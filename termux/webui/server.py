@@ -531,6 +531,8 @@ user-select:none;-webkit-tap-highlight-color:transparent;transition:background .
 .ext-sep{color:var(--ink3);font-size:12px}
 .ext-note{font-size:11.5px;color:var(--ink3);line-height:1.6;padding:0 0 10px}
 .refresh{transform-origin:50% 50%;will-change:transform}
+/* 用对称 SVG 代替 ↻ 字符：字符的字形墨迹不在 em 框正中，绕中心旋转会看出偏心摇晃 */
+.refresh svg{display:block}
 .refresh.spinning{color:#0f6e56}
 .aot-lb{flex:none;font-size:11px;color:var(--ink3);font-family:ui-monospace,monospace;
 min-width:22px;text-align:right}
@@ -628,7 +630,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <label class="switch"><input type="checkbox" id="perfChk"><span class="slider"></span></label>
     </span>
     <span class="sw-text" id="btnTune" aria-label="tuning">性能模式 <i class="tip-i">ⓘ</i></span>
-    <button class="refresh" id="btnRefresh" aria-label="刷新">↻</button></div>
+    <button class="refresh" id="btnRefresh" aria-label="刷新"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 12a8 8 0 1 0 8-8"/><path fill="currentColor" d="M12 1.3 16.4 4 12 6.7z"/></svg></button></div>
   <div class="subline"><span id="battery"></span><span id="stat">加载中…</span></div>
   <div class="banner" id="banner" style="display:none"></div>
   <input id="q" type="search" data-tp="searchPh" placeholder="搜索应用名或包名，点下方按钮切换排序" autocomplete="off">
@@ -773,7 +775,7 @@ var I18N = {
     clearSel: '清空',
     picked: '已选',
     tagArchived: '已归档', tagRestricted: '已限制', tagSystem: '系统', tagNormal: '正常',
-    agoNever: '从未',
+    agoNever: '24h 以上',
     bannerOff: '调试通道未连接', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip 5555',
     bannerUnauth: '等待授权', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
     waitAuth: '等待手机授权…',
@@ -868,7 +870,7 @@ var I18N = {
     clearSel: 'Clear',
     picked: 'Picked',
     tagArchived: 'Archived', tagRestricted: 'Restricted', tagSystem: 'System', tagNormal: 'Normal',
-    agoNever: 'never',
+    agoNever: '>24h',
     bannerOff: 'ADB channel not connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip 5555',
     bannerUnauth: 'Waiting for authorization', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
     waitAuth: 'Waiting for phone authorization…',

@@ -165,27 +165,12 @@ public class Bridge {
         });
     }
 
+    /**
+     * 改走 adb 读 dumpsys usagestats。
+     * UsageStatsManager 需要「使用情况访问权限」，没授予就返回空 —— 见 AdbService.usageJson。
+     */
     private String lastUsedJson() {
-        org.json.JSONObject o = new org.json.JSONObject();
-        try {
-            android.content.Context ctx = web.getContext();
-            android.app.usage.UsageStatsManager usm =
-                    (android.app.usage.UsageStatsManager)
-                    ctx.getSystemService(android.content.Context.USAGE_STATS_SERVICE);
-            long now = System.currentTimeMillis();
-            java.util.List<android.app.usage.UsageStats> list =
-                    usm.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_YEARLY,
-                            now - 365L * 24 * 3600 * 1000, now);
-            if (list != null) {
-                for (android.app.usage.UsageStats u : list) {
-                    long t = u.getLastTimeUsed();
-                    if (t > 0) o.put(u.getPackageName(), t);
-                }
-            }
-        } catch (Exception e) {
-            android.util.Log.w("Bridge", "usage 失败: " + e);
-        }
-        return o.toString();
+        return service.usageJson();
     }
 
     /** arg 形如 "com.foo|1"：1 = 预编译，0 = 取消预编译 */

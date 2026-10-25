@@ -700,6 +700,52 @@ public class AdbService {
         }
     }
 
+    // ---------- 使用记录 ----------
+
+    /**
+     * 各应用最后一次被切到前台的时间（毫秒）。
+     *
+     * 原来用 `UsageStatsManager.queryUsageStats`，但它需要用户在设置里单独授予
+     * 「使用情况访问权限」（PACKAGE_USAGE_STATS）；没授予时返回**空列表**，
+     * 表现为所有应用都显示「从未打开」——微信也一样，明显不合理。
+     *
+     * 我们本来就有 adbd，直接读 `dumpsys usagestats` 更稳，也不用多要一个权限。
+     * 设备端先 grep 过滤：原始 3.6MB，只剩 ACTIVITY_RESUMED 后约 360KB。
+     * ⚠️ 不能加 `-m1`：grep 提前退出会让上游 dumpsys 收到 SIGPIPE 卡死（踩过）。
+     *
+     * 注意范围：这份数据只覆盖**最近 24 小时**，更早用过的应用查不到。
+     */
+    public String usageJson() {
+        JSONObject o = new JSONObject();
+        try {
+            String out = shR("dumpsys usagestats | grep ACTIVITY_RESUMED");
+            java.text.SimpleDateFormat f =
+                    new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            Map<String, Long> last = new HashMap<String, Long>();
+            for (String line : out.split("\n")) {
+                int ti = line.indexOf("time=\"");
+                int pi = line.indexOf(" package=");
+                if (ti < 0 || pi < 0) continue;
+                int te = line.indexOf('"', ti + 6);
+                if (te < 0) continue;
+                String ts = line.substring(ti + 6, te);
+                int start = pi + 9;
+                int pe = line.indexOf(' ', start);
+                String pkg = (pe < 0 ? line.substring(start) : line.substring(start, pe)).trim();
+                if (pkg.isEmpty()) continue;
+                try {
+                    long ms = f.parse(ts).getTime();
+                    Long old = last.get(pkg);
+                    if (old == null || ms > old) last.put(pkg, ms);
+                } catch (Exception ignored) { }
+            }
+            for (Map.Entry<String, Long> e : last.entrySet()) o.put(e.getKey(), e.getValue());
+        } catch (Exception e) {
+            Log.w(TAG, "取使用记录失败: " + e);
+        }
+        return o.toString();
+    }
+
     // ---------- 性能调优 ----------
 
     /** 可写的调优项：{界面键, 命名空间, 设置键} */
