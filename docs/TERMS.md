@@ -24,8 +24,7 @@ adb shell pm enable <包名>
 This app drives the system `pm` / `am` / `cmd` commands directly through ADB — it is **genuinely powerful**.
 
 **Do not freeze or restrict components the system depends on** (Clock, the launcher, the keyboard,
-Phone / Messaging, …). Doing so can stop alarms, break the home screen, or make the phone unable to
-receive calls.
+Phone / Messaging, …). Doing so can stop alarms, break the home screen, block incoming calls, and more.
 
 If you lock yourself out and the app can no longer be opened, connect the phone to a PC and run:
 

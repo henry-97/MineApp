@@ -714,7 +714,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
 <div id="risk" class="risk show">
   <div class="risk-box">
     <h3 data-t="riskTitle">使用前请留意</h3>
-    <p data-t="riskBody">本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电。</p>
+    <p data-t="riskBody">本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电等。</p>
     <a class="risk-link" id="lnkTerms" href="https://github.com/henry-97/MineApp/blob/main/docs/TERMS.md" data-t="riskLink">查看完整「使用须知」→</a>
     <p class="risk-foot" data-t="riskFoot">继续使用本软件，即表示你自行承担因使用不当造成的风险。</p>
     <div class="risk-btns">
@@ -827,7 +827,7 @@ var I18N = {
     secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue',
     riskTitle: '使用前请留意',
-    riskBody: '本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电。',
+    riskBody: '本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电等。',
     riskLink: '查看完整「使用须知」→',
     riskFoot: '继续使用本软件，即表示你自行承担因使用不当造成的风险。',
     riskAgree: '同意并使用', riskQuit: '退出',
@@ -921,7 +921,7 @@ var I18N = {
     secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     extLicense: 'GPL-3.0 — closed-source distribution not permitted. Need a proprietary licence? Open an issue.',
     riskTitle: 'Before you start',
-    riskBody: 'This app drives system commands directly through ADB and is genuinely powerful. Do not freeze or restrict components the system depends on (Clock, launcher, keyboard, …) — alarms, the home screen and incoming calls can break.',
+    riskBody: 'This app drives system commands directly through ADB and is genuinely powerful. Do not freeze or restrict components the system depends on (Clock, launcher, keyboard, …) — alarms, the home screen and incoming calls can break, among other things.',
     riskLink: 'Read the full usage notes →',
     riskFoot: 'By continuing, you accept responsibility for any risk caused by misuse.',
     riskAgree: 'Agree and continue', riskQuit: 'Quit',
