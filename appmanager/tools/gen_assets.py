@@ -87,6 +87,12 @@ def main() -> int:
     html = html.replace("env(safe-area-inset-top)", "var(--sat, env(safe-area-inset-top))")
     html = html.replace("env(safe-area-inset-bottom)", "var(--sab, env(safe-area-inset-bottom))")
 
+    # 版本号以 AndroidManifest.xml 为唯一真源，别在前端再写一份（迟早对不上）
+    man = open(os.path.join(BASE, "src", "AndroidManifest.xml"), encoding="utf-8").read()
+    mv = re.search(r'android:versionName="([^"]+)"', man)
+    ver = mv.group(1) if mv else "?"
+    html = html.replace("__APP_VERSION__", ver)
+
     os.makedirs(os.path.join(BASE, "assets"), exist_ok=True)
     with open(os.path.join(BASE, "assets", "index.html"), "w", encoding="utf-8", newline="\n") as f:
         f.write(html)

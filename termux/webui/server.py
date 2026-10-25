@@ -530,6 +530,8 @@ user-select:none;-webkit-tap-highlight-color:transparent;transition:background .
 .ext:active{background:var(--track)}
 .ext-sep{color:var(--ink3);font-size:12px}
 .ext-note{font-size:11.5px;color:var(--ink3);line-height:1.6;padding:0 0 10px}
+/* 版本号：构建时由 gen_assets.py 把 __APP_VERSION__ 换成 manifest 里的 versionName */
+.ver-line{font-size:11.5px;color:var(--ink3);line-height:1.6;padding:0 0 6px;letter-spacing:.3px}
 .refresh{transform-origin:50% 50%;will-change:transform}
 /* 用对称 SVG 代替 ↻ 字符：字符的字形墨迹不在 em 框正中，绕中心旋转会看出偏心摇晃 */
 .refresh svg{display:block}
@@ -703,6 +705,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <button class="seg" data-tip="0" data-t="tipHide">隐藏</button>
     </div>
     <div class="sec" data-t="secAbout">关于</div>
+    <div class="ver-line">V __APP_VERSION__</div>
     <div class="ext-row">
       <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
       <span class="ext-sep">|</span>
@@ -793,7 +796,7 @@ var I18N = {
     battTitle: '电池健康度 {p}',
     battLevel: '当前电量', battSys: '系统状态',
     battMax: '历史最高', battLast: '最近一次学习', battMin: '历史最低（采用值）',
-    battNote: '系统在每次完整充电后，会用实际充入的电量反推电池当时的真实满电容量，记为一个学习值。<br>健康度 = 学习容量 ÷ 设计容量（5000 mAh）。<br>因为电池健康只会下降不会回升，这里取<b>历史最低值 Min</b> 作为依据，避免个别偏高的学习值把结果拉高。'
+    battNote: '系统在每次完整充电后，会用实际充入的电量反推电池当时的真实满电容量，记为一个学习值。<br>健康度 = 学习容量 ÷ 设计容量（5000 mAh）。<br>因为电池健康只会下降不会回升，这里取<b>历史最低值 Min</b> 作为依据，避免个别偏高的学习值把结果拉高。<br>这个口径偏保守，结果可能略低于实际值，但偏差在可控范围内。'
       + '<br><br><b>关于数值波动</b>：首次检测结果可能滞后或有波动，这是系统的学习机制决定的 —— 它需要若干个完整的充放电周期才能收敛。'
       + '<b>日常使用一周左右</b>即可得到比较稳定的值；刚装好时看到的数字仅供参考，不必在意一两天的跳动。',
     tSaved: '已保存 {n} 个应用', tCompiling: '正在编译，请稍候',
@@ -888,7 +891,7 @@ var I18N = {
     battTitle: 'Battery health {p}',
     battLevel: 'Level', battSys: 'System status',
     battMax: 'All-time high', battLast: 'Latest learned', battMin: 'All-time low (used)',
-    battNote: 'After each full charge the system infers the real full capacity from the charge actually delivered, and records it as a learned value.<br>Health = learned capacity ÷ design capacity (5000 mAh).<br>Battery health only decreases, so the <b>all-time low (Min)</b> is used to keep occasional high readings from inflating the result.'
+    battNote: 'After each full charge the system infers the real full capacity from the charge actually delivered, and records it as a learned value.<br>Health = learned capacity ÷ design capacity (5000 mAh).<br>Battery health only decreases, so the <b>all-time low (Min)</b> is used to keep occasional high readings from inflating the result.<br>This is deliberately conservative: the figure may sit slightly below the true capacity, but the deviation stays within a small, predictable range.'
       + '<br><br><b>About fluctuations</b>: the first reading may lag or bounce around. That is how the system learns — it needs a few complete charge cycles to converge. '
       + 'Expect a stable figure after <b>about a week of normal use</b>; right after installing, treat the number as a rough reference and do not worry about day-to-day jitter.',
     tSaved: 'Saved {n} apps', tCompiling: 'Compiling, please wait',
