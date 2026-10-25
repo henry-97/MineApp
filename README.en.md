@@ -33,9 +33,10 @@ require root, or drag in a whole stack of Shizuku / Ice Box / Hail. Mine App tak
 
 **The phone connects to its own adbd.**
 
-Run `adb tcpip 5555` **once, at install time**, over a USB cable or through Wireless debugging.
-That makes adbd listen on `127.0.0.1:5555`. The app ships a minimal ADB client, authenticates with a
-key kept in its private storage, and then talks to `pm` / `am` / `cmd` directly.
+Run `adb tcpip 5555` **once, at install time** — over a USB cable or through Wireless debugging
+(see [First-time setup](#first-time-setup-once-only)). That makes adbd listen on `127.0.0.1:5555`.
+The app ships a minimal ADB client, authenticates with a key kept in its private storage, and then
+talks to `pm` / `am` / `cmd` directly.
 
 **After that the PC is out of the picture** — freezing, restricting, AOT compilation and performance
 profiles are all a few taps on the phone, with no adb tooling involved. As long as you do not reboot,
@@ -102,21 +103,53 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 ### First-time setup (once only)
 
 The app talks to the adbd listening on **port 5555 of the same device**, so adbd has to be told to
-listen on TCP. **Do this once, at install time:**
+listen on TCP. Do this **once, at install time** — after that it is all taps inside the app, with no
+PC involved, for as long as the phone stays booted.
+
+#### Path A — you have a USB cable (simplest)
 
 ```bash
-# Plug the phone into a PC once (Wireless debugging works too)
+# 1. Plug the phone into a PC
 adb tcpip 5555
 
-# Unplug. From here on it is all taps inside the app — no more PC
+# 2. Unplug. Open the app; the phone shows the ADB dialog → tick "Always allow" → Allow
 ```
 
-**After a reboot** the port closes — just run `adb tcpip 5555` once more.
+Done.
 
-> Wireless debugging is only an alternative *transport* for running that one command
-> (no USB cable needed) — the app itself cannot talk to it, see Known limitations.
+#### Path B — no cable (borrow the PC's Wireless debugging to run that one command)
 
-On first launch the phone shows the ADB authorisation dialog — tick "Always allow" and you are done.
+Phone and PC on the **same Wi-Fi**:
+
+```bash
+# 1. Phone: Settings → Developer options → Wireless debugging → "Pair device with pairing code"
+#    The screen shows an IP, a pairing port, and a 6-digit code
+
+# 2. PC: pair first (this is the PAIRING port, not the debug port)
+adb pair 192.168.1.23:37123
+#    Enter the 6-digit code when prompted
+
+# 3. PC: connect (this time the DEBUG port — it differs from the pairing port)
+adb connect 192.168.1.23:40555
+
+# 4. PC: the one command that matters
+adb tcpip 5555
+
+# 5. You can now turn Wireless debugging off — the app does not need it either way
+```
+
+Then open the app and tick "Always allow" on the phone.
+
+> ⚠️ **The app cannot talk to Wireless debugging itself** — do not expect to just flip a switch.
+> Wireless debugging is **TLS + a pairing code** on a random port; the app speaks plain ADB to a
+> fixed port 5555. Its only role here is to let you run `adb tcpip 5555` **once, without a cable**.
+> Verified: after `adb tcpip 5555`, turning Wireless debugging off leaves the app fully working.
+
+#### After a reboot
+
+Port 5555 closes (`adb tcpip` does not survive a reboot, and `persist.adb.tcp.port` cannot be written
+without root). **Repeat either path above.** The app shows "ADB channel not connected" and reminds you
+of the command.
 
 ## Build from source
 
