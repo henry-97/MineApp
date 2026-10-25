@@ -165,10 +165,11 @@ adb tcpip 5555
 
 Then open the app and tick "Always allow" on the phone.
 
-> ⚠️ **The app cannot talk to Wireless debugging itself** — do not expect to just flip a switch.
-> Wireless debugging is **TLS + a pairing code** on a random port; the app speaks plain ADB to a
-> fixed port 5555. Its only role here is to let you run `adb tcpip 5555` **once, without a cable**.
-> Verified: after `adb tcpip 5555`, turning Wireless debugging off leaves the app fully working.
+> **Why not connect to Wireless debugging directly?** It is technically possible and would remove
+> the PC entirely — but it means rewriting the whole pairing and TLS transport layer, and the added
+> component would be larger than the app itself, with real multi-device compatibility risk. That
+> contradicts the whole point of staying featherweight, and it offers no clear advantage over running
+> one `adb` command at setup time. So it is deliberately out of scope.
 
 #### After a reboot
 
