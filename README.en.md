@@ -99,7 +99,7 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
 | **Memory sort** | Sort by PSS to see exactly what is eating RAM; live aggregate of the selected apps' memory |
 | **Activity monitor** | A **pulsing green dot** on the memory line marks apps that are actually running (based on the system's oom adj — plain cached processes and "recently used, now in background" do not count) |
-| **Per-app cleanup** | An **×** on every row runs `am kill` — clears background processes only. **Auto-start and enabled state are untouched**, so the next launch is a normal cold start |
+| **Per-app cleanup** | An **×** on every row runs `am kill` — clears background processes only. **Auto-start and enabled state are untouched**, so the next launch is a normal cold start. It also reports how much memory was actually freed |
 | **Real app names** | Resolved through the system's `loadLabel`, so every installed app shows its real name instead of its package name |
 | **Batch actions** | Select many apps, then archive / restore / restrict / unrestrict in one go |
 | **Ongoing notification** | Battery health, memory usage and archive count in the status bar; memory ticks every 3 s, battery/counts every 60 s — barely any battery cost |

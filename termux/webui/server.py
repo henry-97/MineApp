@@ -801,7 +801,8 @@ var I18N = {
     tLowMem: '可用内存只剩 {n}MB，全量编译几乎一定失败，请先清理后台',
     cfmKill: '清理「{n}」的后台进程？仅清理后台，不影响应用自启动。',
     killDontAsk: '下次不再提示',
-    tKilled: '已清理「{n}」的后台进程',
+    tKilled: '已清理「{n}」，释放 {m} MB · 稍后列表自动刷新',
+    tKilledZero: '已清理「{n}」，未释放运存 · 稍后列表自动刷新',
     tKillIdle: '「{n}」当前没有后台进程',
     tKillFail: '清理失败：{m}',
     tCleared: '已清空选择', tConnFail: '无法连接服务：{m}', tAdbOff: '调试未连接',
@@ -895,7 +896,8 @@ var I18N = {
     tLowMem: 'Only {n}MB free — full compilation will almost certainly fail. Close some apps first.',
     cfmKill: 'Clear background processes of "{n}"? Background only — auto-start is unaffected.',
     killDontAsk: "Don't ask again",
-    tKilled: 'Cleared background processes of "{n}"',
+    tKilled: 'Cleared "{n}", freed {m} MB · list refreshes shortly',
+    tKilledZero: 'Cleared "{n}", no memory freed · list refreshes shortly',
     tKillIdle: '"{n}" has no background processes right now',
     tKillFail: 'Failed: {m}',
     tCleared: 'Selection cleared', tConnFail: 'Cannot reach service: {m}', tAdbOff: 'ADB not connected',
@@ -1102,10 +1104,11 @@ function closeSettings(){
 }
 
 function saveKeep(){ localStorage.setItem('keep', JSON.stringify(Array.from(keep))); }
-function toast(msg){
+function toast(msg, ms){
   var t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove('show'); }, 2200);
+  clearTimeout(t._h);
+  t._h = setTimeout(function(){ t.classList.remove('show'); }, ms || 2200);
 }
 
 function askConfirm(msg, onOk, opt){
@@ -1528,7 +1531,9 @@ function doKill(pkg, nm){
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d.ok){ toast(T2('tKillFail', {m: d.msg || T('tUnknown')})); return; }
-      toast(T2('tKilled', {n: nm}));
+      var freed = Math.round((d.freed_kb || 0) / 1024);
+      // 文案比默认长，多留一会儿
+      toast(freed > 0 ? T2('tKilled', {n: nm, m: freed}) : T2('tKilledZero', {n: nm}), 3200);
       // 稍等一下再刷新，让系统的运存统计跟上
       setTimeout(function(){ load(true); }, 800);
     })

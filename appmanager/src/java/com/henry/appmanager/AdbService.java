@@ -653,9 +653,18 @@ public class AdbService {
     public String killApp(String pkg) {
         JSONObject o = new JSONObject();
         try {
+            // 清理前后各量一次 PSS，差值就是真正释放掉的运存。
+            // am kill 是异步的，进程不会立刻消失 —— 不等一下第二次会读到旧值。
+            long before = pssOf(pkg);
             sh("am kill " + pkg);
+            try { Thread.sleep(700); } catch (InterruptedException ignored) { }
+            long after = pssOf(pkg);
+
             o.put("ok", true);
             o.put("pkg", pkg);
+            o.put("before_kb", before);
+            o.put("after_kb", after);
+            o.put("freed_kb", Math.max(0, before - after));
         } catch (Exception e) {
             try {
                 o.put("ok", false);
@@ -664,6 +673,16 @@ public class AdbService {
             } catch (Exception ignored) { }
         }
         return o.toString();
+    }
+
+    /** 取单个包当前的 PSS（KB），拿不到就返回 0。 */
+    private long pssOf(String pkg) {
+        try {
+            Long v = getPss().pss.get(pkg);
+            return v == null ? 0L : v;
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 
     // ---------- 性能调优 ----------
