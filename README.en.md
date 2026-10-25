@@ -42,7 +42,7 @@ profiles are all a few taps on the phone, with no adb tooling involved. As long 
 that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 <p align="center">
-  <img src="docs/main.jpg" width="320" alt="Main screen">
+  <img src="docs/main-en.jpg" width="320" alt="Main screen">
 </p>
 
 ### Compared to the usual options
@@ -81,7 +81,7 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 | **List cache** | The fetched list is cached locally; re-entering within a minute does not refetch |
 
 <p align="center">
-  <img src="docs/settings.jpg" width="320" alt="Settings">
+  <img src="docs/settings-en.jpg" width="320" alt="Settings">
 </p>
 
 <p align="center">
