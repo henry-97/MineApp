@@ -32,7 +32,22 @@ public class KeepAliveService extends Service {
      */
     private static final String CHANNEL_ID = "app_manager_status_v2";
     private static final int NOTICE_ID = 1001;
-    private static final long INTERVAL_MS = 10 * 60 * 1000L;   // 10 分钟
+    /**
+     * 通知刷新节奏：**3 秒小刷新 / 60 秒大刷新**。
+     *
+     * 小刷新只跑 `cat /proc/meminfo`（极轻），用来让「内存」这一行实时跳动；
+     * 电池、归档数、限制数这些几十秒才变一次的数据，每 20 次（=60 秒）才全量取一次。
+     * 原来每次刷新都跑一遍 `dumpsys battery` + `dumpsys batterystats`（输出很大）
+     * 加 4 条 pm/appops，高频下纯属浪费。
+     */
+    private static final long TICK_MS = 3000L;
+    private static final int FULL_EVERY = 20;
+
+    /** 上次全量刷新拿到的电池段与计数，小刷新时沿用 */
+    private JSONObject cachedBattery;
+    private int cachedArchived = -1;
+    private int cachedRestricted = -1;
+    private int tickCount = 0;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private AdbService service;
@@ -45,8 +60,9 @@ public class KeepAliveService extends Service {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    refresh();
-                    handler.postDelayed(tick, INTERVAL_MS);
+                    refresh(tickCount % FULL_EVERY == 0);
+                    tickCount++;
+                    handler.postDelayed(tick, TICK_MS);
                 }
             }, "keepalive-refresh").start();
         }
@@ -68,18 +84,25 @@ public class KeepAliveService extends Service {
         handler.postDelayed(tick, 8000);
     }
 
-    private void refresh() {
+    private void refresh(boolean full) {
         String text;
         String title = appLabel();
         try {
-            // 用户开启过「性能」，就持续把它写回去（MIUI 会自行回退）
-            SharedPreferences sp = getSharedPreferences("app", MODE_PRIVATE);
-            if (sp.getBoolean("perf_keep", false)) {
-                service.setPerf(true);
+            // 性能模式的写回只在全量刷新时做：每 3 秒写一次 settings 太浪费
+            if (full) {
+                SharedPreferences sp = getSharedPreferences("app", MODE_PRIVATE);
+                if (sp.getBoolean("perf_keep", false)) {
+                    service.setPerf(true);
+                }
             }
 
-            JSONObject s = new JSONObject(service.summaryJson());
-            JSONObject b = s.optJSONObject("battery");
+            JSONObject s = new JSONObject(service.summaryJson(full));
+            if (full) {
+                cachedBattery = s.optJSONObject("battery");
+                cachedArchived = s.optInt("archived", -1);
+                cachedRestricted = s.optInt("restricted", -1);
+            }
+            JSONObject b = cachedBattery;
             if (b == null) {
                 text = "调试未连接";
             } else {
@@ -114,8 +137,8 @@ public class KeepAliveService extends Service {
                               s.optDouble("mem_pct", 0)));
                 }
                 if (sb.length() > 0) sb.append("　");
-                sb.append("归档 ").append(s.optInt("archived", 0));
-                sb.append(" · 限制 ").append(s.optInt("restricted", 0));
+                sb.append("归档 ").append(cachedArchived < 0 ? 0 : cachedArchived);
+                sb.append(" · 限制 ").append(cachedRestricted < 0 ? 0 : cachedRestricted);
                 text = sb.toString().trim();
             }
         } catch (Exception e) {

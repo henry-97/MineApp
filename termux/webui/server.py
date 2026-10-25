@@ -487,8 +487,9 @@ li.on .chk{background:var(--blue);border-color:var(--blue)}
 .name .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pkg{font-size:12.5px;color:var(--ink3);font-family:ui-monospace,monospace;white-space:nowrap;
 overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-.mem{font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap;
-overflow:hidden;text-overflow:ellipsis}
+.mem{position:relative;font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap}
+/* 文本单独包一层：省略号在这里做，.mem 本身不裁切，绿点才能画到左侧空隙里 */
+.mem-t{display:block;overflow:hidden;text-overflow:ellipsis}
 .mem .ago{color:var(--ink3);font-family:ui-monospace,monospace}
 .msearch{padding:10px 16px 0}
 .tag{flex:none;font-size:12px;padding:4px 10px;border-radius:20px;background:var(--bg);color:var(--ink3)}
@@ -509,6 +510,22 @@ transition:width .2s linear}
 align-items:center;justify-content:center;font-size:10px;font-weight:600;
 color:#0b3b2e;font-family:ui-monospace,monospace;letter-spacing:-.4px;line-height:1}
 .aot-sw.busy .pct{display:flex}
+/* 活跃指示：有内存占用、未被限制/归档、且还有非缓存进程 */
+/* 绿点绝对定位到文字列左边的空隙里（li 的 gap=14px），
+   完全不参与文本流 —— 所以内存数字和上一行的应用名左边缘对齐 */
+.dot-live{position:absolute;left:-11px;top:50%;margin-top:-3px;
+width:6px;height:6px;border-radius:50%;background:#12b76a;
+box-shadow:0 0 0 2px rgba(18,183,106,.16);
+animation:dotPulse 2.2s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{opacity:.35;transform:scale(.78)}50%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.dot-live{animation:none}}
+/* 单应用清理：只清后台进程（am kill），不动自启动 */
+.kill-x{flex:none;width:19px;height:19px;line-height:17px;text-align:center;border-radius:50%;
+font-size:14px;color:var(--ink3);border:1px solid var(--track);cursor:pointer;
+user-select:none;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s}
+.kill-x:active{background:var(--track);color:var(--ink)}
+.refresh{transform-origin:50% 50%;will-change:transform}
+.refresh.spinning{color:#0f6e56}
 .aot-lb{flex:none;font-size:11px;color:var(--ink3);font-family:ui-monospace,monospace;
 min-width:22px;text-align:right}
 .rt-top{display:flex;align-items:center;gap:7px}
@@ -576,6 +593,9 @@ align-items:center;justify-content:center;padding:24px;z-index:60}
 .modal-box{background:var(--card);border-radius:16px;padding:22px 20px 18px;
 width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
 #modal-msg{font-size:16px;line-height:1.6;margin:0 0 20px;white-space:pre-wrap;color:var(--ink)}
+.modal-opt{display:none;align-items:center;gap:7px;margin:-2px 0 14px;font-size:12px;
+color:var(--ink3);cursor:pointer;user-select:none}
+.modal-opt input{width:15px;height:15px;accent-color:#0f6e56;margin:0}
 .modal-btns{display:flex;gap:10px}
 .modal-btns button{flex:1}
 </style>
@@ -668,6 +688,7 @@ width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
 <div id="modal" class="modal">
   <div class="modal-box">
     <p id="modal-msg"></p>
+    <label class="modal-opt" id="modal-opt"><input type="checkbox" id="modal-opt-cb"><span id="modal-opt-tx"></span></label>
     <div class="modal-btns">
       <button class="ghost" id="modal-cancel" data-t="cancel">取消</button>
       <button class="primary" id="modal-ok" data-t="confirm">确定</button>
@@ -731,12 +752,19 @@ var I18N = {
     battTitle: '电池健康度 {p}',
     battLevel: '当前电量', battSys: '系统状态',
     battMax: '历史最高', battLast: '最近一次学习', battMin: '历史最低（采用值）',
-    battNote: '系统在每次完整充电后，会用实际充入的电量反推电池当时的真实满电容量，记为一个学习值。<br>健康度 = 学习容量 ÷ 设计容量（5000 mAh）。<br>因为电池健康只会下降不会回升，这里取<b>历史最低值 Min</b> 作为依据，避免个别偏高的学习值把结果拉高。',
+    battNote: '系统在每次完整充电后，会用实际充入的电量反推电池当时的真实满电容量，记为一个学习值。<br>健康度 = 学习容量 ÷ 设计容量（5000 mAh）。<br>因为电池健康只会下降不会回升，这里取<b>历史最低值 Min</b> 作为依据，避免个别偏高的学习值把结果拉高。'
+      + '<br><br><b>关于数值波动</b>：首次检测结果可能滞后或有波动，这是系统的学习机制决定的 —— 它需要若干个完整的充放电周期才能收敛。'
+      + '<b>日常使用一周左右</b>即可得到比较稳定的值；刚装好时看到的数字仅供参考，不必在意一两天的跳动。',
     tSaved: '已保存 {n} 个应用', tCompiling: '正在编译，请稍候',
     compiling: '编译中', reverting: '还原中',
     tFail: '操作失败：{m}', tCompiled: '预编译完成 {n}s', tReverted: '已取消预编译 {n}s',
     tAlready: '已经是 AOT 状态，无需重复编译',
     tLowMem: '可用内存只剩 {n}MB，全量编译几乎一定失败，请先清理后台',
+    cfmKill: '清理「{n}」的后台进程？仅清理后台，不影响应用自启动。',
+    killDontAsk: '下次不再提示',
+    tKilled: '已清理「{n}」的后台进程',
+    tKillIdle: '「{n}」当前没有后台进程',
+    tKillFail: '清理失败：{m}',
     tCleared: '已清空选择', tConnFail: '无法连接服务：{m}', tAdbOff: '调试未连接',
     tPerfNoAdb: '调试未连接，性能模式未生效',
     tPerfOn: '性能模式已开启', tPerfOff: '性能模式已关闭',
@@ -811,12 +839,19 @@ var I18N = {
     battTitle: 'Battery health {p}',
     battLevel: 'Level', battSys: 'System status',
     battMax: 'All-time high', battLast: 'Latest learned', battMin: 'All-time low (used)',
-    battNote: 'After each full charge the system infers the real full capacity from the charge actually delivered, and records it as a learned value.<br>Health = learned capacity ÷ design capacity (5000 mAh).<br>Battery health only decreases, so the <b>all-time low (Min)</b> is used to keep occasional high readings from inflating the result.',
+    battNote: 'After each full charge the system infers the real full capacity from the charge actually delivered, and records it as a learned value.<br>Health = learned capacity ÷ design capacity (5000 mAh).<br>Battery health only decreases, so the <b>all-time low (Min)</b> is used to keep occasional high readings from inflating the result.'
+      + '<br><br><b>About fluctuations</b>: the first reading may lag or bounce around. That is how the system learns — it needs a few complete charge cycles to converge. '
+      + 'Expect a stable figure after <b>about a week of normal use</b>; right after installing, treat the number as a rough reference and do not worry about day-to-day jitter.',
     tSaved: 'Saved {n} apps', tCompiling: 'Compiling, please wait',
     compiling: 'Compiling', reverting: 'Reverting',
     tFail: 'Failed: {m}', tCompiled: 'Compiled in {n}s', tReverted: 'Reverted in {n}s',
     tAlready: 'Already AOT-compiled, nothing to do',
     tLowMem: 'Only {n}MB free — full compilation will almost certainly fail. Close some apps first.',
+    cfmKill: 'Clear background processes of "{n}"? Background only — auto-start is unaffected.',
+    killDontAsk: "Don't ask again",
+    tKilled: 'Cleared background processes of "{n}"',
+    tKillIdle: '"{n}" has no background processes right now',
+    tKillFail: 'Failed: {m}',
     tCleared: 'Selection cleared', tConnFail: 'Cannot reach service: {m}', tAdbOff: 'ADB not connected',
     tPerfNoAdb: 'ADB not connected, performance mode not applied',
     tPerfOn: 'Performance mode on', tPerfOff: 'Performance mode off',
@@ -998,16 +1033,27 @@ function toast(msg){
   clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove('show'); }, 2200);
 }
 
-function askConfirm(msg, onOk){
+function askConfirm(msg, onOk, opt){
   var m = document.getElementById('modal');
   document.getElementById('modal-msg').textContent = msg;
   var cancel = document.getElementById('modal-cancel');
   var ok = document.getElementById('modal-ok');
+  var box = document.getElementById('modal-opt');
+  var cb = document.getElementById('modal-opt-cb');
+  // opt = {text, key}：带「下次不再提示」复选框
+  if (opt){
+    document.getElementById('modal-opt-tx').textContent = opt.text;
+    box.style.display = 'flex';
+    cb.checked = false;
+  } else {
+    box.style.display = 'none';
+  }
   cancel.style.display = '';
   ok.textContent = T('confirm');
   m.classList.add('show');
   ok.onclick = function(){
     m.classList.remove('show');
+    if (opt && cb.checked) localStorage.setItem(opt.key, '1');
     onOk();
   };
   cancel.onclick = function(){
@@ -1081,7 +1127,13 @@ function subline(a){
     var ago = fmtAgo(idleMap[a.pkg]) || T('agoNever');
     h += (h ? ' · ' : '') + '<span class="ago">' + ago + '</span>';
   }
-  return h ? '<div class="mem">' + h + '</div>' : '';
+  if (!h) return '';
+  // 绿点 = 真正还在活动：有内存占用、未被归档、未被限制后台，且系统里还有
+  // cached/empty 之外的进程（只被缓存着的应用不点绿点，避免满屏都是点）。
+  // 绝对定位到左侧空隙，不占文本流 —— 数字与上方应用名左对齐。
+  var live = mb > 0 && a.active && !a.frozen && !a.restricted;
+  return '<div class="mem">' + (live ? '<i class="dot-live"></i>' : '')
+       + '<span class="mem-t">' + h + '</span></div>';
 }
 
 /* 系统标记：小号，紧跟应用名，不占右下角 */
@@ -1116,6 +1168,7 @@ function render(){
          +    sysTag(a) + '</div>'
          +  '<div class="pkg">' + a.pkg + '</div>' + subline(a) + '</div>'
          +  '<div class="rt"><div class="rt-top">'
+         +    (a.pss > 0 ? '<span class="kill-x" data-kill="' + a.pkg + '">×</span>' : '')
          +    '<span class="aot-lb">AOT</span>'
          +    '<span class="aot-sw' + (aotOn ? ' on' : '') + '" data-pkg="' + a.pkg
          +      '" data-aot="' + (aotOn ? '1' : '0') + '"><i class="fill"></i><b class="pct"></b></span>'
@@ -1303,48 +1356,123 @@ function saveCache(d){
   } catch (e) { /* 配额超了就算了，不影响主流程 */ }
 }
 
-function restoreCache(){
+/* 返回 0=没有缓存 / 1=缓存新鲜（可直接用，不必再拉）/ 2=缓存已过期（先画出来再后台刷新）
+   allowStale=true 时即使过期也会先渲染 —— 冷启动等授权的那几秒不应该是一片空白 */
+function restoreCache(allowStale){
   try {
     var raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return false;
+    if (!raw) return 0;
     var d = JSON.parse(raw);
-    if (!d || !d.t || (Date.now() - d.t) > CACHE_TTL) return false;
+    if (!d || !d.t) return 0;
+    var fresh = (Date.now() - d.t) <= CACHE_TTL;
+    if (!fresh && !allowStale) return 0;
     applyData(d);
-    return true;
-  } catch (e) { return false; }
+    return fresh ? 1 : 2;
+  } catch (e) { return 0; }
 }
+
+/* 刷新图标的旋转：用 rAF 自己累加角度，停下来时一定停在整圈上。
+   用 CSS animation 的话，remove 那一刻会停在任意角度，看起来像卡了一下。 */
+var spinDeg = 0, spinOn = false, spinStop = false, spinLimit = -1, spinLast = 0, spinEl = null;
+function spinFrame(ts){
+  if (!spinOn) return;
+  if (!spinEl) spinEl = document.getElementById('btnRefresh');
+  if (!spinLast) spinLast = ts;
+  var dt = Math.min(ts - spinLast, 64);   // 掉帧时别一下跳太远
+  spinLast = ts;
+  var step = dt * 360 / 780;              // 780ms 一圈
+  if (spinStop && spinLimit < 0) spinLimit = Math.ceil(spinDeg / 360) * 360;
+  spinDeg += step;
+  if (spinLimit >= 0 && spinDeg >= spinLimit){
+    spinDeg = spinLimit;
+    spinOn = false;
+    if (spinEl){ spinEl.style.transform = ''; spinEl.classList.remove('spinning'); }
+    return;
+  }
+  if (spinEl) spinEl.style.transform = 'rotate(' + spinDeg + 'deg)';
+  requestAnimationFrame(spinFrame);
+}
+function spinStart(){
+  if (spinOn) return;
+  spinOn = true; spinStop = false; spinLimit = -1; spinLast = 0;
+  spinEl = document.getElementById('btnRefresh');
+  if (spinEl) spinEl.classList.add('spinning');
+  requestAnimationFrame(spinFrame);
+}
+function spinFinish(){ if (spinOn) spinStop = true; }
 
 function load(force){
   // force=true 表示手动刷新或刚做过操作，必须拿新数据
-  if (!force && restoreCache()) return;
+  var state = force ? 0 : restoreCache(true);
+  // 1 分钟内的缓存直接用它，不必再拉；过期的缓存也已经画出来了，继续后台刷新
+  if (state === 1) return;
+
   var btn = document.getElementById('btnRefresh');
   if (btn) btn.disabled = true;
-  document.getElementById('stat').textContent = T('loading');
+  spinStart();
+
+  // 已经有内容（旧缓存）时不要用「加载中」把摘要行顶掉，转圈本身就是提示
+  var el = document.getElementById('stat');
+  if (state === 0 && el) el.textContent = T('loading');
+
   // 首次连接可能要在手机上点授权，几秒没回来就先提示用户去看手机
   var authTimer = setTimeout(function(){
-    var el = document.getElementById('stat');
-    if (el && el.textContent === T('loading')) el.textContent = T('waitAuth');
+    if (state === 0 && el && el.textContent === T('loading')) el.textContent = T('waitAuth');
   }, 4000);
+
   fetch('/api/list?pss=1').then(function(r){ return r.json(); }).then(function(d){
     clearTimeout(authTimer);
     saveCache(d);
     applyData(d);
     if (btn) btn.disabled = false;
+    spinFinish();
   }).catch(function(e){
     clearTimeout(authTimer);
-    document.getElementById('stat').textContent = T('connFail');
+    if (state === 0 && el) el.textContent = T('connFail');
     if (btn) btn.disabled = false;
+    spinFinish();
     toast(T2('tConnFail', {m: e}));
   });
 }
 
 document.getElementById('list').addEventListener('click', function(e){
   if (e.target.closest('.aot-sw')) return;   // AOT 开关走单独的处理
+  if (e.target.closest('.kill-x')) return;   // 清理按钮也走单独的处理
   var li = e.target.closest('li');
   if (!li || busy) return;
   var pkg = li.getAttribute('data-pkg');
   if (keep.has(pkg)) keep.delete(pkg); else keep.add(pkg);
   saveKeep(); render();
+});
+
+/* 单应用清理：am kill 只杀后台进程，不动自启动，也不改启用状态 */
+var killNoAsk = 'killNoAsk';
+function doKill(pkg, nm){
+  fetch('/api/kill', {method:'POST', headers:{'Content-Type':'application/json'},
+                      body: JSON.stringify({pkg: pkg})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok){ toast(T2('tKillFail', {m: d.msg || T('tUnknown')})); return; }
+      toast(T2('tKilled', {n: nm}));
+      // 稍等一下再刷新，让系统的运存统计跟上
+      setTimeout(function(){ load(true); }, 800);
+    })
+    .catch(function(){ toast(T2('tKillFail', {m: T('tUnknown')})); });
+}
+document.getElementById('list').addEventListener('click', function(e){
+  var kx = e.target.closest('.kill-x');
+  if (!kx) return;
+  if (!adbOk){ toast(T('tAdbOff')); return; }
+  var pkg = kx.getAttribute('data-kill');
+  var one = null;
+  for (var i = 0; i < apps.length; i++) if (apps[i].pkg === pkg){ one = apps[i]; break; }
+  var nm = one ? one.label : pkg;
+  // 运存为 0 = 当前没有后台进程，am kill 什么也杀不到，别假装清理成功
+  if (one && one.pss <= 0){ toast(T2('tKillIdle', {n: nm})); return; }
+  if (localStorage.getItem(killNoAsk) === '1'){ doKill(pkg, nm); return; }
+  askConfirm(T2('cfmKill', {n: nm}),
+             function(){ doKill(pkg, nm); },
+             {text: T('killDontAsk'), key: killNoAsk});
 });
 
 /* AOT 预编译：点开关 → 轨道变成进度条（秒数同步显示在标签上），完成后就地刷新 */
@@ -1760,6 +1888,9 @@ document.getElementById('tipBar').addEventListener('click', function(e){
   if (!b) return;
   showTip = b.getAttribute('data-tip') === '1';
   localStorage.setItem('showTip', showTip ? '1' : '0');
+  // 重新打开「界面提示」时，把「清理不再提示」也一起复位 ——
+  // 否则用户勾过一次之后，就再也没有入口能把它改回来了
+  if (showTip) localStorage.removeItem('killNoAsk');
   applyTip();
   renderSettings();
 });

@@ -31,6 +31,14 @@ public class AdbService {
     private static final String HOST = "127.0.0.1";
     private static final int PORT = 5555;
 
+    /**
+     * 全量 AOT 编译建议预留的可用内存（MB）。
+     *
+     * 实测抖音极速版编译时 dex2oat 的 RSS 峰值 2.2GB，期间 lmkd 连杀十几个后台进程。
+     * 留 2.5GB 作为门槛：低于这个数基本必然失败，提前拦住比让用户干等 10 分钟好。
+     */
+    private static final int AOT_NEED_MB = 2560;
+
     /** 电池设计容量（mAh）。Redmi Note 12 Turbo = 5000。 */
     private static final int BATTERY_DESIGN_MAH = 5000;
 
@@ -270,11 +278,28 @@ public class AdbService {
     }
 
     /** 解析 dumpsys meminfo 的 Total PSS by process；同一应用的子进程累加。 */
-    private Map<String, Long> getPss() throws Exception {
-        Map<String, Long> result = new HashMap<String, Long>();
+    /** getPss 的结果：每个包的 PSS，以及「是否还有非缓存进程」 */
+    static final class PssInfo {
+        final Map<String, Long> pss = new HashMap<String, Long>();
+        /** 存在 cached / empty 之外进程的包 —— 即真正还在活动 */
+        final Set<String> active = new HashSet<String>();
+    }
+
+    private PssInfo getPss() throws Exception {
         // 用 -c（紧凑机器可读格式）。整份输出只有 ~42KB，可以整段取回后本地过滤；
         // 不再走管道：`| grep` 在 PTY 下只会回前 56 字节（实测），拿不到数据。
         String best = shR("dumpsys meminfo -c");
+
+        // ⚠️ 关键：`dumpsys meminfo -c` 会把**同一个 pid 输出两行**（实测 718 行只有
+        // 359 个唯一 pid，init 出现两次：6932 与 7761）。早先的实现直接按包名累加，
+        // 等于把每个进程算了两遍 —— 所有应用的运存数字都虚高近一倍
+        // （抖音极速版显示 2848MB，而 ps 实测只有 566MB）。
+        //
+        // 正确做法：先按 pid 去重（同一 pid 取较小值，那才是真实 PSS；另一行是
+        // 同一进程的另一份统计），再把同一包名的**不同 pid** 加起来。
+        Map<Integer, Long> pssByPid = new HashMap<Integer, Long>();
+        Map<Integer, String> pkgByPid = new HashMap<Integer, String>();
+        Map<Integer, Boolean> liveByPid = new HashMap<Integer, Boolean>();
         for (String line : best.split("\n")) {
             line = line.trim();
             if (!line.startsWith("proc,")) continue;
@@ -285,16 +310,34 @@ public class AdbService {
             String name = f[2].trim();
             String base = name.split(":")[0];
             if (!base.contains(".")) continue;   // 排除 system / init 等非包名进程
+            int pid;
             long kb;
             try {
+                pid = Integer.parseInt(f[3].trim());
                 kb = Long.parseLong(f[4].trim());
             } catch (NumberFormatException e) {
                 continue;
             }
-            Long old = result.get(base);
-            result.put(base, (old == null ? 0 : old) + kb);
+            Long old = pssByPid.get(pid);
+            if (old == null || kb < old) pssByPid.put(pid, kb);
+            pkgByPid.put(pid, base);
+            // meminfo -c 的第 2 个字段是 oom 档位：
+            //   fore / vis / percept / service* / home / prev … = 还在活动
+            //   cached / empty                                    = 只是被缓存着
+            boolean live = !(cat.equals("cached") || cat.equals("empty"));
+            Boolean was = liveByPid.get(pid);
+            liveByPid.put(pid, was == null ? live : (was || live));
         }
-        return result;
+
+        PssInfo out = new PssInfo();
+        for (Map.Entry<Integer, Long> e : pssByPid.entrySet()) {
+            String base = pkgByPid.get(e.getKey());
+            if (base == null) continue;
+            Long old = out.pss.get(base);
+            out.pss.put(base, (old == null ? 0 : old) + e.getValue());
+            if (Boolean.TRUE.equals(liveByPid.get(e.getKey()))) out.active.add(base);
+        }
+        return out;
     }
 
     private long[] getMemInfo() throws Exception {
@@ -391,8 +434,8 @@ public class AdbService {
                 } else if (learnedMin < stored) {
                     capMin = learnedMin;            // 更低 → 采纳，健康度只降不升
                     sp.edit().putInt("cap_min", capMin).apply();
-                } else if (learnedMin > stored * 1.15) {
-                    capMin = learnedMin;            // 高出 15% 以上 → 换电池或重新校准
+                } else if (learnedMin > stored * 1.07) {
+                    capMin = learnedMin;            // 高出 7% 以上 → 换电池或重新校准
                     sp.edit().putInt("cap_min", capMin).apply();
                 } else {
                     capMin = stored;                // 正常波动 → 沿用历史最低
@@ -427,9 +470,24 @@ public class AdbService {
     }
 
     /** 常驻通知用的精简状态：电池 + 归档数 + 限制数。 */
-    public String summaryJson() {
+    /**
+     * 常驻通知用的摘要。
+     *
+     * @param full true = 完整取数（电池 + 归档/限制计数 + 内存）；
+     *             false = **只读内存**，用于高频刷新。
+     *
+     * 常驻通知每 3 秒刷一次内存，但电池段要跑 `dumpsys battery` 加
+     * `dumpsys batterystats | grep`（后者输出很大、解析也慢），归档/限制还要
+     * 再跑 4 条 pm / appops。这些数据本来几十秒才变一次，没必要每 3 秒全跑一遍 ——
+     * 拆成「3 秒只读 /proc/meminfo、60 秒全量」后，高频路径只剩一条极轻的命令。
+     */
+    public String summaryJson(boolean full) {
         JSONObject o = new JSONObject();
         try {
+            if (!full) {
+                putMem(o);
+                return o.toString();
+            }
             o.put("battery", getBattery());
             // 归档包含两种：被 disable-user 的，以及被 uninstall --user 0 的
             Set<String> archived = new HashSet<String>(getDisabled());
@@ -441,17 +499,21 @@ public class AdbService {
             }
             o.put("archived", archived.size());
             o.put("restricted", getRestricted().size());
-            // 内存占用（常驻通知里显示）。cat /proc/meminfo 很轻，不影响刷新耗时
-            long[] mem = getMemInfo();
-            if (mem[0] > 0) {
-                o.put("mem_total", mem[0]);
-                o.put("mem_avail", mem[1]);
-                o.put("mem_pct", Math.round((mem[0] - mem[1]) * 1000.0 / mem[0]) / 10.0);
-            }
+            putMem(o);
         } catch (Exception e) {
             Log.w(TAG, "summary 失败: " + e);
         }
         return o.toString();
+    }
+
+    /** 内存占用：`cat /proc/meminfo` 极轻，是高频刷新唯一要跑的命令。 */
+    private void putMem(JSONObject o) throws Exception {
+        long[] mem = getMemInfo();
+        if (mem[0] > 0) {
+            o.put("mem_total", mem[0]);
+            o.put("mem_avail", mem[1]);
+            o.put("mem_pct", Math.round((mem[0] - mem[1]) * 1000.0 / mem[0]) / 10.0);
+        }
     }
 
     // ---------- AOT 预编译 ----------
@@ -519,12 +581,13 @@ public class AdbService {
             if (on) {
                 long[] mem = getMemInfo();
                 long availMb = mem[1] / 1024;
-                if (availMb > 0 && availMb < 1200) {
+                if (availMb > 0 && availMb < AOT_NEED_MB) {
                     o.put("ok", false);
                     o.put("lowmem", true);
                     o.put("avail_mb", availMb);
-                    o.put("msg", "可用内存只剩 " + availMb + "MB，全量编译几乎一定失败。"
-                            + "请先清理后台再试（小应用一般不受影响）。");
+                    o.put("need_mb", AOT_NEED_MB);
+                    o.put("msg", "全量编译需要约 " + (AOT_NEED_MB / 1024) + "GB 可用内存，"
+                            + "当前只有 " + availMb + "MB。请先清理后台再试。");
                     return o.toString();
                 }
             }
@@ -567,6 +630,35 @@ public class AdbService {
             synchronized (AdbService.class) {
                 compilingPkg = null;
             }
+        }
+        return o.toString();
+    }
+
+    // ---------- 单应用清理 ----------
+
+    /**
+     * 只清理某个应用的**后台**进程。
+     *
+     * 用 `am kill` 而不是 `am force-stop`：
+     *   · am kill 只杀后台进程，不改变应用的启用状态、不影响自启动与推送，
+     *     下次启动依然是冷启动而不是「被强行停止」的异常状态；
+     *   · am force-stop 会把应用标记为 stopped，自启动和推送都会被系统拦住，
+     *     那是「停用」而不是「清理内存」，与这里的语义不符。
+     *
+     * 前台应用不会被杀掉（系统行为），返回 ok 但实际什么也没做 —— 这是预期。
+     */
+    public String killApp(String pkg) {
+        JSONObject o = new JSONObject();
+        try {
+            sh("am kill " + pkg);
+            o.put("ok", true);
+            o.put("pkg", pkg);
+        } catch (Exception e) {
+            try {
+                o.put("ok", false);
+                o.put("pkg", pkg);
+                o.put("msg", String.valueOf(e.getMessage()));
+            } catch (Exception ignored) { }
         }
         return o.toString();
     }
@@ -753,7 +845,8 @@ public class AdbService {
         Set<String> disabled = getDisabled();
         if (DEBUG) Log.i(TAG, "active=" + active.size() + " all=" + all.size()
                 + " system=" + system.size() + " restricted=" + getRestricted().size());
-        Map<String, Long> pss = withPss ? getPss() : Collections.<String, Long>emptyMap();
+        PssInfo pssInfo = withPss ? getPss() : new PssInfo();
+        Map<String, Long> pss = pssInfo.pss;
         if (DEBUG) Log.i(TAG, "pss 条目数=" + pss.size());
         Set<String> restricted = getRestricted();
         Map<String, String> labels = labelMap();
@@ -774,6 +867,7 @@ public class AdbService {
                 a.put("system", system.contains(pkg));
                 Long v = pss.get(pkg);
                 a.put("pss", v == null ? 0 : v);
+                a.put("active", pssInfo.active.contains(pkg));
                 a.put("restricted", restricted.contains(pkg));
             } catch (Exception ignored) { }
             apps.add(a);
