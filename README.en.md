@@ -233,11 +233,6 @@ the APK therefore share identical UI logic — no second implementation to keep 
 - **Port 5555 closes on reboot.** Run `adb tcpip 5555` once more.
   `persist.adb.tcp.port` cannot be written without root (SELinux blocks the shell user), so there is
   no way to make it survive a reboot.
-- **Wireless debugging cannot replace the app's own connection.** The app speaks plain ADB to
-  `127.0.0.1:5555`; Android 11+ Wireless debugging uses **TLS + a pairing code** on a random port,
-  which the app cannot connect to. Treat Wireless debugging only as a *cable-free way to run*
-  `adb tcpip 5555` once, from a PC or another device with adb.
-  Verified: port 5555 keeps listening whether Wireless debugging is on or off, and the app works in both cases.
 - **Full AOT compilation is memory-hungry.** dex2oat can peak above 2 GB, so the app refuses to start
   below ~2.5 GB of free memory and tells you why. A few very large apps (many plugin dex files, e.g.
   TikTok Lite) may be abandoned by dex2oat even with plenty of RAM, leaving the status at `speed-profile`.
@@ -278,10 +273,20 @@ In short: use it, modify it, redistribute it — but **derivatives must stay ope
 repackage it with ads and ship it closed-source. If you need it inside a proprietary product, open an
 issue to discuss a licence.
 
-## Disclaimer
+## Usage notes
 
-This project drives the system `pm` / `am` / `cmd` commands directly through ADB, which makes it
-**powerful**. Freezing or restricting system apps can break alarms, push notifications or the
-launcher. Only touch apps whose behaviour you understand, and recover with
-`adb shell pm enable <package>` if something goes wrong. The author is not responsible for any data
-loss or device misbehaviour.
+This app drives the system `pm` / `am` / `cmd` commands directly through ADB — it is **genuinely powerful**.
+
+**Do not freeze or restrict components the system depends on** (Clock, the launcher, the keyboard,
+Phone / Messaging, …). Doing so can stop alarms, break the home screen, or make the phone unable to
+receive calls.
+
+If you lock yourself out and the app can no longer be opened, connect the phone to a PC and run:
+
+```bash
+adb shell pm enable <package>
+```
+
+That re-enables the component and gets you back in.
+
+**The author is not liable for data loss or device misbehaviour caused by misuse.**

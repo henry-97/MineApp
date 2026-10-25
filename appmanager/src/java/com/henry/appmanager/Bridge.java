@@ -201,6 +201,37 @@ public class Bridge {
         });
     }
 
+    /**
+     * 启动风险提示里点「退出」时调用 —— 直接结束 Activity。
+     *
+     * 用 web.post 而不是 runOnUiThread：Bridge 没有 Activity 引用，
+     * 从 WebView 的 context 取最省事；web.post 保证在 UI 线程执行。
+     */
+    @JavascriptInterface
+    public void exitApp() {
+        web.post(new Runnable() {
+            @Override
+            public void run() {
+                android.content.Context c = web.getContext();
+                if (!(c instanceof android.app.Activity)) return;
+                // 只 finish 的话常驻通知还挂着，看起来像没退干净 —— 一并停掉
+                try {
+                    c.stopService(new android.content.Intent(c, KeepAliveService.class));
+                } catch (Exception ignored) { }
+                ((android.app.Activity) c).finish();
+            }
+        });
+    }
+
+    /** 单应用清理后台（am kill），不改变自启动 */
+    @JavascriptInterface
+    public void kill(final int id, final String pkg) {
+        dispatch(id, new Task() {
+            @Override
+            public String run() { return service.killApp(pkg); }
+        });
+    }
+
     /** arg = "manager" | "mine"：切换桌面名称，图标保持不变 */
     @JavascriptInterface
     public void name(final int id, final String arg) {

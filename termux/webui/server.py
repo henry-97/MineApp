@@ -603,6 +603,20 @@ width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
 color:var(--ink3);cursor:pointer;user-select:none}
 .modal-opt input{width:15px;height:15px;accent-color:#0f6e56;margin:0}
 .modal-btns{display:flex;gap:10px}
+/* 启动风险提示：比普通弹窗更高一层，且不允许点遮罩关闭 */
+.risk{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;
+align-items:center;justify-content:center;padding:22px;z-index:90}
+.risk.show{display:flex}
+.risk-box{background:var(--card);border-radius:16px;padding:22px 20px 18px;
+width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.22)}
+.risk-box h3{font-size:16px;margin:0 0 10px;color:var(--ink)}
+.risk-box p{font-size:13.5px;line-height:1.65;color:var(--ink2);margin:0 0 10px}
+.risk-link{display:inline-block;font-size:13px;color:#0f6e56;text-decoration:none;
+padding:2px 0 10px}
+.risk-foot{font-size:12px;color:var(--ink3);line-height:1.6;margin:2px 0 16px;
+padding-top:10px;border-top:0.5px solid var(--line)}
+.risk-btns{display:flex;gap:10px}
+.risk-btns button{flex:1}
 .modal-btns button{flex:1}
 </style>
 </head>
@@ -695,6 +709,18 @@ color:var(--ink3);cursor:pointer;user-select:none}
     <div class="ext-note" data-t="extLicense">本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue</div>
     <div class="info-note" style="border-top:0"><span data-t="setEntry">左滑主界面或点标题可再次进入本页。</span><br>
       <span data-t="setNameNote">应用名称会同时改变桌面图标的名称。</span></div>
+  </div>
+</div>
+<div id="risk" class="risk show">
+  <div class="risk-box">
+    <h3 data-t="riskTitle">使用前请留意</h3>
+    <p data-t="riskBody">本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电。</p>
+    <a class="risk-link" id="lnkTerms" href="https://github.com/henry-97/MineApp/blob/main/docs/TERMS.md" data-t="riskLink">查看完整「使用须知」→</a>
+    <p class="risk-foot" data-t="riskFoot">继续使用本软件，即表示你自行承担因使用不当造成的风险。</p>
+    <div class="risk-btns">
+      <button class="ghost" id="riskQuit" data-t="riskQuit">退出</button>
+      <button class="primary" id="riskOk" data-t="riskAgree">同意并使用</button>
+    </div>
   </div>
 </div>
 <div id="toast"></div>
@@ -800,6 +826,11 @@ var I18N = {
     secTip: '界面提示（ⓘ）', tipShow: '显示', tipHide: '隐藏',
     secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue',
+    riskTitle: '使用前请留意',
+    riskBody: '本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电。',
+    riskLink: '查看完整「使用须知」→',
+    riskFoot: '继续使用本软件，即表示你自行承担因使用不当造成的风险。',
+    riskAgree: '同意并使用', riskQuit: '退出',
     secIcon: '应用图标',
     icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
     tIconOk: '图标已切换，桌面可能需要几秒刷新', tIconFail: '图标切换失败',
@@ -889,6 +920,11 @@ var I18N = {
     secTip: 'Hints (ⓘ)', tipShow: 'Show', tipHide: 'Hide',
     secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     extLicense: 'GPL-3.0 — closed-source distribution not permitted. Need a proprietary licence? Open an issue.',
+    riskTitle: 'Before you start',
+    riskBody: 'This app drives system commands directly through ADB and is genuinely powerful. Do not freeze or restrict components the system depends on (Clock, launcher, keyboard, …) — alarms, the home screen and incoming calls can break.',
+    riskLink: 'Read the full usage notes →',
+    riskFoot: 'By continuing, you accept responsibility for any risk caused by misuse.',
+    riskAgree: 'Agree and continue', riskQuit: 'Quit',
     secIcon: 'App icon',
     icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
     tIconOk: 'Icon changed; the launcher may take a few seconds', tIconFail: 'Failed to change icon',
@@ -1920,6 +1956,16 @@ document.getElementById('themeBar').addEventListener('click', function(e){
   localStorage.setItem('theme', themeMode);
   applyTheme();
   renderSettings();
+});
+
+/* 启动风险提示：只能通过「同意并使用」关闭，点遮罩无效 */
+document.getElementById('riskOk').addEventListener('click', function(){
+  document.getElementById('risk').classList.remove('show');
+});
+document.getElementById('riskQuit').addEventListener('click', function(){
+  // 有 Java 桥就真的退出；Termux 版没有桥，退回关闭窗口
+  if (window.Bridge && window.Bridge.exitApp) { window.Bridge.exitApp(); return; }
+  window.close();
 });
 
 document.getElementById('tipBar').addEventListener('click', function(e){
