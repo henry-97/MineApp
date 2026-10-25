@@ -169,7 +169,7 @@ Then open the app and tick "Always allow" on the phone.
 > the PC entirely — but it means rewriting the whole pairing and TLS transport layer, and the added
 > component would be larger than the app itself, with real multi-device compatibility risk. That
 > contradicts the whole point of staying featherweight, and it offers no clear advantage over running
-> one `adb` command at setup time. So it is deliberately out of scope.
+> one `adb` command at setup time. So this approach is deliberately not pursued for now.
 
 #### After a reboot
 
