@@ -630,7 +630,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <label class="switch"><input type="checkbox" id="perfChk"><span class="slider"></span></label>
     </span>
     <span class="sw-text" id="btnTune" aria-label="tuning">性能模式 <i class="tip-i">ⓘ</i></span>
-    <button class="refresh" id="btnRefresh" aria-label="刷新"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 12a8 8 0 1 0 8-8"/><path fill="currentColor" d="M12 1.3 16.4 4 12 6.7z"/></svg></button></div>
+    <button class="refresh" id="btnRefresh" aria-label="刷新"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M4 12a8 8 0 1 0 8-8"/><path fill="currentColor" d="M8.4 4 12.8 1.4v5.2z"/></svg></button></div>
   <div class="subline"><span id="battery"></span><span id="stat">加载中…</span></div>
   <div class="banner" id="banner" style="display:none"></div>
   <input id="q" type="search" data-tp="searchPh" placeholder="搜索应用名或包名，点下方按钮切换排序" autocomplete="off">

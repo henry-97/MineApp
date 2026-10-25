@@ -993,7 +993,12 @@ public class AdbService {
         List<JSONObject> apps = new ArrayList<JSONObject>();
         List<String> sortedPkgs = new ArrayList<String>(all);
         Collections.sort(sortedPkgs);
+        // 把自己排除掉：在列表里对着自己点「归档」会直接把本应用冻结，界面立刻打不开，
+        // 只能回电脑用 adb shell pm enable 救回来 —— 这种误操作不值得给机会。
+        String selfPkg = appCtx == null ? null : appCtx.getPackageName();
+
         for (String pkg : sortedPkgs) {
+            if (pkg.equals(selfPkg)) continue;
             JSONObject a = new JSONObject();
             try {
                 String label = labels.get(pkg);
