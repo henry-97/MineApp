@@ -50,15 +50,15 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 | | **Mine App** | Built-in "Force stop" | Ice Box | Hail |
 |---|---|---|---|---|
 | Needs root | **No** | No | No | No |
-| Requires Shizuku | **✓ No** | No | Yes | Yes |
-| Per-app deployment | **✓ Yes** | — | No | No |
-| Needs a background daemon | **✓ No** | No | Yes (Shizuku running) | Yes (Shizuku running) |
-| APK size | **✓ < 1MB** | Built in | Several MB | Several MB |
+| Requires Shizuku | **No ✓** | No | Yes | Yes |
+| Per-app deployment | **Yes ✓** | — | No | No |
+| Needs a background daemon | **No ✓** | No | Yes (Shizuku running) | Yes (Shizuku running) |
+| APK size | **< 1MB ✓** | Built in | Several MB | Several MB |
 | Batch freeze / unfreeze | **Yes** | — | Yes | Yes |
 | Survives a reboot | **Yes** | No | Yes | Yes |
-| Performance profile tuning | **✓ Yes** | — | — | — |
-| Per-app AOT compilation | **✓ Yes** | — | — | — |
-| PSS memory sorting | **✓ Yes** | — | — | — |
+| Performance profile tuning | **Yes ✓** | — | — | — |
+| Per-app AOT compilation | **Yes ✓** | — | — | — |
+| PSS memory sorting | **Yes ✓** | — | — | — |
 
 > **✓** marks where Mine App has the edge.
 > "Per-app deployment" means freezing / restricting / AOT-compiling one specific app without
