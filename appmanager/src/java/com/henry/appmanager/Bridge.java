@@ -23,6 +23,14 @@ public class Bridge {
     private final WebView web;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    /**
+     * 长任务专用线程池（目前只有 AOT 编译）。
+     *
+     * 原来所有请求共用 worker 单线程，AOT 一跑就是几分钟，期间「进性能调优页」
+     * 「刷新列表」全部排在后面，表现就是界面被卡住。长任务拆出去之后，
+     * 普通请求立刻就能执行（传输层另有一条连接，见 AdbService.shLong）。
+     */
+    private final ExecutorService heavy = Executors.newSingleThreadExecutor();
 
     public Bridge(AdbService service, WebView web) {
         this.service = service;
@@ -55,6 +63,30 @@ public class Bridge {
     }
 
     private interface Task { String run() throws Exception; }
+
+    /** 与 dispatch 相同，只是跑在 heavy 线程池上，不阻塞普通请求 */
+    private void dispatchHeavy(final int id, final Task task) {
+        heavy.execute(new Runnable() {
+            @Override
+            public void run() {
+                String json;
+                try {
+                    json = task.run();
+                } catch (Throwable e) {
+                    android.util.Log.w("Bridge", "长任务失败: " + e, e);
+                    json = "{\"ok\":false,\"msg\":\"" + e.getMessage() + "\"}";
+                }
+                final String payload = JSONObject.quote(json);
+                main.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        web.evaluateJavascript(
+                                "window.__bridgeResult(" + id + "," + payload + ")", null);
+                    }
+                });
+            }
+        });
+    }
 
     @JavascriptInterface
     public void list(int id, String arg) {
@@ -159,7 +191,7 @@ public class Bridge {
     /** arg 形如 "com.foo|1"：1 = 预编译，0 = 取消预编译 */
     @JavascriptInterface
     public void aot(final int id, final String arg) {
-        dispatch(id, new Task() {
+        dispatchHeavy(id, new Task() {
             @Override
             public String run() {
                 int i = arg.lastIndexOf('|');
@@ -282,5 +314,6 @@ public class Bridge {
 
     public void shutdown() {
         worker.shutdownNow();
+        heavy.shutdownNow();
     }
 }

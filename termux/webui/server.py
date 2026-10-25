@@ -504,9 +504,13 @@ background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform .16s e
 .aot-sw .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#0f6e56;opacity:.5;
 transition:width .2s linear}
 .aot-sw.busy::after{transform:translateX(18px);opacity:0}
-.aot-lb{flex:none;font-size:11px;color:var(--ink3);font-family:ui-monospace,monospace;min-width:14px;
-text-align:right}
-.aot-lb.run{min-width:44px;color:#0f6e56}
+/* 编译中：百分比画在轨道内部，不占用左侧 AOT 标签的位置 */
+.aot-sw .pct{position:absolute;left:0;right:0;top:0;bottom:0;display:none;
+align-items:center;justify-content:center;font-size:10px;font-weight:600;
+color:#0b3b2e;font-family:ui-monospace,monospace;letter-spacing:-.4px;line-height:1}
+.aot-sw.busy .pct{display:flex}
+.aot-lb{flex:none;font-size:11px;color:var(--ink3);font-family:ui-monospace,monospace;
+min-width:22px;text-align:right}
 .rt-top{display:flex;align-items:center;gap:7px}
 .tag.sys{flex:none;background:var(--bluebg);color:var(--blue);font-size:10px;
 padding:1px 6px;border-radius:5px;line-height:1.6;font-weight:400}
@@ -1112,7 +1116,7 @@ function render(){
          +  '<div class="rt"><div class="rt-top">'
          +    '<span class="aot-lb">AOT</span>'
          +    '<span class="aot-sw' + (aotOn ? ' on' : '') + '" data-pkg="' + a.pkg
-         +      '" data-aot="' + (aotOn ? '1' : '0') + '"><i class="fill"></i></span>'
+         +      '" data-aot="' + (aotOn ? '1' : '0') + '"><i class="fill"></i><b class="pct"></b></span>'
          +  '</div>' + stateTag(a) + '</div></li>';
   }
   list.innerHTML = html;
@@ -1357,14 +1361,19 @@ document.getElementById('list').addEventListener('click', function(e){
   sw.classList.remove('on');
   sw.classList.add('busy');
   var fill = sw.querySelector('.fill');
-  var lb = sw.parentNode.querySelector('.aot-lb');
-  if (lb) lb.classList.add('run');
+  var pctEl = sw.querySelector('.pct');
   var t0 = Date.now();
+  // 显示已用时而不是假百分比：大应用 speed 编译实测要 10 分钟，
+  // 伪进度条会在 99% 停七八分钟，看起来像卡死。真实耗时不可知，报时间最诚实。
   function tick(){
     var t = (Date.now() - t0) / 1000;
     var pct = Math.min(99, 99 * (1 - Math.pow(0.5, (t + 3) / 20)));
     if (fill) fill.style.width = pct.toFixed(1) + '%';
-    if (lb) lb.textContent = pct.toFixed(1) + '%';
+    if (pctEl){
+      var sec = Math.floor(t);
+      pctEl.textContent = sec < 60 ? (sec + 's')
+                        : (Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2));
+    }
   }
   tick();
   var timer = setInterval(tick, 200);
@@ -1375,7 +1384,7 @@ document.getElementById('list').addEventListener('click', function(e){
     aotBusy = false;
     sw.classList.remove('busy');
     if (fill) fill.style.width = '0%';
-    if (lb){ lb.classList.remove('run'); lb.textContent = 'AOT'; }
+    if (pctEl) pctEl.textContent = '';
     if (ok){
       if (wantOn) sw.classList.add('on');
       sw.setAttribute('data-aot', wantOn ? '1' : '0');
@@ -1386,7 +1395,13 @@ document.getElementById('list').addEventListener('click', function(e){
                      body: JSON.stringify({pkg: pkg, on: wantOn})})
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if (!d.ok){ settle(false); toast(T2('tFail', {m: d.msg || T('tUnknown')})); return; }
+      if (!d.ok){
+        settle(false);
+        // busy = 后台已经有一个编译在跑（Java 侧的单飞保护），不是失败
+        if (d.busy) toast(T('tCompiling'));
+        else toast(T2('tFail', {m: d.msg || T('tUnknown')}));
+        return;
+      }
       settle(true);
       if (wantOn) aotDone.add(pkg); else aotDone.delete(pkg);
       saveAot();

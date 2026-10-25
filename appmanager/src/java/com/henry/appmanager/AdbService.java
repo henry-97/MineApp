@@ -66,10 +66,14 @@ public class AdbService {
      * 未授权时各弹一次授权框 —— 这也是「连续弹好几次」的来源之一。
      */
     private static AdbService shared;
+    /** ApplicationContext，只用于 PackageManager 取应用名 */
+    private static android.content.Context appCtx;
 
     public static synchronized AdbService shared(android.content.Context ctx, AdbClient.Log log) {
         if (shared == null) {
             AdbService s = new AdbService(log);
+            // 保留 ApplicationContext：取应用名要用 PackageManager，不能持有 Activity
+            appCtx = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
             try {
                 s.initKey(ctx.getFilesDir());
             } catch (Exception e) {
@@ -169,6 +173,35 @@ public class AdbService {
         if (head.length() > 50) head = head.substring(0, 50);
         if (DEBUG) Log.i(TAG, "CMD[" + cmd + "] len=" + out.length() + " head=" + head);
         return out;
+    }
+
+    // ---------- 长任务专用连接 ----------
+
+    /**
+     * AOT 编译这类命令一跑就是几分钟到十几分钟。如果和普通命令共用同一条
+     * transport + 同一把锁，编译期间「进性能调优页」「刷新列表」全部排队，
+     * 界面表现为卡死。
+     *
+     * adbd 支持多条 transport，用同一把已授权的密钥再开一条专供长任务，
+     * 普通命令立刻就能执行；密钥已在手机上「一律允许」，新连接不会再弹框。
+     */
+    private AdbClient longConn;
+    private final Object longLock = new Object();
+
+    private String shLong(String cmd) throws Exception {
+        synchronized (longLock) {
+            if (longConn == null || !longConn.isConnected()) {
+                if (longConn != null) {
+                    try { longConn.close(); } catch (Exception ignored) { }
+                    longConn = null;
+                }
+                AdbClient c = new AdbClient(log);
+                c.applyKey(key);
+                c.connect(HOST, PORT);
+                longConn = c;
+            }
+            return longConn.shell(cmd, 0, false);
+        }
     }
 
     /** 读命令：断线自动重连重试一次。 */
@@ -343,9 +376,33 @@ public class AdbService {
         //   · 不用 Last：单次偏高的学习值会把结果拉高，且充满电后 Last 会刷新成当前容量
         //   · 不用 charge counter：它反映的也是「这一次」的满电容量，同样可能偏高
         // Min 不存在（新机 / 从未完整充放过）时返回 0，界面显示「—」而不是一个假数字。
+        // 系统给的 Min 自己也会变：充满一次电或重启后 batterystats 会重新学习容量，
+        // Min 可能被刷新成更大的值 —— 于是健康度会「涨回去」（实测 87% → 90%）。
+        // 这里自己记一份历史最低，只在「明显变高」时认为换了电池/重新校准才重置。
+        int capMin = learnedMin;
+        if (learnedMin > 0 && appCtx != null) {
+            try {
+                android.content.SharedPreferences sp =
+                        appCtx.getSharedPreferences("app", 0);
+                int stored = sp.getInt("cap_min", 0);
+                if (stored <= 0) {
+                    capMin = learnedMin;
+                    sp.edit().putInt("cap_min", capMin).apply();
+                } else if (learnedMin < stored) {
+                    capMin = learnedMin;            // 更低 → 采纳，健康度只降不升
+                    sp.edit().putInt("cap_min", capMin).apply();
+                } else if (learnedMin > stored * 1.15) {
+                    capMin = learnedMin;            // 高出 15% 以上 → 换电池或重新校准
+                    sp.edit().putInt("cap_min", capMin).apply();
+                } else {
+                    capMin = stored;                // 正常波动 → 沿用历史最低
+                }
+            } catch (Throwable ignored) { }
+        }
+
         int healthPct = 0;
-        if (learnedMin > 0 && BATTERY_DESIGN_MAH > 0) {
-            healthPct = (int) Math.round(learnedMin * 100.0 / BATTERY_DESIGN_MAH);
+        if (capMin > 0 && BATTERY_DESIGN_MAH > 0) {
+            healthPct = (int) Math.round(capMin * 100.0 / BATTERY_DESIGN_MAH);
         }
         try {
             o.put("level", level);
@@ -355,7 +412,7 @@ public class AdbService {
             o.put("temp", temp);
             o.put("charge", charge);
             o.put("learned_last", learnedLast);
-            o.put("learned_min", learnedMin);
+            o.put("learned_min", capMin);
             o.put("learned_max", learnedMax);
         } catch (Exception ignored) { }
         return o;
@@ -431,8 +488,29 @@ public class AdbService {
      *    都会把「其实成功了」误报成失败。连接真断了会抛 IOException，不会永远卡住。
      * 3. 成败一律以编译后的**真实 status** 为准，不解析命令输出。
      */
+    /**
+     * 正在编译的包名（null = 空闲）。
+     *
+     * 同一时刻只允许一个 dexopt。WebView 重载后前端的 aotBusy 会归零，
+     * 用户再点一次就会发出第二条 compile —— 两条 dexopt 抢同一把系统锁，
+     * 后发的那条会失败，表现为「明明还在编译，却又报编译失败」。
+     */
+    private static volatile String compilingPkg;
+
     public String setAot(String pkg, boolean on) {
         JSONObject o = new JSONObject();
+        synchronized (AdbService.class) {
+            if (compilingPkg != null) {
+                try {
+                    o.put("ok", false);
+                    o.put("busy", true);
+                    o.put("pkg", compilingPkg);
+                    o.put("msg", "busy: " + compilingPkg);
+                } catch (Exception ignored) { }
+                return o.toString();
+            }
+            compilingPkg = pkg;
+        }
         try {
             String before = aotStatus(pkg);
             if (on && "speed".equals(before)) {
@@ -445,19 +523,33 @@ public class AdbService {
             String cmd = on
                     ? "cmd package compile -m speed " + pkg
                     : "cmd package compile -m verify " + pkg;
-            String r = sh(cmd, 0).trim();
+            String r = shLong(cmd).trim();
             String after = aotStatus(pkg);
             boolean ok = on ? "speed".equals(after) : !"speed".equals(after);
             o.put("ok", ok);
             o.put("aot", on && ok);
             o.put("status", after);
-            o.put("msg", ok ? r : (r.isEmpty() ? ("status=" + after) : r));
+            String msg = r.trim();
+            if (!ok) {
+                // dex2oat 对超大应用会直接放弃，命令只回一个 "Failure"，
+                // 光把这个词弹给用户没有任何信息量。这里翻译成人话。
+                if (msg.isEmpty() || msg.equalsIgnoreCase("Failure")
+                        || msg.startsWith("Error")) {
+                    msg = "系统拒绝全量编译（dex2oat 放弃），已保持 " + after
+                            + "。插件多的大应用常见，speed-profile 本身已比未编译快。";
+                }
+            }
+            o.put("msg", ok ? msg : msg);
         } catch (Exception e) {
             try {
                 o.put("ok", false);
                 o.put("aot", !on);
                 o.put("msg", String.valueOf(e.getMessage()));
             } catch (Exception ignored) { }
+        } finally {
+            synchronized (AdbService.class) {
+                compilingPkg = null;
+            }
         }
         return o.toString();
     }
@@ -603,6 +695,38 @@ public class AdbService {
         }
     }
 
+    /**
+     * 一次取出全部「包名 → 应用显示名」。
+     *
+     * 以前只查 AppNames.MAP（一张手写的 61 条表），表里没有的包一律回落到包名，
+     * 于是「抖音极速版」这类应用看到的是 com.ss.android.ugc.aweme.lite。
+     *
+     * 改成问系统要真实 label：getInstalledApplications 一次 IPC 拿全表，
+     * 比逐包 getApplicationInfo 快得多（600 个包是 1 次调用而不是 600 次）。
+     * 依赖 manifest 里的 QUERY_ALL_PACKAGES —— 没有它，Android 11+ 只返回
+     * 与自身有交互的少数包，大部分应用仍然拿不到名字。
+     */
+    private Map<String, String> labelMap() {
+        Map<String, String> m = new HashMap<String, String>();
+        if (appCtx == null) return m;
+        try {
+            android.content.pm.PackageManager pm = appCtx.getPackageManager();
+            for (android.content.pm.ApplicationInfo ai : pm.getInstalledApplications(0)) {
+                try {
+                    CharSequence cs = ai.loadLabel(pm);
+                    if (cs == null) continue;
+                    String s = cs.toString().trim();
+                    // 少数应用把 label 写成包名或空串，这种交给兜底逻辑
+                    if (s.isEmpty() || s.equals(ai.packageName)) continue;
+                    m.put(ai.packageName, s);
+                } catch (Throwable ignored) { }
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "取应用名失败: " + e);
+        }
+        return m;
+    }
+
     private String buildList(boolean withPss) throws Exception {
 
         Set<String> active = pkgs("--user", "0");
@@ -615,6 +739,7 @@ public class AdbService {
         Map<String, Long> pss = withPss ? getPss() : Collections.<String, Long>emptyMap();
         if (DEBUG) Log.i(TAG, "pss 条目数=" + pss.size());
         Set<String> restricted = getRestricted();
+        Map<String, String> labels = labelMap();
 
         List<JSONObject> apps = new ArrayList<JSONObject>();
         List<String> sortedPkgs = new ArrayList<String>(all);
@@ -622,7 +747,8 @@ public class AdbService {
         for (String pkg : sortedPkgs) {
             JSONObject a = new JSONObject();
             try {
-                String label = AppNames.MAP.containsKey(pkg) ? AppNames.MAP.get(pkg) : pkg;
+                String label = labels.get(pkg);
+                if (label == null) label = AppNames.MAP.containsKey(pkg) ? AppNames.MAP.get(pkg) : pkg;
                 a.put("pkg", pkg);
                 a.put("label", label);
                 // 两种「归档」状态都要认：新方式 disable-user（数据保留），

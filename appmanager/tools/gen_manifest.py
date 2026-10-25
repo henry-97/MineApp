@@ -20,7 +20,7 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="26"
+    android:versionCode="27"
     android:versionName="1.3.2">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
@@ -30,6 +30,9 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <!-- 应用管理器必须能列出全部应用才能取到真实应用名（否则 Android 11+ 只返回
+         与自身有交互的少数包，绝大多数应用只能显示包名） -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <application
         android:label="Mine App"
