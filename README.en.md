@@ -3,7 +3,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/app-icon.png" width="112" alt="Mine App">
+  <img src="docs/app-icon.png" width="96" alt="Mine App">
+  &nbsp;&nbsp;
+  <img src="docs/app-icon-clover.png" width="96" alt="Mine App">
 </p>
 
 <h1 align="center">Mine App · App Manager</h1>
