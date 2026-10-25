@@ -21,7 +21,7 @@
 > **Mine App is a featherweight Android app manager that brings sluggish devices back to life — without root or heavy frameworks.**
 >
 > - **Zero Bloat, Zero Dependencies**: Built without Gradle overhead; operates completely independent of Root or Shizuku services. Ultra-compact footprint with <1MB APK size and <10MB total storage footprint (including runtime caches).
-> - **Paradoxical Energy Efficiency**: Pair a sustained performance mode with aggressive background freezes and restriction policies. Cut off stealthy background resource grabs to minimize power drain while ensuring maximum foreground responsiveness.
+> - **Faster and Lighter at Once**: Pair a sustained performance mode with aggressive background freezes and restriction policies. Cut off stealthy background resource grabs to minimize power drain while ensuring maximum foreground responsiveness.
 > - **Low-Level Acceleration**: Built-in Android AOT Speed batch compilation compiles DEX to native code, eliminating JIT stutters and dramatically accelerating cold-start times on low-spec hardware.
 
 ---
@@ -29,7 +29,10 @@
 ## What is this
 
 The usual way to keep an unused app completely silent on Android is to freeze it. Most solutions
-require root, or drag in a whole stack of Shizuku / Ice Box / Hail. Mine App takes a different route:
+require root, or drag in a whole stack of Shizuku / Ice Box / Hail — **several apps that make
+already-tight storage even tighter**.
+
+Mine App takes a different route: **single-app deployment, without giving up an ounce of lightness.**
 
 **The phone connects to its own adbd.**
 
@@ -38,13 +41,32 @@ Run `adb tcpip 5555` **once, at install time** — over a USB cable or through W
 The app ships a minimal ADB client, authenticates with a key kept in its private storage, and then
 talks to `pm` / `am` / `cmd` directly.
 
-**After that the PC is out of the picture** — freezing, restricting, AOT compilation and performance
-profiles are all a few taps on the phone, with no adb tooling involved. As long as you do not reboot,
-that single `adb tcpip` keeps working; after a reboot, just run it once more.
+**One app, and that is the whole setup.** A single 525 KB APK with zero third-party dependencies:
+no Shizuku, no Ice Box, no Hail, no resident daemon, no extra permissions.
 
 <p align="center">
   <img src="docs/main-en.jpg" width="320" alt="Main screen">
 </p>
+
+### Polling: minimal load, without letting the data go stale
+
+A resident tool is at risk of becoming the very thing it is meant to fix. Mine App splits its
+polling into two tiers:
+
+| Frequency | What is fetched | Why split this way |
+|---|---|---|
+| **Every 3 s** | A single `cat /proc/meminfo` — total and used memory | So cheap it is effectively free, yet enough to keep the memory picture live |
+| **Every 60 s** | Battery health, archive count, restriction count | These change slowly, and cost `dumpsys battery` + `dumpsys batterystats` + four `pm`/`appops` calls — far heavier than meminfo, so only every 20th tick |
+
+There is also a **manual refresh button**, for when you want the state right now instead of waiting
+for the next tick.
+
+In short: **poll the lightest metric often, do the heavy work rarely** — minimal load on the device,
+with information that never goes stale.
+
+**After that the PC is out of the picture** — freezing, restricting, AOT compilation and performance
+profiles are all a few taps on the phone, with no adb tooling involved. As long as you do not reboot,
+that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 ### Compared to the usual options
 
