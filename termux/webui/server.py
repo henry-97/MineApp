@@ -730,6 +730,15 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     </div>
   </div>
 </div>
+<script>
+/* 每次安装（versionCode 变化）只提示并确认一次。
+   按 versionCode 判断而不是布尔标记：覆盖安装时 localStorage 会保留，
+   只认"同意过"就再也不会弹；只认布尔 false 又每次都弹。 */
+var RISK_VER = '__VERSION_CODE__';
+if (localStorage.getItem('riskOkVer') === RISK_VER) {
+  document.getElementById('risk').classList.remove('show');
+}
+</script>
 <div id="toast"></div>
 <div id="modal" class="modal">
   <div class="modal-box">
@@ -2041,6 +2050,7 @@ document.getElementById('themeBar').addEventListener('click', function(e){
 
 /* 启动风险提示：只能通过「同意并使用」关闭，点遮罩无效 */
 document.getElementById('riskOk').addEventListener('click', function(){
+  localStorage.setItem('riskOkVer', RISK_VER);   // 记住"这个版本已同意"
   document.getElementById('risk').classList.remove('show');
 });
 document.getElementById('riskQuit').addEventListener('click', function(){

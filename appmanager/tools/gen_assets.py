@@ -92,6 +92,9 @@ def main() -> int:
     mv = re.search(r'android:versionName="([^"]+)"', man)
     ver = mv.group(1) if mv else "?"
     html = html.replace("__APP_VERSION__", ver)
+    # versionCode 也注入：风险提示要"每次安装只确认一次"，只能按 versionCode 判断
+    mc = re.search(r'android:versionCode="(\d+)"', man)
+    html = html.replace("__VERSION_CODE__", mc.group(1) if mc else "0")
 
     os.makedirs(os.path.join(BASE, "assets"), exist_ok=True)
     with open(os.path.join(BASE, "assets", "index.html"), "w", encoding="utf-8", newline="\n") as f:
