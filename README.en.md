@@ -41,11 +41,14 @@ authenticates with a key kept in its private storage, and talks to `pm` / `am` /
 
 ### Compared to the usual options
 
-| | Needs root | Needs a daemon | Needs a PC | APK size |
-|---|---|---|---|---|
-| Built-in "Force stop" | No | No | No | — (but resets on reboot, no batch) |
-| Shizuku + Ice Box | No | **Yes** (two of them) | First time only | Tens of MB |
-| **Mine App** | **No** | **No** | Only once for `adb tcpip` | **525 KB** |
+| | **Mine App** | Built-in "Force stop" | Shizuku + Ice Box |
+|---|---|---|---|
+| Needs root | **No** | No | No |
+| Needs a background daemon | **No** | No | Yes (two of them) |
+| Needs a PC | **Once, for `adb tcpip`** | No | Once, to activate Shizuku |
+| APK size | **525 KB** | Built in | Tens of MB |
+| Batch operations | **Yes** | No | Yes |
+| Survives a reboot | **Yes** | No | Yes |
 
 ## Features
 
