@@ -34,6 +34,12 @@ public class MainActivity extends Activity {
     private AdbService service;
     private Bridge bridge;
 
+    /** 正式版（无 android:debuggable）返回 false：WebView 远程调试与 JS 日志都据此关闭 */
+    private boolean isDebuggable() {
+        return (getApplicationInfo().flags
+                & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -54,11 +60,18 @@ public class MainActivity extends Activity {
         // 表现为字号偏小、字形被横向压扁（meta viewport 也不生效）。
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
+        // 正式版一律关掉 WebView 远程调试（chrome://inspect 能挂上来直接改页面），
+        // 只在 debuggable 构建里打开，方便开发期看 console。
+        if (android.os.Build.VERSION.SDK_INT >= 19) {
+            WebView.setWebContentsDebuggingEnabled(isDebuggable());
+        }
         web.setWebChromeClient(new android.webkit.WebChromeClient() {
             @Override
             public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
-                android.util.Log.i("WebConsole",
-                        m.message() + " @" + m.lineNumber());
+                if (isDebuggable()) {
+                    android.util.Log.i("WebConsole",
+                            m.message() + " @" + m.lineNumber());
+                }
                 return true;
             }
         });

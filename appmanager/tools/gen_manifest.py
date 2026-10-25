@@ -20,7 +20,7 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="25"
+    android:versionCode="26"
     android:versionName="1.3.2">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
@@ -36,8 +36,7 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:allowBackup="false"
-        android:usesCleartextTraffic="true">
+        android:allowBackup="false">
 
         <activity
             android:name=".MainActivity"

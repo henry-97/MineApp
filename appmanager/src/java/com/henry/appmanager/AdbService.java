@@ -26,6 +26,8 @@ import java.util.regex.Pattern;
 public class AdbService {
 
     private static final String TAG = "AdbService";
+    /** 正式版关掉逐条命令日志；Log.w 的异常告警保留，方便用户报 bug 时抓 */
+    private static final boolean DEBUG = false;
     private static final String HOST = "127.0.0.1";
     private static final int PORT = 5555;
 
@@ -107,7 +109,7 @@ public class AdbService {
         c.applyKey(key);
         c.connect(HOST, PORT);
         conn = c;
-        Log.i(TAG, "新建 adbd 连接，后续命令复用这条 transport");
+        if (DEBUG) Log.i(TAG, "新建 adbd 连接，后续命令复用这条 transport");
         return c;
     }
 
@@ -165,7 +167,7 @@ public class AdbService {
         int nl = out.indexOf('\n');
         String head = nl > 0 ? out.substring(0, nl) : out;
         if (head.length() > 50) head = head.substring(0, 50);
-        Log.i(TAG, "CMD[" + cmd + "] len=" + out.length() + " head=" + head);
+        if (DEBUG) Log.i(TAG, "CMD[" + cmd + "] len=" + out.length() + " head=" + head);
         return out;
     }
 
@@ -608,10 +610,10 @@ public class AdbService {
         if (all.isEmpty()) all = active;
         Set<String> system = pkgs("-s");
         Set<String> disabled = getDisabled();
-        Log.i(TAG, "active=" + active.size() + " all=" + all.size()
+        if (DEBUG) Log.i(TAG, "active=" + active.size() + " all=" + all.size()
                 + " system=" + system.size() + " restricted=" + getRestricted().size());
         Map<String, Long> pss = withPss ? getPss() : Collections.<String, Long>emptyMap();
-        Log.i(TAG, "pss 条目数=" + pss.size());
+        if (DEBUG) Log.i(TAG, "pss 条目数=" + pss.size());
         Set<String> restricted = getRestricted();
 
         List<JSONObject> apps = new ArrayList<JSONObject>();
