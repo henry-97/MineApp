@@ -6,6 +6,9 @@ appmanager/out/
 
 # 本地环境与签名（绝不提交）
 appmanager/local.env
+.gh_token
+*.token
+.env
 *.keystore
 *.jks
 *.pk8
