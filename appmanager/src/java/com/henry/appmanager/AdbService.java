@@ -997,10 +997,23 @@ public class AdbService {
         // 只能回电脑用 adb shell pm enable 救回来 —— 这种误操作不值得给机会。
         String selfPkg = appCtx == null ? null : appCtx.getPackageName();
 
+        // Millet 白名单（豁免后台限制）：一条 settings get，顺手带上，前端好打「白名单」胶囊
+        Set<String> white = new HashSet<String>();
+        try {
+            String ml = shR("settings get system MILLET_NO_RESTRICT_APP").trim();
+            if (!ml.isEmpty() && !"null".equals(ml)) {
+                for (String x : ml.split(",")) {
+                    x = x.trim();
+                    if (!x.isEmpty()) white.add(x);
+                }
+            }
+        } catch (Exception ignored) { }
+
         for (String pkg : sortedPkgs) {
             if (pkg.equals(selfPkg)) continue;
             JSONObject a = new JSONObject();
             try {
+                a.put("white", white.contains(pkg));
                 String label = labels.get(pkg);
                 if (label == null) label = AppNames.MAP.containsKey(pkg) ? AppNames.MAP.get(pkg) : pkg;
                 a.put("pkg", pkg);

@@ -597,6 +597,8 @@ box-shadow:0 0 0 0.5px rgba(0,0,0,.12)}
 padding:0;font-size:16px;color:var(--ink2);min-height:36px;font-weight:400}
 .seg.on{background:#0f6e56;color:#fff;border-color:#0f6e56;font-weight:500}
 .tag.w{background:#faeeda;color:#854f0b}
+/* 白名单：排在「已限制」上方，单独一个胶囊 */
+.tag.b{background:#e3f0eb;color:#0f6e56}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;
 align-items:center;justify-content:center;padding:24px;z-index:60}
 .modal.show{display:flex}
@@ -777,7 +779,9 @@ var I18N = {
     memSel: '内存 <b>{u}G</b> ({p}%)',
     clearSel: '清空',
     picked: '已选',
-    tagArchived: '已归档', tagRestricted: '已限制', tagSystem: '系统', tagNormal: '正常',
+    tagArchived: '已归档', tagRestricted: '已限制', tagWhite: '白名单', tagSystem: '系统', tagNormal: '正常',
+    milletNow: '当前名单 {n} 个',
+    cfmMillet: '保存后白名单会从 {a} 个变成 {b} 个（整体覆盖），确定吗？',
     agoNever: '24h 以上',
     bannerOff: '调试通道未连接', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip 5555',
     bannerUnauth: '等待授权', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
@@ -872,7 +876,9 @@ var I18N = {
     memSel: 'RAM <b>{u}G</b> ({p}%)',
     clearSel: 'Clear',
     picked: 'Picked',
-    tagArchived: 'Archived', tagRestricted: 'Restricted', tagSystem: 'System', tagNormal: 'Normal',
+    tagArchived: 'Archived', tagRestricted: 'Restricted', tagWhite: 'Allowlisted', tagSystem: 'System', tagNormal: 'Normal',
+    milletNow: 'currently {n}',
+    cfmMillet: 'Saving replaces the allowlist: {a} → {b}. Continue?',
     agoNever: '>24h',
     bannerOff: 'ADB channel not connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip 5555',
     bannerUnauth: 'Waiting for authorization', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
@@ -1182,6 +1188,12 @@ function applySort(arr, mode){
   } else if (mode === 'name') {
     arr.sort(function(a, b){ return a.label.localeCompare(b.label, 'zh'); });
   }
+}
+
+/* 白名单置顶：只在 Millet 白名单页用，主界面不参与
+   （sort 稳定，非白名单之间保持原顺序） */
+function whiteFirst(arr){
+  arr.sort(function(a, b){ return (b.white ? 1 : 0) - (a.white ? 1 : 0); });
 }
 
 /* 距上次前台打开的时长：15 s / 5 m / 3 h / 1 d */
@@ -1866,7 +1878,8 @@ document.getElementById('tuneBody').addEventListener('change', function(e){
 });
 
 /* ---------- Millet 白名单编辑 ---------- */
-var milletSet = new Set();
+var milletSet = new Set();     // 本次勾选的（待保存）
+var milletSaved = new Set();   // 服务端当前白名单，只用于展示胶囊，不再预勾选
 var milletSortMode = 'default';
 
 function openMillet(){
@@ -1874,8 +1887,10 @@ function openMillet(){
                         body: JSON.stringify({})})
     .then(function(r){ return r.json(); })
     .then(function(d){
-      milletSet = new Set((d.list || '').split(',')
+      milletSaved = new Set((d.list || '').split(',')
         .map(function(s){ return s.trim(); }).filter(function(s){ return s.length; }));
+      // 不再预勾选：白名单状态由行内的「白名单」胶囊表达，勾选框只表示「本次要加入」
+      milletSet = new Set();
       document.getElementById('mq').value = '';
       document.getElementById('millet').classList.add('show');
       renderMillet();
@@ -1890,11 +1905,16 @@ function renderMillet(){
     if (onlyPicked && !milletSet.has(a.pkg)) return false;
     return !q || a.pkg.toLowerCase().indexOf(q) >= 0 || a.label.toLowerCase().indexOf(q) >= 0;
   });
-  if (!onlyPicked) applySort(arr, milletSortMode);
+  if (!onlyPicked){
+    applySort(arr, milletSortMode);
+    // 这个页面默认把白名单应用排在最前，一眼就能看出谁已经在名单里
+    if (milletSortMode === 'default') whiteFirst(arr);
+  }
   var html = '';
   for (var i = 0; i < arr.length; i++){
     var a = arr[i];
     var on = milletSet.has(a.pkg);
+    var saved = milletSaved.has(a.pkg);
     var cls = 'li' + (a.frozen ? ' frozen' : (a.restricted ? ' restricted' : ''))
             + (on ? ' on' : '');
     html += '<li class="' + cls + '" data-mpkg="' + a.pkg + '">'
@@ -1902,7 +1922,9 @@ function renderMillet(){
          +  '<div class="meta"><div class="name"><span class="nm">' + a.label + '</span>'
          +    sysTag(a) + '</div>'
          +  '<div class="pkg">' + a.pkg + '</div>' + subline(a) + '</div>'
-         +  stateTag(a) + '</li>';
+         +  '<div class="rt">'
+         +    (saved ? '<span class="tag b">' + T('tagWhite') + '</span>' : '')
+         +    stateTag(a) + '</div></li>';
   }
   if (!html) html = '<div class="empty">' + T('empty') + '</div>';
   document.getElementById('milletList').innerHTML = html;
@@ -1911,7 +1933,8 @@ function renderMillet(){
 
 function updateMilletInfo(){
   var el = document.getElementById('milletSel');
-  if (el) el.innerHTML = T2('infoSel', {n: milletSet.size, t: apps.length});
+  if (el) el.innerHTML = T2('infoSel', {n: milletSet.size, t: apps.length})
+        + (milletSaved.size ? ' · ' + T2('milletNow', {n: milletSaved.size}) : '');
   var c = document.getElementById('milletClear');
   if (c) c.disabled = (milletSet.size === 0);
   // 已勾选应用占用的内存合计，贴在最右侧
@@ -1965,14 +1988,23 @@ document.getElementById('milletSort').addEventListener('click', function(e){
 
 document.getElementById('milletSave').onclick = function(){
   var csv = Array.from(milletSet).join(',');
-  fetch('/api/millet', {method:'POST', headers:{'Content-Type':'application/json'},
-                        body: JSON.stringify({csv: csv})})
-    .then(function(r){ return r.json(); })
-    .then(function(){
-      toast(T2('tSaved', {n: milletSet.size}));
-      document.getElementById('millet').classList.remove('show');
-      if (tuneData) tuneData.millet_count = milletSet.size;
-    });
+  function doSave(){
+    fetch('/api/millet', {method:'POST', headers:{'Content-Type':'application/json'},
+                          body: JSON.stringify({csv: csv})})
+      .then(function(r){ return r.json(); })
+      .then(function(){
+        toast(T2('tSaved', {n: milletSet.size}));
+        document.getElementById('millet').classList.remove('show');
+        if (tuneData) tuneData.millet_count = milletSet.size;
+        load(true);   // 主列表要重刷，否则「白名单」胶囊不会更新
+      });
+  }
+  // 保存是整体覆盖：勾得比原来少就会删条目，先确认一次，别静默丢配置
+  if (milletSaved.size > milletSet.size){
+    askConfirm(T2('cfmMillet', {a: milletSaved.size, b: milletSet.size}), doSave);
+    return;
+  }
+  doSave();
 };
 
 /* ---------- 设置页：名称 / 主题 ---------- */
