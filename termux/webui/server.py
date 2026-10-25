@@ -529,6 +529,7 @@ user-select:none;-webkit-tap-highlight-color:transparent;transition:background .
 .ext{color:#0f6e56;text-decoration:none;padding:6px 2px;border-radius:6px}
 .ext:active{background:var(--track)}
 .ext-sep{color:var(--ink3);font-size:12px}
+.ext-note{font-size:11.5px;color:var(--ink3);line-height:1.6;padding:0 0 10px}
 .refresh{transform-origin:50% 50%;will-change:transform}
 .refresh.spinning{color:#0f6e56}
 .aot-lb{flex:none;font-size:11px;color:var(--ink3);font-family:ui-monospace,monospace;
@@ -691,6 +692,7 @@ color:var(--ink3);cursor:pointer;user-select:none}
       <span class="ext-sep">|</span>
       <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
     </div>
+    <div class="ext-note" data-t="extLicense">本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue</div>
     <div class="info-note" style="border-top:0"><span data-t="setEntry">左滑主界面或点标题可再次进入本页。</span><br>
       <span data-t="setNameNote">应用名称会同时改变桌面图标的名称。</span></div>
   </div>
@@ -797,6 +799,7 @@ var I18N = {
     perfTip: '性能模式',
     secTip: '界面提示（ⓘ）', tipShow: '显示', tipHide: '隐藏',
     secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
+    extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue',
     secIcon: '应用图标',
     icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
     tIconOk: '图标已切换，桌面可能需要几秒刷新', tIconFail: '图标切换失败',
@@ -885,6 +888,7 @@ var I18N = {
     perfTip: 'Performance',
     secTip: 'Hints (ⓘ)', tipShow: 'Show', tipHide: 'Hide',
     secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
+    extLicense: 'GPL-3.0 — closed-source distribution not permitted. Need a proprietary licence? Open an issue.',
     secIcon: 'App icon',
     icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
     tIconOk: 'Icon changed; the launcher may take a few seconds', tIconFail: 'Failed to change icon',
