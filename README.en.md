@@ -37,7 +37,7 @@ Mine App takes a different route: **single-app deployment, without giving up an 
 **The phone connects to its own adbd.**
 
 Run `adb tcpip 5555` **once, at install time** — over a USB cable or through Wireless debugging
-(see [First-time setup](#first-time-setup-once-only)). That makes adbd listen on `127.0.0.1:5555`.
+(see **First-time setup** below). That makes adbd listen on `127.0.0.1:5555`.
 The app ships a minimal ADB client, authenticates with a key kept in its private storage, and then
 talks to `pm` / `am` / `cmd` directly.
 
