@@ -1226,37 +1226,74 @@ function stateTag(a){
       : '<span class="tag">' + T('tagNormal') + '</span>');
 }
 
+/* 单行模板 */
+function rowHtml(a){
+  var on = keep.has(a.pkg);
+  var cls = 'li' + (a.frozen ? ' frozen' : (a.restricted ? ' restricted' : ''))
+          + (on ? ' on' : '');
+  var aotOn = aotDone.has(a.pkg);
+  return '<li class="' + cls + '" data-pkg="' + a.pkg + '">'
+       +  '<span class="chk">' + (on ? '✓' : '') + '</span>'
+       +  '<div class="meta"><div class="name"><span class="nm">' + a.label + '</span>'
+       +    sysTag(a) + '</div>'
+       +  '<div class="pkg">' + a.pkg + '</div>' + subline(a) + '</div>'
+       +  '<div class="rt"><div class="rt-top">'
+       +    (a.pss > 0 ? '<span class="kill-x" data-kill="' + a.pkg + '">×</span>' : '')
+       +    '<span class="aot-lb">AOT</span>'
+       +    '<span class="aot-sw' + (aotOn ? ' on' : '') + '" data-pkg="' + a.pkg
+       +      '" data-aot="' + (aotOn ? '1' : '0') + '"><i class="fill"></i><b class="pct"></b></span>'
+       +  '</div>' + stateTag(a) + '</div></li>';
+}
+
+/* 增量渲染：一次只铺 CHUNK 行，滚到底部再接着铺。
+   以前是一次性 innerHTML 598 行 —— 那一下要排版一张 4 万像素高的长表，
+   Chromium 的栅格化内存会瞬间冲到 400MB 以上（实测启动峰值 442MB）。
+   分批之后初始只铺几十行，峰值大幅下降，滚动体验也更好。 */
+var shownList = [];
+var renderedCount = 0;
+var CHUNK = 40;
+
+function appendMore(){
+  if (renderedCount >= shownList.length) return;
+  var list = document.getElementById('list');
+  var end = Math.min(renderedCount + CHUNK, shownList.length);
+  var html = '';
+  for (; renderedCount < end; renderedCount++) html += rowHtml(shownList[renderedCount]);
+  list.insertAdjacentHTML('beforeend', html);
+}
+
 function render(){
   var q = document.getElementById('q').value.trim().toLowerCase();
   var list = document.getElementById('list');
-  var shown = apps.filter(function(a){
+  shownList = apps.filter(function(a){
     return !q || a.pkg.toLowerCase().indexOf(q) >= 0 || a.label.toLowerCase().indexOf(q) >= 0;
   });
-  applySort(shown, sortMode);
-  var html = '';
-  for (var i = 0; i < shown.length; i++){
-    var a = shown[i];
-    var on = keep.has(a.pkg);
-    var cls = 'li' + (a.frozen ? ' frozen' : (a.restricted ? ' restricted' : ''))
-            + (on ? ' on' : '');
-    var aotOn = aotDone.has(a.pkg);
-    html += '<li class="' + cls + '" data-pkg="' + a.pkg + '">'
-         +  '<span class="chk">' + (on ? '✓' : '') + '</span>'
-         +  '<div class="meta"><div class="name"><span class="nm">' + a.label + '</span>'
-         +    sysTag(a) + '</div>'
-         +  '<div class="pkg">' + a.pkg + '</div>' + subline(a) + '</div>'
-         +  '<div class="rt"><div class="rt-top">'
-         +    (a.pss > 0 ? '<span class="kill-x" data-kill="' + a.pkg + '">×</span>' : '')
-         +    '<span class="aot-lb">AOT</span>'
-         +    '<span class="aot-sw' + (aotOn ? ' on' : '') + '" data-pkg="' + a.pkg
-         +      '" data-aot="' + (aotOn ? '1' : '0') + '"><i class="fill"></i><b class="pct"></b></span>'
-         +  '</div>' + stateTag(a) + '</div></li>';
+  applySort(shownList, sortMode);
+
+  // 重绘要保持原来的滚动位置：勾选/取消勾选也会走 render()，
+  // 每次都弹回顶部的话，往下翻着选会很崩溃
+  var prevTop = list.scrollTop;
+  renderedCount = 0;
+  list.innerHTML = '';
+  appendMore();
+  if (prevTop > 0){
+    // 先补铺到足够高，再把滚动位置还原
+    var guard = 0;
+    while (renderedCount < shownList.length
+           && list.scrollHeight < prevTop + list.clientHeight + 200 && guard++ < 100){
+      appendMore();
+    }
+    list.scrollTop = prevTop;
   }
-  list.innerHTML = html;
-  document.getElementById('empty').style.display = (shown.length || !adbOk) ? 'none' : 'block';
+  document.getElementById('empty').style.display = (shownList.length || !adbOk) ? 'none' : 'block';
   updateInfo();
   updateActions();
 }
+
+/* 快滚到底部时补下一批（留 800px 提前量，避免看到空白） */
+document.getElementById('list').addEventListener('scroll', function(){
+  if (this.scrollTop + this.clientHeight > this.scrollHeight - 800) appendMore();
+}, {passive:true});
 
 /* 上次打开时间：首次用到时拉一次，可强制刷新 */
 var idleBusy = false, idleCbs = [];

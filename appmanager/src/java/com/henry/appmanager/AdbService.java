@@ -866,7 +866,23 @@ public class AdbService {
      * 2. 再用 `getInstalledApplications(0)` 补齐没有启动入口的包（系统组件等）。
      *    已存在的条目**不覆盖**，避免把第 1 轮的好名字冲掉。
      */
-    private Map<String, String> labelMap() {
+    /**
+     * 🔴 必须缓存：`loadLabel` 会为每个应用加载它的**资源表**，
+     * 598 个应用一次性解析下来，进程内存会瞬间冲到 450MB 以上
+     * （实测刷新时 139MB → 455MB，GC 之后才回落，中间卡 5~7 秒）。
+     * 应用名基本不会变，缓存起来即可，代价是刚装的应用最多 5 分钟内显示包名。
+     */
+    private Map<String, String> labelCache;
+    private long labelCacheAt = 0;
+    private int labelCacheCount = -1;
+    private static final long LABEL_TTL = 5 * 60 * 1000L;
+
+    private Map<String, String> labelMap(int pkgCount) {
+        long now = System.currentTimeMillis();
+        if (labelCache != null && labelCacheCount == pkgCount
+                && (now - labelCacheAt) < LABEL_TTL) {
+            return labelCache;
+        }
         Map<String, String> m = new HashMap<String, String>();
         if (appCtx == null) return m;
         try {
@@ -907,6 +923,9 @@ public class AdbService {
         } catch (Throwable e) {
             Log.w(TAG, "取应用名失败: " + e);
         }
+        labelCache = m;
+        labelCacheAt = now;
+        labelCacheCount = pkgCount;
         return m;
     }
 
@@ -923,7 +942,7 @@ public class AdbService {
         Map<String, Long> pss = pssInfo.pss;
         if (DEBUG) Log.i(TAG, "pss 条目数=" + pss.size());
         Set<String> restricted = getRestricted();
-        Map<String, String> labels = labelMap();
+        Map<String, String> labels = labelMap(all.size());
 
         List<JSONObject> apps = new ArrayList<JSONObject>();
         List<String> sortedPkgs = new ArrayList<String>(all);
