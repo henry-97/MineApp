@@ -31,9 +31,13 @@ require root, or drag in a whole stack of Shizuku / Ice Box / Hail. Mine App tak
 
 **The phone connects to its own adbd.**
 
-After `adb tcpip 5555`, adbd listens on `127.0.0.1:5555`. The app ships a minimal ADB client,
-authenticates with a key kept in its private storage, and talks to `pm` / `am` / `cmd` directly —
-**everything stays on-device. No PC. No root.**
+Run `adb tcpip 5555` **once, at install time**, over a USB cable or through Wireless debugging.
+That makes adbd listen on `127.0.0.1:5555`. The app ships a minimal ADB client, authenticates with a
+key kept in its private storage, and then talks to `pm` / `am` / `cmd` directly.
+
+**After that the PC is out of the picture** — freezing, restricting, AOT compilation and performance
+profiles are all a few taps on the phone, with no adb tooling involved. As long as you do not reboot,
+that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 <p align="center">
   <img src="docs/main.jpg" width="320" alt="Main screen">
@@ -90,19 +94,20 @@ authenticates with a key kept in its private storage, and talks to `pm` / `am` /
 1. Grab `app-manager.apk` (~525 KB) from [Releases](https://github.com/henry-97/MineApp/releases)
 2. Or build it yourself (see below)
 
-### First-time setup (the important bit)
+### First-time setup (once only)
 
 The app talks to the adbd listening on **port 5555 of the same device**, so adbd has to be told to
-listen on TCP:
+listen on TCP. **Do this once, at install time:**
 
 ```bash
-# Plug the phone into a PC once
+# Plug the phone into a PC once (Wireless debugging works too)
 adb tcpip 5555
 
-# Unplug. Repeat after every reboot (or use Wireless debugging instead)
+# Unplug. From here on it is all taps inside the app — no more PC
 ```
 
-No PC at hand? Settings → Developer options → **Wireless debugging** works too.
+**After a reboot** the port closes — just run `adb tcpip 5555` once more (or re-pair Wireless
+debugging).
 
 On first launch the phone shows the ADB authorisation dialog — tick "Always allow" and you are done.
 
