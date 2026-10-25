@@ -837,19 +837,56 @@ public class AdbService {
      * 依赖 manifest 里的 QUERY_ALL_PACKAGES —— 没有它，Android 11+ 只返回
      * 与自身有交互的少数包，大部分应用仍然拿不到名字。
      */
+    /**
+     * 包名 → 显示名。
+     *
+     * 分两轮，顺序很关键：
+     *
+     * 1. **先取所有启动 Activity 的 label**（一次 queryIntentActivities 拿全）。
+     *    `ApplicationInfo.loadLabel()` 只认 `<application android:label>`，
+     *    但有些应用把名字写在启动 `<activity>` 上（百度网盘就是），application 层没有
+     *    label，loadLabel 就会回落到包名。而桌面显示用的正是 Activity 的 label ——
+     *    所以这一轮拿到的才是「用户认得的名字」。
+     *
+     * 2. 再用 `getInstalledApplications(0)` 补齐没有启动入口的包（系统组件等）。
+     *    已存在的条目**不覆盖**，避免把第 1 轮的好名字冲掉。
+     */
     private Map<String, String> labelMap() {
         Map<String, String> m = new HashMap<String, String>();
         if (appCtx == null) return m;
         try {
             android.content.pm.PackageManager pm = appCtx.getPackageManager();
+
+            // 第 1 轮：所有带启动入口的应用（一次批量查询，不按包循环）
+            try {
+                android.content.Intent launcher = new android.content.Intent(
+                        android.content.Intent.ACTION_MAIN);
+                launcher.addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+                java.util.List<android.content.pm.ResolveInfo> ris =
+                        pm.queryIntentActivities(launcher, 0);
+                for (android.content.pm.ResolveInfo ri : ris) {
+                    if (ri.activityInfo == null) continue;
+                    String pkg = ri.activityInfo.packageName;
+                    CharSequence cs = ri.loadLabel(pm);
+                    if (cs == null) continue;
+                    String nm = cs.toString().trim();
+                    if (nm.isEmpty() || nm.equals(pkg)) continue;
+                    if (!m.containsKey(pkg)) m.put(pkg, nm);
+                }
+            } catch (Throwable e) {
+                Log.w(TAG, "取启动项名称失败: " + e);
+            }
+
+            // 第 2 轮：没有启动入口的包（系统组件、服务类应用）
             for (android.content.pm.ApplicationInfo ai : pm.getInstalledApplications(0)) {
                 try {
+                    if (m.containsKey(ai.packageName)) continue;
                     CharSequence cs = ai.loadLabel(pm);
                     if (cs == null) continue;
-                    String s = cs.toString().trim();
+                    String nm = cs.toString().trim();
                     // 少数应用把 label 写成包名或空串，这种交给兜底逻辑
-                    if (s.isEmpty() || s.equals(ai.packageName)) continue;
-                    m.put(ai.packageName, s);
+                    if (nm.isEmpty() || nm.equals(ai.packageName)) continue;
+                    m.put(ai.packageName, nm);
                 } catch (Throwable ignored) { }
             }
         } catch (Throwable e) {
