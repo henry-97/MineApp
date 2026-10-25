@@ -188,6 +188,19 @@ the APK therefore share identical UI logic — no second implementation to keep 
 - A frozen app's launcher icon greys out rather than disappearing; hiding it completely needs
   launcher support.
 
+### Security note (a side effect of `adb tcpip 5555`)
+
+`adb tcpip 5555` makes adbd listen on **all interfaces** (`[::]:5555`), not just `127.0.0.1`.
+Android offers **no** way to bind it to loopback only (the device exposes no `adb.listen_addrs`-style
+property, and it cannot be changed without root), so the app cannot fix this for you.
+
+That said, `ro.adb.secure=1` means **every new device must be authorised on the phone itself** —
+someone on the same network can at most trigger the authorisation dialog, not take over silently.
+
+- Only run `adb tcpip 5555` on a **trusted network**; do not leave 5555 open on public Wi-Fi
+- If an "Allow USB debugging?" dialog appears from a device you do not recognise, tap **Deny**
+- When in doubt, reboot — the port closes on its own (and you would have to redo it anyway)
+
 ## Sponsorship
 
 If this project helped you, you can buy me a coffee. **Entirely optional — no feature is gated.**
