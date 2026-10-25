@@ -321,10 +321,13 @@ public class AdbService {
             Long old = pssByPid.get(pid);
             if (old == null || kb < old) pssByPid.put(pid, kb);
             pkgByPid.put(pid, base);
-            // meminfo -c 的第 2 个字段是 oom 档位：
-            //   fore / vis / percept / service* / home / prev … = 还在活动
-            //   cached / empty                                    = 只是被缓存着
-            boolean live = !(cat.equals("cached") || cat.equals("empty"));
+            // meminfo -c 的第 2 个字段是系统给的 oom 档位：
+            //   fore / vis / percept / service* / home / pers … = 还在活动
+            //   cached / empty                                  = 只是被缓存着
+            //   prev = 刚用完退到后台、为快速恢复保留着 —— 进程还在但没做事，
+            //          按「活动」算会让人困惑（明明没动却有绿点），这里排除
+            boolean live = !(cat.equals("cached") || cat.equals("empty")
+                    || cat.equals("prev"));
             Boolean was = liveByPid.get(pid);
             liveByPid.put(pid, was == null ? live : (was || live));
         }
