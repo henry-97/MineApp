@@ -190,8 +190,14 @@ public class Bridge {
     /** 6 套图标，顺序与 tools/gen_icon.py 的 SHAPES × COLORS 一致 */
     static final String[] ICON_KEYS = {
             "sq_g", "sq_y", "sq_k",
-            "cl_g", "cl_y", "cl_k",
-            "cl2_g", "cl2_y", "cl2_k"};
+            "cl_g", "cl_y", "cl_k"};
+
+    /** 该图标键当前是否还存在于清单里（删减造型后旧键会失效） */
+    static boolean isKnownIcon(String key) {
+        if (key == null) return false;
+        for (int i = 0; i < ICON_KEYS.length; i++) if (ICON_KEYS[i].equals(key)) return true;
+        return false;
+    }
 
     /** "mine"|"manager" + "sq_g" → "AliasMineSqG" */
     static String aliasName(String mode, String key) {
@@ -225,11 +231,14 @@ public class Bridge {
             String mode = sp.getString("name_mode", "mine");
             String key = sp.getString("icon_key", "sq_g");
 
+            // 图标清单可能被删减（比如去掉了某一套造型），存着的键就失效了。
+            // 这里先兜回默认值，否则 aliasName 会拼出一个不存在的组件，
+            // setComponentEnabledSetting 抛异常，最后桌面上一个入口都不剩。
+            if (!isKnownIcon(key)) key = ICON_KEYS[0];
+
             if (which != null) mode = "manager".equals(which) ? "manager" : "mine";
             if (iconKey != null) {
-                boolean ok = false;
-                for (int i = 0; i < ICON_KEYS.length; i++) if (ICON_KEYS[i].equals(iconKey)) ok = true;
-                if (!ok) return "{\"ok\":false}";
+                if (!isKnownIcon(iconKey)) return "{\"ok\":false}";
                 key = iconKey;
             }
 

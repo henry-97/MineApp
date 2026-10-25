@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """生成 src/AndroidManifest.xml。
 
-桌面入口 = 2 种名称 × 9 套图标 = 18 个 activity-alias，同一时间只启用一个。
+桌面入口 = 2 种名称 × 6 套图标 = 12 个 activity-alias，同一时间只启用一个。
 Android 无法在运行时改 label / icon，只能靠切换 alias 实现「App 内换名、换图标」。
-alias 名规律：Alias<Mine|Mgr><Sq|Cl|Cl2><G|Y|K>，例如 AliasMineSqG、AliasMgrCl2K。
+alias 名规律：Alias<Mine|Mgr><Sq|Cl><G|Y|K>，例如 AliasMineSqG、AliasMgrClK。
 
 改图标清单时同步改这里和 tools/gen_icon.py 的 SHAPES / COLORS。
 """
@@ -13,14 +13,14 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(BASE, "src", "AndroidManifest.xml")
 
 NAMES = [("Mine", "Mine App"), ("Mgr", "应用管理器")]
-KEYS = ["sq_g", "sq_y", "sq_k", "cl_g", "cl_y", "cl_k", "cl2_g", "cl2_y", "cl2_k"]
+KEYS = ["sq_g", "sq_y", "sq_k", "cl_g", "cl_y", "cl_k"]
 DEFAULT_ALIAS = "AliasMineSqG"
 
 HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="24"
+    android:versionCode="25"
     android:versionName="1.3.2">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
@@ -44,7 +44,7 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
-        <!-- 18 个桌面入口：名称 × 图标，同一时间只启用一个 -->
+        <!-- 12 个桌面入口：名称 × 图标，同一时间只启用一个 -->
 '''
 
 ALIAS = '''        <activity-alias

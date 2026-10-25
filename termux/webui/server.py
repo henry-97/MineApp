@@ -753,7 +753,7 @@ var I18N = {
     perfTip: '性能模式',
     secTip: '界面提示（ⓘ）', tipShow: '显示', tipHide: '隐藏',
     secIcon: '应用图标',
-    icSq: '方块', icCl: '四叶草', icCl2: '四叶·满', icG: '墨绿', icY: '金色', icK: '黑色',
+    icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
     tIconOk: '图标已切换，桌面可能需要几秒刷新', tIconFail: '图标切换失败',
     tBusy: '正在处理，请稍候',
     tNoArchivable: '所选应用中没有可归档的',
@@ -832,7 +832,7 @@ var I18N = {
     perfTip: 'Performance',
     secTip: 'Hints (ⓘ)', tipShow: 'Show', tipHide: 'Hide',
     secIcon: 'App icon',
-    icSq: 'Blocks', icCl: 'Clover', icCl2: 'Clover·Full', icG: 'Green', icY: 'Gold', icK: 'Black',
+    icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
     tIconOk: 'Icon changed; the launcher may take a few seconds', tIconFail: 'Failed to change icon',
     tBusy: 'Working, please wait',
     tNoArchivable: 'None of the selected apps can be archived',
@@ -897,7 +897,7 @@ var themeMode = (function(){
 })();
 
 /* 六套桌面图标（顺序与 tools/gen_icon.py 一致），名称沿用它的 shape_color 命名 */
-var ICONS = ['sq_g', 'sq_y', 'sq_k', 'cl_g', 'cl_y', 'cl_k', 'cl2_g', 'cl2_y', 'cl2_k'];
+var ICONS = ['sq_g', 'sq_y', 'sq_k', 'cl_g', 'cl_y', 'cl_k'];
 var iconKey = (function(){
   var k = localStorage.getItem('iconKey');
   return ICONS.indexOf(k) >= 0 ? k : 'sq_g';
@@ -925,8 +925,7 @@ function applyTip(){
 
 function iconLabel(k){
   var p = k.split('_');
-  var name = p[0] === 'sq' ? 'icSq' : (p[0] === 'cl2' ? 'icCl2' : 'icCl');
-  return T(name) + '·' + T('ic' + p[1].toUpperCase());
+  return T(p[0] === 'cl' ? 'icCl' : 'icSq') + '·' + T('ic' + p[1].toUpperCase());
 }
 
 function renderIcons(){
