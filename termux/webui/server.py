@@ -1525,9 +1525,10 @@ document.getElementById('list').addEventListener('click', function(e){
 
 /* 单应用清理：am kill 只杀后台进程，不动自启动，也不改启用状态 */
 var killNoAsk = 'killNoAsk';
-function doKill(pkg, nm){
+function doKill(pkg, nm, pss){
+  // 把列表里显示的那个 PSS 一起带上，后端就不用再跑一次全量 meminfo
   fetch('/api/kill', {method:'POST', headers:{'Content-Type':'application/json'},
-                      body: JSON.stringify({pkg: pkg})})
+                      body: JSON.stringify({pkg: pkg, pss: pss || 0})})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d.ok){ toast(T2('tKillFail', {m: d.msg || T('tUnknown')})); return; }
@@ -1549,9 +1550,10 @@ document.getElementById('list').addEventListener('click', function(e){
   var nm = one ? one.label : pkg;
   // 运存为 0 = 当前没有后台进程，am kill 什么也杀不到，别假装清理成功
   if (one && one.pss <= 0){ toast(T2('tKillIdle', {n: nm})); return; }
-  if (localStorage.getItem(killNoAsk) === '1'){ doKill(pkg, nm); return; }
+  var pss = one ? one.pss : 0;
+  if (localStorage.getItem(killNoAsk) === '1'){ doKill(pkg, nm, pss); return; }
   askConfirm(T2('cfmKill', {n: nm}),
-             function(){ doKill(pkg, nm); },
+             function(){ doKill(pkg, nm, pss); },
              {text: T('killDontAsk'), key: killNoAsk});
 });
 

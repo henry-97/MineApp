@@ -650,21 +650,36 @@ public class AdbService {
      *
      * 前台应用不会被杀掉（系统行为），返回 ok 但实际什么也没做 —— 这是预期。
      */
-    public String killApp(String pkg) {
+    public String killApp(String pkg, long beforeKb) {
         JSONObject o = new JSONObject();
         try {
-            // 清理前后各量一次 PSS，差值就是真正释放掉的运存。
-            // am kill 是异步的，进程不会立刻消失 —— 不等一下第二次会读到旧值。
-            long before = pssOf(pkg);
+            // 「清理前」直接用列表里已经显示的那个 PSS —— 用户点之前看到的就是它，
+            // 释放量跟屏幕上的数字自然对得上。省掉一次全量 meminfo（约 0.5s）。
+            long before = beforeKb > 0 ? beforeKb : pssOf(pkg);
+
             sh("am kill " + pkg);
-            try { Thread.sleep(700); } catch (InterruptedException ignored) { }
-            long after = pssOf(pkg);
+
+            // 轮询等进程退出，而不是死等 700ms：通常 100~300ms 就干净了
+            boolean gone = false;
+            for (int i = 0; i < 8; i++) {
+                try { Thread.sleep(100); } catch (InterruptedException ignored) { }
+                String pids;
+                try {
+                    pids = sh("pidof " + pkg);
+                } catch (Exception e) {
+                    // 个别 ROM 没有 pidof —— 当作还活着，退回实测路径，别让整个清理失败
+                    break;
+                }
+                if (pids == null || pids.trim().isEmpty()) { gone = true; break; }
+            }
+
+            // 进程全没了 → 释放的就是清理前那些；还有存活进程才实测一次
+            long freed = gone ? before : Math.max(0, before - pssOf(pkg));
 
             o.put("ok", true);
             o.put("pkg", pkg);
             o.put("before_kb", before);
-            o.put("after_kb", after);
-            o.put("freed_kb", Math.max(0, before - after));
+            o.put("freed_kb", freed);
         } catch (Exception e) {
             try {
                 o.put("ok", false);

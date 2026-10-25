@@ -225,10 +225,18 @@ public class Bridge {
 
     /** 单应用清理后台（am kill），不改变自启动 */
     @JavascriptInterface
-    public void kill(final int id, final String pkg) {
+    public void kill(final int id, final String arg) {
+        // arg = "包名|清理前PSS(KB)"，PSS 由前端带上（就是列表里显示的那个数）
+        final String[] parts = (arg == null ? "" : arg).split("\\|");
+        final String pkg = parts.length > 0 ? parts[0] : "";
+        long pss = 0;
+        if (parts.length > 1) {
+            try { pss = Long.parseLong(parts[1].trim()); } catch (Exception ignored) { }
+        }
+        final long before = pss;
         dispatch(id, new Task() {
             @Override
-            public String run() { return service.killApp(pkg); }
+            public String run() { return service.killApp(pkg, before); }
         });
     }
 

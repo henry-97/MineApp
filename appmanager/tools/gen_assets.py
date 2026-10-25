@@ -53,6 +53,7 @@ SHIM = r"""
     else if (url.indexOf('/api/millet') === 0) p = call('millet', body.csv || '');
     else if (url.indexOf('/api/name') === 0) p = call('name', body.name || '');
     else if (url.indexOf('/api/icon') === 0) p = call('icon', body.key || '');
+    else if (url.indexOf('/api/kill') === 0) p = call('kill', (body.pkg || '') + '|' + (body.pss || 0));
     else if (url.indexOf('/api/aot') === 0) p = call('aot', (body.pkg || '') + '|' + (body.on ? '1' : '0'));
     else p = Promise.resolve({});
     return p.then(function(d){
