@@ -80,6 +80,35 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 injectInsets();
             }
+
+            /**
+             * 设置页的 GitHub / 打赏是 http(s) 外链。不拦的话 WebView 会直接跳过去，
+             * 整个 App 界面就被网页顶掉了，返回键也回不来。这里统一交给系统浏览器。
+             */
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, android.webkit.WebResourceRequest req) {
+                return openExternal(req == null ? null : req.getUrl());
+            }
+
+            @Override
+            @SuppressWarnings("deprecation")
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return openExternal(url == null ? null : android.net.Uri.parse(url));
+            }
+
+            private boolean openExternal(android.net.Uri uri) {
+                if (uri == null) return false;
+                String scheme = uri.getScheme();
+                if (!"http".equals(scheme) && !"https".equals(scheme)) return false;
+                try {
+                    Intent i = new Intent(Intent.ACTION_VIEW, uri);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Exception e) {
+                    android.util.Log.w("Main", "打开外链失败: " + e);
+                }
+                return true;
+            }
         });
 
         try {

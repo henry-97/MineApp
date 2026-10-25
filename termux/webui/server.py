@@ -524,6 +524,11 @@ animation:dotPulse 2.2s ease-in-out infinite}
 font-size:14px;color:var(--ink3);border:1px solid var(--track);cursor:pointer;
 user-select:none;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s}
 .kill-x:active{background:var(--track);color:var(--ink)}
+/* 设置页外链：跳到浏览器打开，不在 WebView 里替换界面 */
+.ext-row{display:flex;align-items:center;gap:8px;padding:2px 0 10px;font-size:13px}
+.ext{color:#0f6e56;text-decoration:none;padding:6px 2px;border-radius:6px}
+.ext:active{background:var(--track)}
+.ext-sep{color:var(--ink3);font-size:12px}
 .refresh{transform-origin:50% 50%;will-change:transform}
 .refresh.spinning{color:#0f6e56}
 .aot-lb{flex:none;font-size:11px;color:var(--ink3);font-family:ui-monospace,monospace;
@@ -680,6 +685,12 @@ color:var(--ink3);cursor:pointer;user-select:none}
       <button class="seg" data-tip="1" data-t="tipShow">显示</button>
       <button class="seg" data-tip="0" data-t="tipHide">隐藏</button>
     </div>
+    <div class="sec" data-t="secAbout">关于</div>
+    <div class="ext-row">
+      <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub 官方</a>
+      <span class="ext-sep">|</span>
+      <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#赞助">打赏与资助</a>
+    </div>
     <div class="info-note" style="border-top:0"><span data-t="setEntry">左滑主界面或点标题可再次进入本页。</span><br>
       <span data-t="setNameNote">应用名称会同时改变桌面图标的名称。</span></div>
   </div>
@@ -785,6 +796,7 @@ var I18N = {
     setNameNote: '应用名称会同时改变桌面图标的名称。',
     perfTip: '性能模式',
     secTip: '界面提示（ⓘ）', tipShow: '显示', tipHide: '隐藏',
+    secAbout: '关于', extRepo: 'GitHub 官方', extFund: '打赏与资助',
     secIcon: '应用图标',
     icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
     tIconOk: '图标已切换，桌面可能需要几秒刷新', tIconFail: '图标切换失败',
@@ -872,6 +884,7 @@ var I18N = {
     setNameNote: 'The app name also changes the launcher label.',
     perfTip: 'Performance',
     secTip: 'Hints (ⓘ)', tipShow: 'Show', tipHide: 'Hide',
+    secAbout: 'About', extRepo: 'GitHub', extFund: 'Sponsor',
     secIcon: 'App icon',
     icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
     tIconOk: 'Icon changed; the launcher may take a few seconds', tIconFail: 'Failed to change icon',
@@ -927,6 +940,25 @@ function applyLang(){
   if (bt) bt.innerHTML = T('perfTip') + ' <i class="tip-i">ⓘ</i>';
   var ph = document.querySelectorAll('[data-tp]');
   for (var j = 0; j < ph.length; j++) ph[j].setAttribute('placeholder', T(ph[j].getAttribute('data-tp')));
+  applyExtLinks();
+}
+
+/* 设置页的 GitHub / 打赏链接：跟着界面语言走。
+   中文 → 仓库首页（默认渲染 README.md）；英文 → README.en.md。
+   「打赏与资助」直接跳到 README 里的赞助小节锚点。 */
+var GH = 'https://github.com/henry-97/MineApp';
+function applyExtLinks(){
+  var en = (lang() === 'en');
+  var repo = document.getElementById('lnkRepo');
+  var fund = document.getElementById('lnkFund');
+  if (repo){
+    repo.textContent = T('extRepo');
+    repo.setAttribute('href', en ? (GH + '/blob/main/README.en.md') : GH);
+  }
+  if (fund){
+    fund.textContent = T('extFund');
+    fund.setAttribute('href', en ? (GH + '/blob/main/README.en.md#sponsorship') : (GH + '#赞助'));
+  }
 }
 
 /* ---------- 名称与主题（设置页） ---------- */

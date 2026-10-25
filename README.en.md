@@ -76,8 +76,11 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live percentage |
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
 | **Memory sort** | Sort by PSS to see exactly what is eating RAM; live aggregate of the selected apps' memory |
+| **Activity monitor** | A **pulsing green dot** on the memory line marks apps that are actually running (based on the system's oom adj — plain cached processes and "recently used, now in background" do not count) |
+| **Per-app cleanup** | An **×** on every row runs `am kill` — clears background processes only. **Auto-start and enabled state are untouched**, so the next launch is a normal cold start |
+| **Real app names** | Resolved through the system's `loadLabel`, so all 598 apps show their real names instead of package names |
 | **Batch actions** | Select many apps, then archive / restore / restrict / unrestrict in one go |
-| **Ongoing notification** | Battery health, memory usage and archive count in the status bar |
+| **Ongoing notification** | Battery health, memory usage and archive count in the status bar; memory ticks every 3 s, battery/counts every 60 s — barely any battery cost |
 | **Appearance** | 6 icon sets (blocks / clover × green / gold / black), two app names, light & dark theme, Chinese & English |
 | **List cache** | The fetched list is cached locally; re-entering within a minute does not refetch |
 
