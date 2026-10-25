@@ -1,0 +1,25 @@
+# 构建产物
+appmanager/build/
+appmanager/out/
+*.apk
+*.apk.idsig
+
+# 本地环境与签名（绝不提交）
+appmanager/local.env
+*.keystore
+*.jks
+*.pk8
+*.blob
+
+# 由 build.sh 从 termux/webui/server.py 提取生成
+appmanager/assets/index.html
+
+# Python
+__pycache__/
+*.pyc
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

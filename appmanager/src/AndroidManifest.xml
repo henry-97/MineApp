@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.henry.appmanager"
+    android:versionCode="24"
+    android:versionName="3.2">
+
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+
+    <application
+        android:label="Mine App"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:allowBackup="false"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 18 个桌面入口：名称 × 图标，同一时间只启用一个 -->
+        <activity-alias
+            android:name=".AliasMineSqG"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="true"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_sq_g"
+            android:roundIcon="@mipmap/ic_launcher_sq_g">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineSqY"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_sq_y"
+            android:roundIcon="@mipmap/ic_launcher_sq_y">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineSqK"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_sq_k"
+            android:roundIcon="@mipmap/ic_launcher_sq_k">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineClG"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_cl_g"
+            android:roundIcon="@mipmap/ic_launcher_cl_g">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineClY"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_cl_y"
+            android:roundIcon="@mipmap/ic_launcher_cl_y">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineClK"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_cl_k"
+            android:roundIcon="@mipmap/ic_launcher_cl_k">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineCl2G"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_cl2_g"
+            android:roundIcon="@mipmap/ic_launcher_cl2_g">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineCl2Y"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_cl2_y"
+            android:roundIcon="@mipmap/ic_launcher_cl2_y">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMineCl2K"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="Mine App"
+            android:icon="@mipmap/ic_launcher_cl2_k"
+            android:roundIcon="@mipmap/ic_launcher_cl2_k">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrSqG"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_sq_g"
+            android:roundIcon="@mipmap/ic_launcher_sq_g">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrSqY"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_sq_y"
+            android:roundIcon="@mipmap/ic_launcher_sq_y">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrSqK"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_sq_k"
+            android:roundIcon="@mipmap/ic_launcher_sq_k">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrClG"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_cl_g"
+            android:roundIcon="@mipmap/ic_launcher_cl_g">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrClY"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_cl_y"
+            android:roundIcon="@mipmap/ic_launcher_cl_y">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrClK"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_cl_k"
+            android:roundIcon="@mipmap/ic_launcher_cl_k">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrCl2G"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_cl2_g"
+            android:roundIcon="@mipmap/ic_launcher_cl2_g">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrCl2Y"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_cl2_y"
+            android:roundIcon="@mipmap/ic_launcher_cl2_y">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".AliasMgrCl2K"
+            android:targetActivity=".MainActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:label="应用管理器"
+            android:icon="@mipmap/ic_launcher_cl2_k"
+            android:roundIcon="@mipmap/ic_launcher_cl2_k">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <service
+            android:name=".KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="显示电池与应用状态并保持用户选择的性能模式" />
+        </service>
+    </application>
+</manifest>
