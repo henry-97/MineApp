@@ -1,0 +1,191 @@
+<p align="center">
+  <a href="README.md">简体中文</a> · <b>English</b>
+</p>
+
+<p align="center">
+  <img src="docs/app-icon.png" width="112" alt="Mine App">
+</p>
+
+<h1 align="center">Mine App · App Manager</h1>
+
+<p align="center">
+  <img alt="version" src="https://img.shields.io/badge/version-1.3.2-0F6E56">
+  <img alt="APK" src="https://img.shields.io/badge/APK-525%20KB-0F6E56">
+  <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
+  <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
+  <img alt="license" src="https://img.shields.io/badge/license-GPL--3.0-0F6E56">
+</p>
+
+> **Mine App is a featherweight Android app manager designed to revitalize legacy and throttled devices without root or heavy frameworks.**
+>
+> - **Zero Bloat, Zero Dependencies**: Built without Gradle overhead; operates completely independent of Root or Shizuku services. Ultra-compact footprint with <1MB APK size and <10MB total storage footprint (including runtime caches).
+> - **Paradoxical Energy Efficiency**: Pair a sustained performance mode with aggressive background freezes and restriction policies. Cut off stealthy background resource grabs to minimize power drain while ensuring maximum foreground responsiveness.
+> - **Low-Level Acceleration**: Built-in Android AOT Speed batch compilation compiles DEX to native code, eliminating JIT stutters and dramatically accelerating cold-start times on low-spec hardware.
+
+---
+
+## What is this
+
+The usual way to keep an unused app completely silent on Android is to freeze it. Most solutions
+require root, or drag in a whole stack of Shizuku / Ice Box / Hail. Mine App takes a different route:
+
+**The phone connects to its own adbd.**
+
+After `adb tcpip 5555`, adbd listens on `127.0.0.1:5555`. The app ships a minimal ADB client,
+authenticates with a key kept in its private storage, and talks to `pm` / `am` / `cmd` directly —
+**everything stays on-device. No PC. No root.**
+
+<p align="center">
+  <img src="docs/settings.png" width="300" alt="Settings">
+</p>
+
+### Compared to the usual options
+
+| | Needs root | Needs a daemon | Needs a PC | APK size |
+|---|---|---|---|---|
+| Built-in "Force stop" | No | No | No | — (but resets on reboot, no batch) |
+| Shizuku + Ice Box | No | **Yes** (two of them) | First time only | Tens of MB |
+| **Mine App** | **No** | **No** | Only once for `adb tcpip` | **525 KB** |
+
+## Features
+
+| Feature | What it does |
+|---|---|
+| **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, launcher icon greys out |
+| **Restrict** | Restricts background activity; milder than freezing, the app can still be launched |
+| **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; shows a percentage |
+| **Performance mode** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
+| **Memory sort** | Sort by PSS to see exactly what is eating RAM; live aggregate of the selected apps' memory |
+| **Batch actions** | Select many apps, then archive / restore / restrict / unrestrict in one go |
+| **Ongoing notification** | Battery health, memory usage and archive count in the status bar |
+| **Appearance** | 6 icon sets (blocks / clover × green / gold / black), two app names, light & dark theme, Chinese & English |
+| **List cache** | The fetched list is cached locally; re-entering within a minute does not refetch |
+
+<p align="center">
+  <img src="docs/icon-set.png" width="760" alt="Six icon sets">
+</p>
+
+## Requirements
+
+- Android 8.0 (API 26) or newer, targetSdk 35
+- Developer options → **USB debugging** enabled
+- No root
+
+## Install
+
+1. Grab `app-manager.apk` (~525 KB) from [Releases](https://github.com/henry-97/MineApp/releases)
+2. Or build it yourself (see below)
+
+### First-time setup (the important bit)
+
+The app talks to the adbd listening on **port 5555 of the same device**, so adbd has to be told to
+listen on TCP:
+
+```bash
+# Plug the phone into a PC once
+adb tcpip 5555
+
+# Unplug. Repeat after every reboot (or use Wireless debugging instead)
+```
+
+No PC at hand? Settings → Developer options → **Wireless debugging** works too.
+
+On first launch the phone shows the ADB authorisation dialog — tick "Always allow" and you are done.
+
+## Build from source
+
+No Gradle, no Android Studio — just JDK + Android SDK build-tools + python3:
+
+```bash
+git clone https://github.com/henry-97/MineApp.git
+cd MineApp/appmanager
+
+cp local.env.example local.env     # point it at your SDK / JDK
+bash build.sh                      # output: out/app-manager.apk
+```
+
+You need:
+
+- JDK 17
+- Android SDK: `build-tools;35.0.0`, `platforms;android-35`
+- Python 3 + Pillow (for icon generation)
+
+`build.sh` generates a self-signed key on first run, so there is nothing to prepare.
+Every path can be overridden via environment variables — see the header of `build.sh`.
+
+> An APK you build yourself is signed with a different key and **cannot be installed over** the
+> official release — uninstall first. Conversely, nobody can ship an update over the official
+> release either. That is exactly what a release key is for.
+
+## Project layout
+
+```
+MineApp/
+├── appmanager/                   Android project (no Gradle)
+│   ├── build.sh                  aapt2 → javac → d8 → zipalign → apksigner
+│   ├── src/java/.../
+│   │   ├── AdbClient.java        ADB protocol (CNXN/AUTH/OPEN/WRTE/OKAY/CLSE)
+│   │   ├── AdbService.java       Business layer: list, freeze, restrict, AOT, battery, memory
+│   │   ├── Bridge.java           JS ↔ Java bridge, single-threaded
+│   │   ├── MainActivity.java     WebView host
+│   │   └── KeepAliveService.java Ongoing notification
+│   ├── res/                      Resources (icons generated by tools/gen_icon.py)
+│   ├── assets/                   Front-end bundled into the APK
+│   └── tools/
+│       ├── gen_assets.py         Extracts the UI from server.py + package name map
+│       ├── gen_icon.py           Generates the 6 adaptive icon sets
+│       └── gen_manifest.py       Generates the 12 activity-aliases
+└── termux/
+    └── webui/server.py           Single source of truth for the UI (also the Termux server)
+```
+
+**There is only one copy of the front-end.** `server.py` embeds the whole HTML/CSS/JS;
+`gen_assets.py` extracts it verbatim and injects a `fetch → Java bridge` shim. The Termux build and
+the APK therefore share identical UI logic — no second implementation to keep in sync.
+
+## Known limitations
+
+- **Changing the icon or name kills the app process.** Android cannot change `label`/`icon` at
+  runtime, so this is done by switching `activity-alias` components. Disabling the alias that is
+  currently running makes the system finish the task, so the app restarts once (the list is cached,
+  so it comes back instantly).
+- **Port 5555 closes on reboot.** Run `adb tcpip 5555` again, or use Wireless debugging.
+- **Some ROMs are stricter.** On Xiaomi/Redmi, disable the install confirmation first:
+  `adb shell settings put global adb_install_need_confirm 0`.
+- A frozen app's launcher icon greys out rather than disappearing; hiding it completely needs
+  launcher support.
+
+## Sponsorship
+
+If this project helped you, you can buy me a coffee. **Entirely optional — no feature is gated.**
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center"><b>WeChat Pay</b></td>
+      <td align="center"><b>Alipay</b></td>
+    </tr>
+    <tr>
+      <td><img src="docs/sponsor-wechat.png" width="260" alt="WeChat Pay"></td>
+      <td><img src="docs/sponsor-alipay.jpg" width="260" alt="Alipay"></td>
+    </tr>
+  </table>
+</div>
+
+Issues and pull requests are just as welcome — they help a lot too.
+
+## License
+
+[GPL-3.0](LICENSE).
+
+In short: use it, modify it, redistribute it — but **derivatives must stay open source**. You may not
+repackage it with ads and ship it closed-source. If you need it inside a proprietary product, open an
+issue to discuss a licence.
+
+## Disclaimer
+
+This project drives the system `pm` / `am` / `cmd` commands directly through ADB, which makes it
+**powerful**. Freezing or restricting system apps can break alarms, push notifications or the
+launcher. Only touch apps whose behaviour you understand, and recover with
+`adb shell pm enable <package>` if something goes wrong. The author is not responsible for any data
+loss or device misbehaviour.

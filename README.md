@@ -1,18 +1,26 @@
-# Mine App · 应用管理器
-
-> 一个不用 root、不用 Shizuku、不用装一堆依赖的 Android 应用管理器。
-> 通过 ADB 直接管理手机上的应用：**归档（冻结）、限制后台、AOT 编译、性能模式**。
-
 <p align="center">
-  <img src="docs/app-icon.png" width="120" alt="Mine App">
+  <b>简体中文</b> · <a href="README.en.md">English</a>
 </p>
 
 <p align="center">
+  <img src="docs/app-icon.png" width="112" alt="Mine App">
+</p>
+
+<h1 align="center">Mine App · 应用管理器</h1>
+
+<p align="center">
   <img alt="version" src="https://img.shields.io/badge/version-1.3.2-0F6E56">
+  <img alt="APK" src="https://img.shields.io/badge/APK-525%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
   <img alt="license" src="https://img.shields.io/badge/license-GPL--3.0-0F6E56">
 </p>
+
+> **Mine App 是一款专为老旧与卡顿安卓设备注入第二春的纯净应用管理器。**
+>
+> - **真·零依赖**：无 Gradle 冗余，不依赖 Root，无需常驻 Shizuku，APK 体积不足 1MB，加上本地数据不足 10MB。
+> - **逆向能效优化**：通过「归档冻结」与「后台限制」彻底封锁流氓进程与冗余唤醒；在常驻性能模式确保前台高响应的同时，大幅降低整机待机功耗。
+> - **底层级加速**：原生支持 AOT Speed 全局静态预编译，消除 JIT 编译卡顿，显著压低应用冷启动延迟。
 
 ---
 
@@ -27,9 +35,17 @@ Shizuku / 冰箱 / 黑洞一整套。Mine App 换了个思路：
 用 App 私有目录里的密钥完成认证，然后直接发 `pm` / `am` / `cmd` 命令——**全程不出本机，
 不需要电脑，不需要 root**。
 
-<div align="center">
+<p align="center">
   <img src="docs/settings.png" width="300" alt="设置页">
-</div>
+</p>
+
+### 和常见方案比
+
+| | 需要 root | 需要常驻服务 | 需要电脑 | APK 体积 |
+|---|---|---|---|---|
+| 系统自带「强行停止」 | 否 | 否 | 否 | — （但重启后失效、不能批量） |
+| Shizuku + 冰箱 | 否 | **是**（两个都要） | 首次要 | 数十 MB |
+| **Mine App** | **否** | **否** | 仅首次 `adb tcpip` | **525 KB** |
 
 ## 功能
 
@@ -46,7 +62,7 @@ Shizuku / 冰箱 / 黑洞一整套。Mine App 换了个思路：
 | **列表缓存** | 拉到的列表存本地，1 分钟内重进不重复拉取 |
 
 <p align="center">
-  <img src="docs/icon-set.png" width="760" alt="九套图标">
+  <img src="docs/icon-set.png" width="760" alt="六套图标">
 </p>
 
 ## 环境要求
@@ -57,7 +73,7 @@ Shizuku / 冰箱 / 黑洞一整套。Mine App 换了个思路：
 
 ## 安装
 
-1. 到 [Releases](../../releases) 下载 `app-manager.apk` 安装
+1. 到 [Releases](https://github.com/henry-97/MineApp/releases) 下载 `app-manager.apk`（约 525 KB）
 2. 或者自己编译（见下文「从源码构建」）
 
 ### 首次配置（关键的一步）
@@ -88,12 +104,16 @@ bash build.sh                      # 产物在 out/app-manager.apk
 ```
 
 需要：
+
 - JDK 17
 - Android SDK：`build-tools;35.0.0`、`platforms;android-35`
 - Python 3 + Pillow（生成图标用）
 
-`build.sh` 首次运行会自动生成一个自签名密钥 `release.keystore`，不用自己准备。
+`build.sh` 首次运行会自动生成一个自签名密钥，不用自己准备。
 所有路径都可以用环境变量覆盖，见 `build.sh` 顶部注释。
+
+> 自己编译出来的 APK 签名和官方 Release 不同，**不能覆盖安装**官方版，需要先卸载。
+> 反过来说，官方版也不可能被第三方用别的密钥覆盖——这正是发布密钥的意义。
 
 ## 项目结构
 
@@ -163,21 +183,3 @@ MineApp/
 冻结、限制系统应用可能导致闹钟不响、推送收不到、桌面异常等问题。
 请只操作你自己清楚后果的应用，出问题请自行用 `adb shell pm enable <包名>` 恢复。
 作者不对任何数据丢失或设备异常负责。
-
----
-
-<details>
-<summary>English</summary>
-
-**Mine App** is a root-free Android app manager. Instead of Shizuku or a companion PC,
-it runs a minimal ADB client inside the app and talks to the phone's own adbd on
-`127.0.0.1:5555` (after `adb tcpip 5555`). That lets it freeze apps
-(`pm disable-user`), restrict background activity, run AOT compilation, and switch
-the system performance profile — all on-device, no root.
-
-Android 8.0+ (API 26), targetSdk 35. Build with JDK 17 + Android SDK build-tools 35,
-no Gradle required: `cd appmanager && cp local.env.example local.env && bash build.sh`.
-
-Licensed under GPL-3.0.
-
-</details>
