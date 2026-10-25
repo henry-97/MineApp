@@ -16,7 +16,7 @@
   <img alt="license" src="https://img.shields.io/badge/license-GPL--3.0-0F6E56">
 </p>
 
-> **Mine App is a featherweight Android app manager designed to revitalize legacy and throttled devices without root or heavy frameworks.**
+> **Mine App is a featherweight Android app manager that brings sluggish devices back to life — without root or heavy frameworks.**
 >
 > - **Zero Bloat, Zero Dependencies**: Built without Gradle overhead; operates completely independent of Root or Shizuku services. Ultra-compact footprint with <1MB APK size and <10MB total storage footprint (including runtime caches).
 > - **Paradoxical Energy Efficiency**: Pair a sustained performance mode with aggressive background freezes and restriction policies. Cut off stealthy background resource grabs to minimize power drain while ensuring maximum foreground responsiveness.
