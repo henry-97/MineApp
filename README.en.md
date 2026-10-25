@@ -43,8 +43,9 @@ authenticates with a key kept in its private storage, and talks to `pm` / `am` /
 
 | | **Mine App** | Built-in "Force stop" | Ice Box | Hail |
 |---|---|---|---|---|
-| Needs root | **No** | No | No (via Shizuku) | No (via Shizuku) |
-| Needs a background daemon | **No** | No | Yes (Shizuku + app) | Yes (Shizuku + app) |
+| Needs root | **No** | No | No | No |
+| **Requires Shizuku** | **No** | No | Yes | Yes |
+| Needs a background daemon | **No** | No | Yes (Shizuku running) | Yes (Shizuku running) |
 | Needs a PC | **Once, for `adb tcpip`** | No | Once, to activate | Once, to activate |
 | APK size | **525 KB** | Built in | Several MB | Several MB |
 | Batch freeze / unfreeze | **Yes** | — | Yes | Yes |
