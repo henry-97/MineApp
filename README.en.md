@@ -111,8 +111,10 @@ adb tcpip 5555
 # Unplug. From here on it is all taps inside the app — no more PC
 ```
 
-**After a reboot** the port closes — just run `adb tcpip 5555` once more (or re-pair Wireless
-debugging).
+**After a reboot** the port closes — just run `adb tcpip 5555` once more.
+
+> Wireless debugging is only an alternative *transport* for running that one command
+> (no USB cable needed) — the app itself cannot talk to it, see Known limitations.
 
 On first launch the phone shows the ADB authorisation dialog — tick "Always allow" and you are done.
 
@@ -173,7 +175,14 @@ the APK therefore share identical UI logic — no second implementation to keep 
   runtime, so this is done by switching `activity-alias` components. Disabling the alias that is
   currently running makes the system finish the task, so the app restarts once (the list is cached,
   so it comes back instantly).
-- **Port 5555 closes on reboot.** Run `adb tcpip 5555` again, or use Wireless debugging.
+- **Port 5555 closes on reboot.** Run `adb tcpip 5555` once more.
+  `persist.adb.tcp.port` cannot be written without root (SELinux blocks the shell user), so there is
+  no way to make it survive a reboot.
+- **Wireless debugging cannot replace the app's own connection.** The app speaks plain ADB to
+  `127.0.0.1:5555`; Android 11+ Wireless debugging uses **TLS + a pairing code** on a random port,
+  which the app cannot connect to. Treat Wireless debugging only as a *cable-free way to run*
+  `adb tcpip 5555` once, from a PC or another device with adb.
+  Verified: port 5555 keeps listening whether Wireless debugging is on or off, and the app works in both cases.
 - **Some ROMs are stricter.** On Xiaomi/Redmi, disable the install confirmation first:
   `adb shell settings put global adb_install_need_confirm 0`.
 - A frozen app's launcher icon greys out rather than disappearing; hiding it completely needs
