@@ -33,8 +33,8 @@
 - **6 套图标**：方块 / 四叶草 × 墨绿 / 金 / 黑，可在设置页随时切换，桌面图标立即生效
 - **两种应用名**：Mine App / 应用管理器
 - **归档、还原、限制、解限**，支持多选批量操作
-- **AOT 编译**，带实时进度百分比
-- **性能模式**，被系统回退后自动重新施加
+- **AOT 预编译**：可针对单个应用编译，也可批量；带实时进度百分比
+- **性能档位调优**，被系统回退后自动重新施加
 - **PSS 内存排序** + 底部实时内存汇总
 - **常驻通知**：电池健康、内存占用、归档 / 限制数量
 - **列表 1 分钟本地缓存**：重进 App 不再重复拉取
@@ -74,8 +74,8 @@
 - **6 icon sets**: blocks / clover × green / gold / black, switchable in settings, applied instantly
 - **Two app names**: Mine App / 应用管理器
 - **Archive, restore, restrict, unrestrict**, with multi-select batch actions
-- **AOT compilation** with live progress
-- **Performance mode**, automatically re-applied if the ROM reverts it
+- **AOT compilation**, per-app or in bulk, with live progress
+- **Performance profile tuning**, automatically re-applied if the ROM reverts it
 - **PSS memory sorting** with a live aggregate bar
 - **Ongoing notification**: battery health, memory usage, archive / restrict counts
 - **1-minute list cache** so re-entering the app does not refetch

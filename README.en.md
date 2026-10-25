@@ -36,19 +36,25 @@ authenticates with a key kept in its private storage, and talks to `pm` / `am` /
 **everything stays on-device. No PC. No root.**
 
 <p align="center">
-  <img src="docs/settings.png" width="300" alt="Settings">
+  <img src="docs/main.jpg" width="320" alt="Main screen">
 </p>
 
 ### Compared to the usual options
 
-| | **Mine App** | Built-in "Force stop" | Shizuku + Ice Box |
-|---|---|---|---|
-| Needs root | **No** | No | No |
-| Needs a background daemon | **No** | No | Yes (two of them) |
-| Needs a PC | **Once, for `adb tcpip`** | No | Once, to activate Shizuku |
-| APK size | **525 KB** | Built in | Tens of MB |
-| Batch operations | **Yes** | No | Yes |
-| Survives a reboot | **Yes** | No | Yes |
+| | **Mine App** | Built-in "Force stop" | Ice Box | Hail |
+|---|---|---|---|---|
+| Needs root | **No** | No | No (via Shizuku) | No (via Shizuku) |
+| Needs a background daemon | **No** | No | Yes (Shizuku + app) | Yes (Shizuku + app) |
+| Needs a PC | **Once, for `adb tcpip`** | No | Once, to activate | Once, to activate |
+| APK size | **525 KB** | Built in | Several MB | Several MB |
+| Batch freeze / unfreeze | **Yes** | — | Yes | Yes |
+| Survives a reboot | **Yes** | No | Yes | Yes |
+| **Performance profile tuning** | **Yes** | — | — | — |
+| **Per-app AOT compilation** | **Yes** | — | — | — |
+| **PSS memory sorting** | **Yes** | — | — | — |
+
+> The Ice Box / Hail columns are based on their public documentation and common usage;
+> refer to their own docs for details.
 
 ## Features
 
@@ -56,13 +62,17 @@ authenticates with a key kept in its private storage, and talks to `pm` / `am` /
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, launcher icon greys out |
 | **Restrict** | Restricts background activity; milder than freezing, the app can still be launched |
-| **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; shows a percentage |
-| **Performance mode** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
+| **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live percentage |
+| **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
 | **Memory sort** | Sort by PSS to see exactly what is eating RAM; live aggregate of the selected apps' memory |
 | **Batch actions** | Select many apps, then archive / restore / restrict / unrestrict in one go |
 | **Ongoing notification** | Battery health, memory usage and archive count in the status bar |
 | **Appearance** | 6 icon sets (blocks / clover × green / gold / black), two app names, light & dark theme, Chinese & English |
 | **List cache** | The fetched list is cached locally; re-entering within a minute does not refetch |
+
+<p align="center">
+  <img src="docs/settings.jpg" width="320" alt="Settings">
+</p>
 
 <p align="center">
   <img src="docs/icon-set.png" width="760" alt="Six icon sets">
