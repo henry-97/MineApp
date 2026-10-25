@@ -230,10 +230,6 @@ the APK therefore share identical UI logic — no second implementation to keep 
 
 ## Known limitations
 
-- **Changing the icon or name kills the app process.** Android cannot change `label`/`icon` at
-  runtime, so this is done by switching `activity-alias` components. Disabling the alias that is
-  currently running makes the system finish the task, so the app restarts once (the list is cached,
-  so it comes back instantly).
 - **Port 5555 closes on reboot.** Run `adb tcpip 5555` once more.
   `persist.adb.tcp.port` cannot be written without root (SELinux blocks the shell user), so there is
   no way to make it survive a reboot.
@@ -245,23 +241,15 @@ the APK therefore share identical UI logic — no second implementation to keep 
 - **Full AOT compilation is memory-hungry.** dex2oat can peak above 2 GB, so the app refuses to start
   below ~2.5 GB of free memory and tells you why. A few very large apps (many plugin dex files, e.g.
   TikTok Lite) may be abandoned by dex2oat even with plenty of RAM, leaving the status at `speed-profile`.
-- **Some ROMs are stricter.** On Xiaomi/Redmi, disable the install confirmation first:
-  `adb shell settings put global adb_install_need_confirm 0`.
 - A frozen app's launcher icon greys out rather than disappearing; hiding it completely needs
   launcher support.
 
-### Security note (a side effect of `adb tcpip 5555`)
+- **Never approve an unexpected "Allow USB debugging?" dialog on a public network.**
+  `adb tcpip 5555` makes adbd listen on all interfaces, so anyone on the same network can trigger
+  that dialog; tapping Allow hands them control of your phone and can leak your data. Deny anything
+  you did not initiate.
 
-`adb tcpip 5555` makes adbd listen on **all interfaces** (`[::]:5555`), not just `127.0.0.1`.
-Android offers **no** way to bind it to loopback only (the device exposes no `adb.listen_addrs`-style
-property, and it cannot be changed without root), so the app cannot fix this for you.
-
-That said, `ro.adb.secure=1` means **every new device must be authorised on the phone itself** —
-someone on the same network can at most trigger the authorisation dialog, not take over silently.
-
-- Only run `adb tcpip 5555` on a **trusted network**; do not leave 5555 open on public Wi-Fi
-- If an "Allow USB debugging?" dialog appears from a device you do not recognise, tap **Deny**
-- When in doubt, reboot — the port closes on its own (and you would have to redo it anyway)
+<a id="sponsor"></a>
 
 ## Sponsorship
 

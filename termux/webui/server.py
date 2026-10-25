@@ -687,9 +687,9 @@ color:var(--ink3);cursor:pointer;user-select:none}
     </div>
     <div class="sec" data-t="secAbout">关于</div>
     <div class="ext-row">
-      <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub 官方</a>
+      <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
       <span class="ext-sep">|</span>
-      <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#赞助">打赏与资助</a>
+      <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
     </div>
     <div class="info-note" style="border-top:0"><span data-t="setEntry">左滑主界面或点标题可再次进入本页。</span><br>
       <span data-t="setNameNote">应用名称会同时改变桌面图标的名称。</span></div>
@@ -796,7 +796,7 @@ var I18N = {
     setNameNote: '应用名称会同时改变桌面图标的名称。',
     perfTip: '性能模式',
     secTip: '界面提示（ⓘ）', tipShow: '显示', tipHide: '隐藏',
-    secAbout: '关于', extRepo: 'GitHub 官方', extFund: '打赏与资助',
+    secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     secIcon: '应用图标',
     icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
     tIconOk: '图标已切换，桌面可能需要几秒刷新', tIconFail: '图标切换失败',
@@ -884,7 +884,7 @@ var I18N = {
     setNameNote: 'The app name also changes the launcher label.',
     perfTip: 'Performance',
     secTip: 'Hints (ⓘ)', tipShow: 'Show', tipHide: 'Hide',
-    secAbout: 'About', extRepo: 'GitHub', extFund: 'Sponsor',
+    secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     secIcon: 'App icon',
     icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
     tIconOk: 'Icon changed; the launcher may take a few seconds', tIconFail: 'Failed to change icon',
@@ -957,7 +957,10 @@ function applyExtLinks(){
   }
   if (fund){
     fund.textContent = T('extFund');
-    fund.setAttribute('href', en ? (GH + '/blob/main/README.en.md#sponsorship') : (GH + '#赞助'));
+    // 直接指向独立的 docs/SPONSOR.md，而不是 README 里的 #赞助 锚点：
+    // 实测 GitHub App 完全不认 fragment 锚点（仓库首页和 blob 文件页都停在页首），
+    // 而浏览器认。独立页两种客户端都能直接落在赞助内容上。
+    fund.setAttribute('href', GH + '/blob/main/docs/SPONSOR.md');
   }
 }
 
