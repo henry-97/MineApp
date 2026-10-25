@@ -47,7 +47,7 @@ authenticates with a key kept in its private storage, and talks to `pm` / `am` /
 | **Requires Shizuku** | **No** | No | Yes | Yes |
 | Needs a background daemon | **No** | No | Yes (Shizuku running) | Yes (Shizuku running) |
 | Needs a PC | **Once, for `adb tcpip`** | No | Once, to activate | Once, to activate |
-| APK size | **525 KB** | Built in | Several MB | Several MB |
+| APK size | **< 1MB** | Built in | Several MB | Several MB |
 | Batch freeze / unfreeze | **Yes** | — | Yes | Yes |
 | Survives a reboot | **Yes** | No | Yes | Yes |
 | **Performance profile tuning** | **Yes** | — | — | — |
