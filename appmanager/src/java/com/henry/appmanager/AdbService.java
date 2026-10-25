@@ -512,6 +512,22 @@ public class AdbService {
             compilingPkg = pkg;
         }
         try {
+            // 全量 speed 编译时 dex2oat 的 RSS 能涨到 2GB 以上。实测抖音极速版编译期间
+            // MemFree 掉到 129MB，lmkd 连杀十几个后台进程，最后 dexopt status=FAILED
+            // （日志里 dex2oatWallTimeMillis=0，说明不是被时间掐断的）。
+            // 内存不够时提前拦住，比让用户干等 10 分钟再看失败好。
+            if (on) {
+                long[] mem = getMemInfo();
+                long availMb = mem[1] / 1024;
+                if (availMb > 0 && availMb < 1200) {
+                    o.put("ok", false);
+                    o.put("lowmem", true);
+                    o.put("avail_mb", availMb);
+                    o.put("msg", "可用内存只剩 " + availMb + "MB，全量编译几乎一定失败。"
+                            + "请先清理后台再试（小应用一般不受影响）。");
+                    return o.toString();
+                }
+            }
             String before = aotStatus(pkg);
             if (on && "speed".equals(before)) {
                 o.put("ok", true);
@@ -535,8 +551,9 @@ public class AdbService {
                 // 光把这个词弹给用户没有任何信息量。这里翻译成人话。
                 if (msg.isEmpty() || msg.equalsIgnoreCase("Failure")
                         || msg.startsWith("Error")) {
-                    msg = "系统拒绝全量编译（dex2oat 放弃），已保持 " + after
-                            + "。插件多的大应用常见，speed-profile 本身已比未编译快。";
+                    msg = "系统没能完成全量编译（status=FAILED，常见原因是内存不足或"
+                            + "应用过大），已保持 " + after + "。这是系统给它的默认优化，"
+                            + "日常启动已经够快，不必强求 speed。";
                 }
             }
             o.put("msg", ok ? msg : msg);

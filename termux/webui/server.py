@@ -736,6 +736,7 @@ var I18N = {
     compiling: '编译中', reverting: '还原中',
     tFail: '操作失败：{m}', tCompiled: '预编译完成 {n}s', tReverted: '已取消预编译 {n}s',
     tAlready: '已经是 AOT 状态，无需重复编译',
+    tLowMem: '可用内存只剩 {n}MB，全量编译几乎一定失败，请先清理后台',
     tCleared: '已清空选择', tConnFail: '无法连接服务：{m}', tAdbOff: '调试未连接',
     tPerfNoAdb: '调试未连接，性能模式未生效',
     tPerfOn: '性能模式已开启', tPerfOff: '性能模式已关闭',
@@ -815,6 +816,7 @@ var I18N = {
     compiling: 'Compiling', reverting: 'Reverting',
     tFail: 'Failed: {m}', tCompiled: 'Compiled in {n}s', tReverted: 'Reverted in {n}s',
     tAlready: 'Already AOT-compiled, nothing to do',
+    tLowMem: 'Only {n}MB free — full compilation will almost certainly fail. Close some apps first.',
     tCleared: 'Selection cleared', tConnFail: 'Cannot reach service: {m}', tAdbOff: 'ADB not connected',
     tPerfNoAdb: 'ADB not connected, performance mode not applied',
     tPerfOn: 'Performance mode on', tPerfOff: 'Performance mode off',
@@ -1399,6 +1401,7 @@ document.getElementById('list').addEventListener('click', function(e){
         settle(false);
         // busy = 后台已经有一个编译在跑（Java 侧的单飞保护），不是失败
         if (d.busy) toast(T('tCompiling'));
+        else if (d.lowmem) toast(T2('tLowMem', {n: d.avail_mb}));
         else toast(T2('tFail', {m: d.msg || T('tUnknown')}));
         return;
       }
