@@ -450,6 +450,11 @@ background:var(--card);border:0.5px solid var(--line);font-size:18px;color:var(-
 font-weight:600;color:#fff;background:#0f6e56}
 .hd-save:active{opacity:.85}
 #milletClose{margin-left:4px}
+/* 标题旁的 ⓘ 点开才展开说明，不占常驻空间 */
+.sheet-hd h2{display:flex;align-items:center;gap:5px}
+.sheet-hd h2 .i-dot{cursor:pointer;padding:2px 0}
+.millet-note{font-size:12px;color:var(--ink3);line-height:1.6;background:var(--bg);
+margin:8px 16px 0;padding:9px 12px;border-radius:10px}
 .sheet-body{flex:1;overflow-y:auto;padding:12px 16px calc(24px + env(safe-area-inset-bottom))}
 .trow{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:0.5px solid var(--line)}
 .trow .tl{font-size:15px;color:var(--ink)}
@@ -661,9 +666,10 @@ padding-top:10px;border-top:0.5px solid var(--line)}
   <div class="sheet-body" id="tuneBody"></div>
 </div>
 <div id="millet" class="sheet">
-  <div class="sheet-hd"><h2 data-t="milletTitle">Millet 白名单</h2>
+  <div class="sheet-hd"><h2><span data-t="milletTitle">Millet 白名单</span><i class="i-dot tip-i" id="milletInfo" role="button" aria-label="info">ⓘ</i></h2>
     <button class="hd-save" id="milletSave" data-t="save">保存</button>
     <button class="close" id="milletClose">×</button></div>
+  <div class="millet-note" id="milletNote" style="display:none" data-t="milletNote">本名单就是系统「电源管理 → 无限制」那份名单。在小米 HyperOS 实测，与应用「省电策略 → 无限制」完全等价。</div>
   <div class="msearch"><input type="search" id="mq" data-tp="searchPh" placeholder="搜索应用名或包名"></div>
   <div class="sortbar" id="milletSort" style="margin:8px 16px 0">
     <button class="seg on" data-msort="default" data-t="sortDefault">默认</button>
@@ -790,6 +796,7 @@ var I18N = {
     picked: '已选',
     tagArchived: '已归档', tagRestricted: '已限制', tagWhite: '白名单', tagSystem: '系统', tagNormal: '正常',
     milletNow: '当前名单 {n} 个',
+    milletNote: '本名单就是系统「电源管理 → 无限制」那份名单。在小米 HyperOS 实测，与应用「省电策略 → 无限制」完全等价。',
     cfmMillet: '保存后白名单会从 {a} 个变成 {b} 个（整体覆盖），确定吗？',
     agoNever: '24h 以上',
     bannerOff: '调试通道未连接', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip 5555',
@@ -887,6 +894,7 @@ var I18N = {
     picked: 'Picked',
     tagArchived: 'Archived', tagRestricted: 'Restricted', tagWhite: 'Allowlisted', tagSystem: 'System', tagNormal: 'Normal',
     milletNow: 'currently {n}',
+    milletNote: 'This is the same list as the system\'s Battery → No restrictions. Verified on Xiaomi HyperOS: identical to an app\'s battery-saver setting "No restrictions".',
     cfmMillet: 'Saving replaces the allowlist: {a} → {b}. Continue?',
     agoNever: '>24h',
     bannerOff: 'ADB channel not connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip 5555',
@@ -1963,6 +1971,12 @@ function updateMilletInfo(){
 }
 
 document.getElementById('mq').addEventListener('input', renderMillet);
+
+/* 标题旁的 ⓘ：点一下展开说明，再点收起 */
+document.getElementById('milletInfo').addEventListener('click', function(){
+  var n = document.getElementById('milletNote');
+  n.style.display = (n.style.display === 'none' || !n.style.display) ? 'block' : 'none';
+});
 
 document.getElementById('milletClose').onclick = function(){
   document.getElementById('millet').classList.remove('show');
