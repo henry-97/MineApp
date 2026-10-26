@@ -56,7 +56,7 @@ polling into two tiers:
 | Frequency | What is fetched | Why split this way |
 |---|---|---|
 | **Every 3 s** | A single `cat /proc/meminfo` — total and used memory | So cheap it is effectively free, yet enough to keep the memory picture live |
-| **Every 60 s** | Battery health, archive count, restriction count | These change slowly, and cost `dumpsys battery` + `dumpsys batterystats` + four `pm`/`appops` calls — far heavier than meminfo, so only once a minute |
+| **Every 60 s** | Battery health, archive count, restriction count | These only change about once a minute, and cost `dumpsys battery` + `dumpsys batterystats` + four `pm`/`appops` calls — far heavier than meminfo, so only once a minute |
 
 There is also a **manual refresh button**, for when you want the state right now instead of waiting
 for the next tick.
