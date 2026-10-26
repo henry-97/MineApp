@@ -11,7 +11,7 @@
 <h1 align="center">Mine App · App Manager</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.0.5-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-2.0.6-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-525%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
