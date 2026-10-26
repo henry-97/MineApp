@@ -31,6 +31,8 @@ public class MainActivity extends Activity {
     private static final String PAGE_BG = "#FAF9F6";
 
     private WebView web;
+    /** 监听应用装卸更新：列表里的 versionCode 和 AOT 状态都会变，需要重拉 */
+    private android.content.BroadcastReceiver pkgReceiver;
     private AdbService service;
     private Bridge bridge;
 
@@ -132,6 +134,31 @@ public class MainActivity extends Activity {
         // decorView 已挂载，此时才能安全设置系统栏外观
         applyBarAppearance();
         web.loadUrl("file:///android_asset/index.html");
+
+        // 应用装/卸/更新后，AOT 记录会因 versionCode 变化而失效 —— 主动重拉一次，
+        // 否则用户切回来看到的还是旧状态，得手动点刷新才纠正。
+        pkgReceiver = new android.content.BroadcastReceiver() {
+            @Override public void onReceive(android.content.Context c, Intent i) {
+                if (web == null) return;
+                web.post(new Runnable() {
+                    @Override public void run() {
+                        web.evaluateJavascript("(typeof load === 'function') && load(true)", null);
+                    }
+                });
+            }
+        };
+        android.content.IntentFilter f = new android.content.IntentFilter();
+        f.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        f.addAction(Intent.ACTION_PACKAGE_ADDED);
+        f.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        f.addDataScheme("package");
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(pkgReceiver, f, android.content.Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(pkgReceiver, f);
+            }
+        } catch (Exception ignored) { }
 
         startKeepAlive();
     }
@@ -262,6 +289,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (pkgReceiver != null) {
+            try { unregisterReceiver(pkgReceiver); } catch (Exception ignored) { }
+            pkgReceiver = null;
+        }
         if (bridge != null) bridge.shutdown();
         if (service != null) service.close();
         if (web != null) web.destroy();

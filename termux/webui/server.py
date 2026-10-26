@@ -773,6 +773,10 @@ function saveAot(){ localStorage.setItem('aot', JSON.stringify(Array.from(aotDon
    因为 dexopt 产物和 APK 内容绑定，更新后系统会退回 speed-profile，
    继续显示「已编译」就是骗人。 */
 function aotKey(a){ return a.pkg + '@' + (a.ver || 0); }
+/* 全量编译撞过 570 秒上限的应用（按 pkg@versionCode 记）。
+   大应用点一下要白等 10 分钟，还必然失败 —— 再点之前先提醒。 */
+var aotTimeout = new Set(JSON.parse(localStorage.getItem('aotTimeout') || '[]'));
+function saveAotTimeout(){ localStorage.setItem('aotTimeout', JSON.stringify(Array.from(aotTimeout))); }
 var busy = false;
 var sortMode = (function(){
   var s = localStorage.getItem('sortMode');
@@ -832,6 +836,7 @@ var I18N = {
     tFail: '操作失败：{m}', tCompiled: '预编译完成 {n}s', tReverted: '已取消预编译 {n}s',
     tAlready: '已经是 AOT 状态，无需重复编译',
     tNotAot: '本来就没有全量编译，无需取消',
+    cfmAotTimeout: '「{n}」上次全量编译超时了（系统上限 9.5 分钟，这个应用太大编不完）。\n系统默认的 speed-profile 已经在生效，不影响日常使用。\n再试一次吗？',
     tLowMem: '可用内存只剩 {n}MB，全量编译几乎一定失败，请先清理后台',
     cfmKill: '清理「{n}」的后台进程？仅清理后台，不影响应用自启动。',
     killDontAsk: '下次不再提示',
@@ -931,6 +936,7 @@ var I18N = {
     tFail: 'Failed: {m}', tCompiled: 'Compiled in {n}s', tReverted: 'Reverted in {n}s',
     tAlready: 'Already AOT-compiled, nothing to do',
     tNotAot: 'Not AOT-compiled, nothing to undo',
+    cfmAotTimeout: '"{n}" timed out last time (the system cap is 9.5 min; this app is too big).\nThe default speed-profile is already active, so nothing is broken.\nTry again anyway?',
     tLowMem: 'Only {n}MB free — full compilation will almost certainly fail. Close some apps first.',
     cfmKill: 'Clear background processes of "{n}"? Background only — auto-start is unaffected.',
     killDontAsk: "Don't ask again",
@@ -1660,6 +1666,8 @@ document.getElementById('list').addEventListener('click', function(e){
 
 /* AOT 预编译：点开关 → 轨道变成进度条（秒数同步显示在标签上），完成后就地刷新 */
 var aotBusy = false;
+/* 已经确认过「就算超时也要再试一次」的包，避免确认框点确定后又弹一次 */
+var aotForcePkg = null;
 document.getElementById('list').addEventListener('click', function(e){
   var sw = e.target.closest('.aot-sw');
   if (!sw) return;
@@ -1667,6 +1675,24 @@ document.getElementById('list').addEventListener('click', function(e){
   if (!adbOk){ toast(T('tAdbOff')); return; }
   var pkg = sw.getAttribute('data-pkg');
   var wantOn = sw.getAttribute('data-aot') !== '1';
+
+  var cur = null;
+  for (var ic = 0; ic < apps.length; ic++) if (apps[ic].pkg === pkg) { cur = apps[ic]; break; }
+
+  // 上次这个应用全量编译超时过：先提醒，别让人白等 10 分钟又失败
+  if (wantOn && cur && aotTimeout.has(aotKey(cur)) && aotForcePkg !== pkg){
+    askConfirm(T2('cfmAotTimeout', {n: cur.label}), function(){
+      aotForcePkg = pkg;
+      // 重新取一次节点：确认框弹出期间列表可能已重绘，旧节点已经脱离文档
+      setTimeout(function(){
+        var el = document.querySelector('#list .aot-sw[data-pkg="' + pkg + '"]');
+        if (el) el.click();
+        aotForcePkg = null;
+      }, 60);
+    });
+    return;
+  }
+
   aotBusy = true;
 
   // 进度条：轨道清空、滑块隐藏，绿色从左侧推进，百分比实时显示在左侧标签上。
@@ -1710,6 +1736,8 @@ document.getElementById('list').addEventListener('click', function(e){
     .then(function(d){
       if (!d.ok){
         settle(false);
+        // 撞了 570 秒上限：记下来，下次点之前先提醒
+        if (d.timeout && cur){ aotTimeout.add(aotKey(cur)); saveAotTimeout(); }
         // busy = 后台已经有一个编译在跑（Java 侧的单飞保护），不是失败
         if (d.busy) toast(T('tCompiling'));
         else if (d.lowmem) toast(T2('tLowMem', {n: d.avail_mb}));
@@ -1721,6 +1749,7 @@ document.getElementById('list').addEventListener('click', function(e){
       for (var i2 = 0; i2 < apps.length; i2++) if (apps[i2].pkg === pkg) { one = apps[i2]; break; }
       if (wantOn) aotDone.add(aotKey(one || {pkg: pkg})); else aotDone.delete(aotKey(one || {pkg: pkg}));
       saveAot();
+      if (wantOn && one){ aotTimeout.delete(aotKey(one)); saveAotTimeout(); }   // 这次成了，清掉超时记录
       var secs = Math.round((Date.now() - t0) / 1000);
       if (d.skipped) toast(wantOn ? T('tAlready') : T('tNotAot'));
       else toast(wantOn ? T2('tCompiled', {n: secs}) : T2('tReverted', {n: secs}));
