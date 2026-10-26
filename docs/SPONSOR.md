@@ -16,7 +16,7 @@ If this project helped you, you can buy me a coffee. **Entirely optional — no 
     </tr>
     <tr>
       <td><img src="sponsor-wechat.png" width="260" alt="WeChat Pay"></td>
-      <td><img src="sponsor-alipay.jpg" width="260" alt="Alipay"></td>
+      <td><img src="sponsor-alipay.png" width="260" alt="Alipay"></td>
     </tr>
   </table>
 </div>

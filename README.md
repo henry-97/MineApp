@@ -255,7 +255,7 @@ MineApp/
     </tr>
     <tr>
       <td><img src="docs/sponsor-wechat.png" width="260" alt="微信支付"></td>
-      <td><img src="docs/sponsor-alipay.jpg" width="260" alt="支付宝"></td>
+      <td><img src="docs/sponsor-alipay.png" width="260" alt="支付宝"></td>
     </tr>
   </table>
 </div>
