@@ -1,30 +1,16 @@
-# 这里放 GitHub 的 Sponsor 按钮配置（`.github/FUNDING.yml`）。
+# 赞助入口配置。各条目填好后取消注释，仓库右上角就会出现 Sponsor 按钮。
 #
-# ⚠️ 目前所有条目都是注释状态，所以仓库右上角**不会**出现 Sponsor 按钮。
-# 等你有了国际收款链接，取消对应那行的注释即可，按钮立刻出现。
-#
-# 关键事实（2026-10 核实 docs.github.com）：
-#   GitHub Sponsors 的「收款」只支持下列地区，**中国大陆不在列表里**
-#   （列表里有 Hong Kong SAR、Macao SAR，没有 China）。
-#   任何人任何地区都可以"赞助"别人，但只有支持地区的开发者能"收到"钱。
-#   所以 `github: henry-97` 这条路走不通，只能用第三方平台 + custom 链接。
-#
-# 支持的键（每个平台一个账号，custom 最多 4 个 URL）：
-#   github / patreon / ko_fi / buy_me_a_coffee / polar / open_collective
-#   liberapay / issuehunt / tidelift / community_bridge / thanks_dev / custom
+# 目前用的是 README「赞助」一节里的收款码，所以这里全部保持注释状态。
 
-# —— 方案 A：Ko-fi（推荐，注册快，可绑 PayPal 收款，欧美用户熟悉）
-# ko_fi: your_username
-
-# —— 方案 B：Buy Me a Coffee（欧美最流行，但提现需要 Stripe）
-# buy_me_a_coffee: your_username
-
-# —— 方案 C：Patreon（适合长期订阅制）
-# patreon: your_username
-
-# —— 方案 D：任意链接，最多 4 个（PayPal.me、爱发电、自己的赞助页都行）
-#   注意：含 ":" 的 URL 必须加引号
-# custom: ["https://paypal.me/yourname"]
-
-# —— 万一以后能开通 GitHub Sponsors，就换成这行
+# GitHub Sponsors —— 已提交申请（澳门地区，在官方支持地区列表内）。
+# 审核通过、profile 上线后，取消下面这行的注释即可：
 # github: henry-97
+
+# 第三方平台（任选其一）：
+# ko_fi: your_username
+# buy_me_a_coffee: your_username
+# patreon: your_username
+# open_collective: your_username
+
+# 任意链接，最多 4 个（含 ":" 的 URL 必须加引号）
+# custom: ["https://example.com/sponsor"]
