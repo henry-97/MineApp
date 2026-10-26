@@ -75,7 +75,7 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 |---|---|---|---|---|
 | Needs root | **No** | No | No | No |
 | Requires Shizuku | **No ✓** | No | Yes | Yes |
-| Per-app deployment | **Yes ✓** | — | No | No |
+| Ships its own ADB client | **Yes ✓** | — | No (uses Shizuku) | No (uses Shizuku) |
 | Needs a background daemon | **No ✓** | No | Yes (Shizuku running) | Yes (Shizuku running) |
 | APK size | **< 1MB ✓** | Built in | Several MB | Several MB |
 | Batch freeze / unfreeze | **Yes** | — | Yes | Yes |
@@ -85,8 +85,9 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 | PSS memory sorting | **Yes ✓** | — | — | — |
 
 > **✓** marks where Mine App has the edge.
-> "Per-app deployment" means freezing / restricting / AOT-compiling one specific app without
-> touching the others.
+> "Ships its own ADB client" means the app implements the ADB protocol itself (CNXN / AUTH / OPEN /
+> WRTE) and talks straight to the phone's local adbd — so no Shizuku or other external tool is
+> needed, and it runs standalone after a one-time authorization.
 > The Ice Box / Hail columns are based on their public documentation and common usage;
 > refer to their own docs for details.
 
