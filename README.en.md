@@ -11,7 +11,7 @@
 <h1 align="center">Mine App · App Manager</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.0.7-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-2.0.8-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-525%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -138,6 +138,10 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 > | **Restrict** the apps you don't need | Puts the background to sleep and removes the wakeups |
 >
 > Fast foreground, quiet background — you save on both ends.
+
+<p align="center">
+  <img src="docs/tune-en.jpg" width="320" alt="Performance tuning">
+</p>
 
 <p align="center">
   <img src="docs/settings-en.jpg" width="320" alt="Settings">

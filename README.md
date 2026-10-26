@@ -11,7 +11,7 @@
 <h1 align="center">Mine App · 应用管理器</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.0.7-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-2.0.8-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-525%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -130,6 +130,10 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 > | **限制**用不着的应用 | 让后台真正睡下去，砍掉唤醒 |
 >
 > 前台快、后台静，两头都省。
+
+<p align="center">
+  <img src="docs/tune.jpg" width="320" alt="性能调优">
+</p>
 
 <p align="center">
   <img src="docs/settings.jpg" width="320" alt="设置页">
