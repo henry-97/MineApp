@@ -23,6 +23,7 @@
 > - **Zero Bloat, Zero Dependencies**: Built without Gradle overhead; operates completely independent of Root or Shizuku services. Ultra-compact footprint with <1MB APK size and <10MB total storage footprint (including runtime caches).
 > - **Faster and Lighter at Once**: Pair a sustained performance mode with aggressive background freezes and restriction policies. Cut off stealthy background resource grabs to minimize power drain while ensuring maximum foreground responsiveness.
 > - **Low-Level Acceleration**: Built-in Android AOT Speed batch compilation compiles DEX to native code, eliminating JIT stutters and dramatically accelerating cold-start times on low-spec hardware.
+> - **"Performance" mode is not a battery hog**: it only lifts the CPU's peak-frequency cap — it does not pin the CPU at full tilt, and clocks drop back down as soon as foreground work is done. The real standby drain is background wakeups, so we recommend **Performance + Restrict**: faster *and* thriftier than capping the CPU.
 
 ---
 

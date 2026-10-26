@@ -96,6 +96,61 @@ public class Bridge {
         });
     }
 
+    /**
+     * 检查 GitHub 上的最新 Release。
+     *
+     * 只在两种情况下发请求：用户主动点「检查更新」，或开了自动检查且距上次超过 24 小时。
+     * 只做一次 GET，不上传任何东西，也没有任何埋点。
+     */
+    @JavascriptInterface
+    public void update(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                java.net.HttpURLConnection c = null;
+                try {
+                    java.net.URL u = new java.net.URL(
+                            "https://api.github.com/repos/henry-97/MineApp/releases/latest");
+                    c = (java.net.HttpURLConnection) u.openConnection();
+                    c.setConnectTimeout(8000);
+                    c.setReadTimeout(8000);
+                    c.setRequestProperty("Accept", "application/vnd.github+json");
+                    c.setRequestProperty("User-Agent", "MineApp");
+                    int code = c.getResponseCode();
+                    JSONObject o = new JSONObject();
+                    if (code != 200) {
+                        o.put("ok", false);
+                        o.put("code", code);
+                        return o.toString();
+                    }
+                    java.io.InputStream in = c.getInputStream();
+                    java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                    in.close();
+                    JSONObject r = new JSONObject(new String(bos.toByteArray(), "UTF-8"));
+                    o.put("ok", true);
+                    o.put("tag", r.optString("tag_name"));
+                    o.put("url", r.optString("html_url"));
+                    o.put("name", r.optString("name"));
+                    return o.toString();
+                } catch (Throwable e) {
+                    try {
+                        JSONObject o = new JSONObject();
+                        o.put("ok", false);
+                        o.put("msg", String.valueOf(e.getMessage()));
+                        return o.toString();
+                    } catch (Exception ignored) {
+                        return "{\"ok\":false}";
+                    }
+                } finally {
+                    if (c != null) c.disconnect();
+                }
+            }
+        });
+    }
+
     @JavascriptInterface
     public void freeze(int id, String pkgs) {
         batch(id, pkgs, "freeze");

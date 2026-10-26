@@ -455,7 +455,7 @@ font-weight:600;color:#fff;background:#0f6e56}
 .sheet-hd h2 .i-dot{cursor:pointer;padding:2px 0}
 .millet-note{font-size:12px;color:var(--ink3);line-height:1.6;background:var(--bg);
 margin:8px 16px 0;padding:9px 12px;border-radius:10px}
-.sheet-body{flex:1;overflow-y:auto;padding:12px 16px calc(24px + env(safe-area-inset-bottom))}
+.sheet-body{flex:1;overflow-y:auto;padding:8px 16px calc(16px + env(safe-area-inset-bottom))}
 .trow{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:0.5px solid var(--line)}
 .trow .tl{font-size:15px;color:var(--ink)}
 .trow .ts{font-size:11.5px;color:var(--ink3);margin-top:3px}
@@ -530,11 +530,11 @@ font-size:14px;color:var(--ink3);border:1px solid var(--track);cursor:pointer;
 user-select:none;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s}
 .kill-x:active{background:var(--track);color:var(--ink)}
 /* 设置页外链：跳到浏览器打开，不在 WebView 里替换界面 */
-.ext-row{display:flex;align-items:center;gap:8px;padding:2px 0 10px;font-size:13px}
+.ext-row{display:flex;align-items:center;gap:8px;padding:2px 0 8px;font-size:13px}
 .ext{color:#0f6e56;text-decoration:none;padding:6px 2px;border-radius:6px}
 .ext:active{background:var(--track)}
 .ext-sep{color:var(--ink3);font-size:12px}
-.ext-note{font-size:11.5px;color:var(--ink3);line-height:1.6;padding:0 0 10px}
+.ext-note{font-size:11.5px;color:var(--ink3);line-height:1.55;padding:0 0 6px}
 /* 版本号：构建时由 gen_assets.py 把 __APP_VERSION__ 换成 manifest 里的 versionName */
 .ver-line{font-size:11.5px;color:var(--ink3);line-height:1.6;padding:0 0 6px;letter-spacing:.3px}
 .refresh{transform-origin:50% 50%;will-change:transform}
@@ -584,7 +584,11 @@ width:70vw;max-width:70vw;box-sizing:border-box;text-align:center}
 line-height:1.55;font-size:13.5px}
 .empty{padding:60px 20px;text-align:center;color:var(--ink3);font-size:16px}
 .sortbar{display:flex;gap:8px;margin-top:8px}
-.sec{font-size:12px;color:var(--ink3);margin:20px 0 2px}
+.sec{font-size:13px;color:var(--ink2);font-weight:500;margin:16px 0 5px}
+/* 设置页：标签放左边、按钮放右边，一行搞定，比「标题一行 + 按钮一行」省一半竖向空间 */
+.setrow{display:flex;align-items:center;gap:36px;margin:17px 0}
+.setrow-lb{flex:none;width:64px;font-size:13px;color:var(--ink2);font-weight:500;line-height:1.3;white-space:nowrap}
+.setrow .sortbar{flex:1;margin-top:0;gap:10px}
 #appTitle{cursor:pointer;display:flex;align-items:center;gap:5px;min-width:0}
 #appNameTx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 三处 ⓘ 提示统一用同一个字符字形，保证视觉大小完全一致（11.5px = 电池行/性能模式行字号） */
@@ -594,16 +598,16 @@ transition:color .12s}
 .tip-i{font-style:normal}
 body.no-info .tip-i{display:none}
 /* 设置页的图标选择器 */
-.icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
-.icon-cell{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;
-padding:10px 4px 8px;border-radius:12px;background:var(--card);border:1.5px solid var(--line)}
-.icon-cell img{width:52px;height:52px;border-radius:12px;display:block;
+.icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:6px}
+.icon-cell{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;
+padding:6px 4px 5px;border-radius:10px;background:var(--card);border:1.5px solid var(--line)}
+.icon-cell img{width:42px;height:42px;border-radius:10px;display:block;
 box-shadow:0 0 0 0.5px rgba(0,0,0,.12)}
 .icon-cell span{font-size:11px;color:var(--ink3);line-height:1}
 .icon-cell.on{border-color:#0f6e56}
 .icon-cell.on span{color:#0f6e56;font-weight:600}
 .seg{flex:1;background:var(--card);border:0.5px solid var(--line);border-radius:10px;
-padding:0;font-size:16px;color:var(--ink2);min-height:36px;font-weight:400}
+padding:0;font-size:15px;color:var(--ink2);min-height:34px;font-weight:400}
 .seg.on{background:#0f6e56;color:#fff;border-color:#0f6e56;font-weight:500}
 .tag.w{background:#faeeda;color:#854f0b}
 /* 白名单：排在「已限制」上方，单独一个胶囊 */
@@ -692,40 +696,59 @@ padding-top:10px;border-top:0.5px solid var(--line)}
 <div id="settings" class="sheet">
   <div class="sheet-hd"><h2 data-t="settings">设置</h2><button class="close" id="setClose">×</button></div>
   <div class="sheet-body">
-    <div class="sec" data-t="secName">应用名称</div>
-    <div class="sortbar" id="nameBar">
-      <button class="seg" data-name="manager">应用管理器</button>
-      <button class="seg" data-name="mine">Mine App</button>
+    <div class="setrow">
+      <span class="setrow-lb" data-t="secName">应用名称</span>
+      <div class="sortbar" id="nameBar">
+        <button class="seg" data-name="manager">应用管理器</button>
+        <button class="seg" data-name="mine">Mine App</button>
+      </div>
     </div>
-    <div class="sec" data-t="secTheme">主题</div>
-    <div class="sortbar" id="themeBar">
-      <button class="seg" data-theme="auto" data-t="themeAuto">跟随系统</button>
-      <button class="seg" data-theme="light" data-t="themeLight">浅色</button>
-      <button class="seg" data-theme="dark" data-t="themeDark">深色</button>
+    <div class="setrow">
+      <span class="setrow-lb" data-t="secTheme">主题</span>
+      <div class="sortbar" id="themeBar">
+        <button class="seg" data-theme="auto" data-t="themeAuto">跟随系统</button>
+        <button class="seg" data-theme="light" data-t="themeLight">浅色</button>
+        <button class="seg" data-theme="dark" data-t="themeDark">深色</button>
+      </div>
     </div>
-    <div class="sec" data-t="secLang">语言</div>
-    <div class="sortbar" id="langBar">
-      <button class="seg" data-lang="auto" data-t="langAuto">跟随系统</button>
-      <button class="seg" data-lang="zh" data-t="langZh">中文</button>
-      <button class="seg" data-lang="en" data-t="langEn">English</button>
+    <div class="setrow">
+      <span class="setrow-lb" data-t="secLang">语言</span>
+      <div class="sortbar" id="langBar">
+        <button class="seg" data-lang="auto" data-t="langAuto">跟随系统</button>
+        <button class="seg" data-lang="zh" data-t="langZh">中文</button>
+        <button class="seg" data-lang="en" data-t="langEn">English</button>
+      </div>
     </div>
     <div class="sec" data-t="secIcon">应用图标</div>
     <div class="icon-grid" id="iconGrid"></div>
-    <div class="sec" data-t="secTip">界面提示（ⓘ）</div>
-    <div class="sortbar" id="tipBar">
-      <button class="seg" data-tip="1" data-t="tipShow">显示</button>
-      <button class="seg" data-tip="0" data-t="tipHide">隐藏</button>
+    <div class="setrow">
+      <span class="setrow-lb" data-t="secTip">界面提示</span>
+      <div class="sortbar" id="tipBar">
+        <button class="seg" data-tip="1" data-t="tipShow">显示</button>
+        <button class="seg" data-tip="0" data-t="tipHide">隐藏</button>
+      </div>
     </div>
     <div class="sec" data-t="secAbout">关于</div>
-    <div class="ver-line">V __APP_VERSION__</div>
+    <div class="trow" style="padding:9px 0;border-bottom:0">
+      <div style="flex:1">
+        <div class="tl" data-t="updTitle">检查更新</div>
+        <div class="ts" id="updState" data-ver="__APP_VERSION__">—</div>
+      </div>
+      <button class="edit" id="updBtn" data-t="updCheck">检查</button>
+    </div>
+    <div class="trow" style="padding:9px 0">
+      <div style="flex:1">
+        <div class="tl" data-t="updAuto">自动检查更新</div>
+        <div class="ts" data-t="updAutoSub">每 24 小时检查一次，默认关闭，可按需主动开启</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="updAutoChk"><span class="slider"></span></label>
+    </div>
     <div class="ext-row">
       <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
       <span class="ext-sep">|</span>
       <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
     </div>
-    <div class="ext-note" data-t="extLicense">本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue</div>
-    <div class="info-note" style="border-top:0"><span data-t="setEntry">左滑主界面或点标题可再次进入本页。</span><br>
-      <span data-t="setNameNote">应用名称会同时改变桌面图标的名称。</span></div>
+    <div class="ext-note" data-t="extLicense">本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。</div>
   </div>
 </div>
 <div id="risk" class="risk show">
@@ -854,6 +877,8 @@ var I18N = {
     tuneSave: '省电模式', tuneSaveSub: '限制后台活动以延长续航',
     tuneBal: '均衡模式', tuneBalSub: '默认的功耗与性能折中',
     tuneGpu: 'GPU 调优', tuneGame: '游戏周期优化',
+    tuneGpuSub: '系统默认已开启，不建议手动修改',
+    tuneGameSub: '系统默认已开启，不建议手动修改',
     milletTitle: 'Millet 白名单', milletSub: '豁免后台限制的应用，当前 {n} 个',
     edit: '编辑', save: '保存',
     rootNote: '以下项目需要 root，当前仅显示',
@@ -861,12 +886,16 @@ var I18N = {
     settings: '设置', secName: '应用名称', secTheme: '主题', secLang: '语言',
     themeAuto: '跟随系统', themeLight: '浅色', themeDark: '深色',
     langAuto: '跟随系统', langZh: '中文', langEn: 'English',
-    setNameNote: '应用名称会同时改变桌面图标的名称。',
     perfTip: '性能模式',
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
-    secTip: '界面提示（ⓘ）', tipShow: '显示', tipHide: '隐藏',
+    secTip: '界面提示', tipShow: '显示', tipHide: '隐藏',
     secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
-    extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue',
+    updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
+    updCurrent: '当前版本 {v}', updLatest: '已是最新版本 {v}',
+    updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
+    updAuto: '自动检查更新', updAutoSub: '每 24 小时检查一次，默认关闭，可按需主动开启',
+    updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
+    extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。',
     riskTitle: '使用前请留意',
     riskBody: '本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电等。',
     riskLink: '查看完整「使用须知」→',
@@ -890,7 +919,6 @@ var I18N = {
     tRunFail: '{w}失败：{m}',
     tUnknown: '未知错误',
     tAdbNoRun: '调试未连接，操作未执行',
-    setEntry: '主界面从左往右滑、或点标题，进入本页；向左滑返回。'
   },
   en: {
     perf: 'Performance',
@@ -955,6 +983,8 @@ var I18N = {
     tuneSave: 'Battery saver', tuneSaveSub: 'Limit background activity to extend battery life',
     tuneBal: 'Balanced mode', tuneBalSub: 'Default power/performance trade-off',
     tuneGpu: 'GPU tuning', tuneGame: 'Game periodic tuning',
+    tuneGpuSub: 'On by default — best left untouched',
+    tuneGameSub: 'On by default — best left untouched',
     milletTitle: 'Millet allowlist', milletSub: 'Apps exempt from background limits · {n}',
     edit: 'Edit', save: 'Save',
     rootNote: 'The following need root and are read-only',
@@ -962,11 +992,16 @@ var I18N = {
     settings: 'Settings', secName: 'App name', secTheme: 'Theme', secLang: 'Language',
     themeAuto: 'System', themeLight: 'Light', themeDark: 'Dark',
     langAuto: 'System', langZh: '中文', langEn: 'English',
-    setNameNote: 'The app name also changes the launcher label.',
     perfTip: 'Performance',
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
-    secTip: 'Hints (ⓘ)', tipShow: 'Show', tipHide: 'Hide',
+    secTip: 'Hints', tipShow: 'Show', tipHide: 'Hide',
     secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
+    updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
+    updCurrent: 'Current version {v}', updLatest: 'Up to date ({v})',
+    updNew: 'New version {v} available', updOpen: 'Get it',
+    updFail: 'Check failed — network problem?',
+    updAuto: 'Auto-check for updates', updAutoSub: 'Checked every 24 h — off by default, turn it on if you want',
+    updAutoOn: 'Auto-check enabled', updAutoOff: 'Auto-check disabled',
     extLicense: 'GPL-3.0 — closed-source distribution not permitted. Need a proprietary licence? Open an issue.',
     riskTitle: 'Before you start',
     riskBody: 'This app drives system commands directly through ADB and is genuinely powerful. Do not freeze or restrict components the system depends on (Clock, launcher, keyboard, …) — alarms, the home screen and incoming calls can break, among other things.',
@@ -991,7 +1026,6 @@ var I18N = {
     tRunFail: '{w} failed: {m}',
     tUnknown: 'unknown error',
     tAdbNoRun: 'ADB not connected, nothing was executed',
-    setEntry: 'Swipe right on the main screen, or tap the title, to open this page; swipe left to go back.'
   }
 };
 
@@ -1029,6 +1063,8 @@ function applyLang(){
   var ph = document.querySelectorAll('[data-tp]');
   for (var j = 0; j < ph.length; j++) ph[j].setAttribute('placeholder', T(ph[j].getAttribute('data-tp')));
   applyExtLinks();
+  // 「当前版本 / 已是最新 / 发现新版本」是动态文案，data-t 覆盖不到，需要单独重绘
+  if (typeof renderUpdState === 'function') renderUpdState();
 }
 
 /* 设置页的 GitHub / 打赏链接：跟着界面语言走。
@@ -1911,11 +1947,12 @@ function renderTune(){
   var h = '';
   h += trowSwitch('perf', T('tunePerf'), T('tunePerfSub'), d.perf);
   // 说明紧跟「性能模式」：这个开关最容易被误解成费电，解释要贴着它
-  h += '<div class="info-note" style="border-top:0;margin:2px 0 6px">' + T('perfNote') + '</div>';
+  h += '<div class="info-note" style="border-top:0;margin:2px 0 0;padding:0 0 12px;'
+     + 'border-bottom:0.5px solid var(--line)">' + T('perfNote') + '</div>';
   h += trowSwitch('save', T('tuneSave'), T('tuneSaveSub'), d.save);
   h += trowSwitch('balanced', T('tuneBal'), T('tuneBalSub'), d.balanced);
-  h += trowSwitch('gpu', T('tuneGpu'), 'GPUTUNER_SWITCH', d.gpu);
-  h += trowSwitch('game', T('tuneGame'), 'cloud_periodic_game_enable', d.game);
+  h += trowSwitch('gpu', T('tuneGpu'), T('tuneGpuSub'), d.gpu);
+  h += trowSwitch('game', T('tuneGame'), T('tuneGameSub'), d.game);
   h += '<div class="trow"><div style="flex:1"><div class="tl">' + T('milletTitle') + '</div>'
      + '<div class="ts">' + T2('milletSub', {n: (d.millet_count || 0)}) + '</div></div>'
      + '<button class="edit" id="milletOpen">' + T('edit') + '</button></div>';
@@ -2149,6 +2186,106 @@ document.getElementById('tipBar').addEventListener('click', function(e){
   applyTip();
   renderSettings();
 });
+
+/* ---------- 检查更新 ----------
+   默认不联网：只有用户点「检查」或开了自动检查且距上次超过 24 小时，才会发一次 GET。
+   请求只带 GitHub 公开 API 的常规头，不上传任何本机信息。 */
+var UPD_AUTO = 'updAuto', UPD_LAST = 'updLast';
+var updUrl = '';
+
+function cmpVer(a, b){
+  a = String(a || '').replace(/^v/i, '').split('.');
+  b = String(b || '').replace(/^v/i, '').split('.');
+  for (var i = 0; i < 3; i++){
+    var x = parseInt(a[i] || '0', 10) || 0, y = parseInt(b[i] || '0', 10) || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
+}
+
+/* 启动时读一次版本号存起来：updState 的文案会被检查结果覆盖，不能每次去 DOM 里取 */
+var CUR_VER = (function(){
+  var el = document.querySelector('[data-ver]');
+  return el ? (el.getAttribute('data-ver') || '') : '';
+})();
+function curVer(){ return CUR_VER; }
+
+/* 外链一律交给系统浏览器：WebView 里直接跳转会把整个界面替换掉 */
+function openExtUrl(url){
+  var a = document.createElement('a');
+  a.href = url; a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ if (a.parentNode) a.parentNode.removeChild(a); }, 0);
+}
+
+/* 记录状态而不是直接写死文案：切换语言时要能按新语言重绘 */
+var updKind = 'current', updVar = '';
+function renderUpdState(){
+  var el = document.getElementById('updState');
+  if (!el) return;
+  var k = {current:'updCurrent', latest:'updLatest', new:'updNew',
+           fail:'updFail', checking:'updChecking'}[updKind] || 'updCurrent';
+  el.textContent = updVar ? T2(k, {v: updVar}) : T(k);
+}
+function setUpdState(kind, v){ updKind = kind; updVar = v || ''; renderUpdState(); }
+
+function checkUpdate(silent){
+  var btn = document.getElementById('updBtn');
+  if (btn) btn.disabled = true;
+  if (!silent) setUpdState('checking');
+  fetch('/api/update', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (btn) btn.disabled = false;
+      localStorage.setItem(UPD_LAST, String(Date.now()));
+      if (!d || !d.ok){
+        setUpdState('fail');
+        if (!silent) toast(T('updFail'));
+        return;
+      }
+      var latest = String(d.tag || '').replace(/^v/i, '');
+      if (cmpVer(latest, curVer()) > 0){
+        updUrl = d.url || '';
+        setUpdState('new', latest);
+        toast(T2('updNew', {v: latest}));
+        if (btn){ btn.textContent = T('updOpen'); btn.setAttribute('data-t', 'updOpen'); }
+      } else {
+        updUrl = '';
+        setUpdState('latest', curVer());
+        if (!silent) toast(T2('updLatest', {v: curVer()}));
+        if (btn){ btn.textContent = T('updCheck'); btn.setAttribute('data-t', 'updCheck'); }
+      }
+    })
+    .catch(function(){
+      if (btn) btn.disabled = false;
+      setUpdState('fail');
+      if (!silent) toast(T('updFail'));
+    });
+}
+
+document.getElementById('updBtn').addEventListener('click', function(){
+  if (updUrl){ openExtUrl(updUrl); return; }   // 已经发现新版 → 直接去下载页
+  checkUpdate(false);
+});
+
+var updChk = document.getElementById('updAutoChk');
+if (updChk){
+  updChk.checked = localStorage.getItem(UPD_AUTO) === '1';
+  updChk.addEventListener('change', function(){
+    localStorage.setItem(UPD_AUTO, updChk.checked ? '1' : '0');
+    toast(updChk.checked ? T('updAutoOn') : T('updAutoOff'));
+  });
+}
+setUpdState('current', curVer());
+
+/* 自动检查：默认关闭。开着也要距上次超过 24 小时才发请求，启动时不打扰 */
+setTimeout(function(){
+  if (localStorage.getItem(UPD_AUTO) !== '1') return;
+  var last = parseInt(localStorage.getItem(UPD_LAST) || '0', 10);
+  if (Date.now() - last < 24 * 3600 * 1000) return;
+  checkUpdate(true);
+}, 6000);
 
 document.getElementById('iconGrid').addEventListener('click', function(e){
   var c = e.target.closest('[data-icon]');
