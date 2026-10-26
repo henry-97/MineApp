@@ -617,9 +617,9 @@ public class AdbService {
                 // 光把这个词弹给用户没有任何信息量。这里翻译成人话。
                 if (msg.isEmpty() || msg.equalsIgnoreCase("Failure")
                         || msg.startsWith("Error")) {
-                    msg = "系统没能完成全量编译（status=FAILED，常见原因是内存不足或"
-                            + "应用过大），已保持 " + after + "。这是系统给它的默认优化，"
-                            + "日常启动已经够快，不必强求 speed。";
+                    // 这句话会原样进 toast，太长会顶成一条竖长条 —— 只留有用的信息
+                    msg = "系统没能完成全量编译（内存不足或应用过大），已保持 " + after
+                            + "。日常启动已经够快，不必强求 speed。";
                 }
             }
             o.put("msg", ok ? msg : msg);

@@ -575,9 +575,13 @@ button:disabled{opacity:.45}
 .primary{background:#0f6e56;color:#fff}
 .ghost{background:var(--bg);color:var(--ink);border:0.5px solid var(--line)}
 #toast{position:fixed;left:50%;bottom:116px;transform:translateX(-50%) translateY(10px);
-background:#2c2c2a;color:#fff;padding:11px 20px;border-radius:20px;font-size:14px;opacity:0;
-transition:opacity .2s,transform .2s;pointer-events:none;z-index:40;max-width:80vw;text-align:center}
+background:#2c2c2a;color:#fff;padding:12px 18px;border-radius:16px;font-size:14px;opacity:0;
+transition:opacity .2s,transform .2s;pointer-events:none;z-index:40;
+width:70vw;max-width:70vw;box-sizing:border-box;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* 长文案（失败原因这类）：单行居中读不动，而且窄框会把它顶成一条竖长条 */
+#toast.long{width:88vw;max-width:88vw;text-align:left;
+line-height:1.55;font-size:13.5px}
 .empty{padding:60px 20px;text-align:center;color:var(--ink3);font-size:16px}
 .sortbar{display:flex;gap:8px;margin-top:8px}
 .sec{font-size:12px;color:var(--ink3);margin:20px 0 2px}
@@ -1134,10 +1138,30 @@ function closeSettings(){
 function saveKeep(){ localStorage.setItem('keep', JSON.stringify(Array.from(keep))); }
 function toast(msg, ms){
   var t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  var len = (msg || '').length;
+  t.textContent = msg;
+  // 超过 40 字换成更宽的左对齐样式，否则窄框会把长句顶成一条竖长条
+  t.classList.toggle('long', len > 40);
+  t.classList.add('show');
   clearTimeout(t._h);
-  t._h = setTimeout(function(){ t.classList.remove('show'); }, ms || 2200);
+  // 停留时间随字数走：20 字以内保持 2.2s，每多 1 字加 80ms，最长 5s
+  // （编译失败那种 70+ 字的解释，2.2s 根本读不完）
+  var dur = ms || Math.min(5000, 2200 + Math.max(0, len - 20) * 80);
+  _toastTaps = 0;   // 新提示重新计数
+  t._h = setTimeout(function(){ t.classList.remove('show'); }, dur);
 }
+
+/* 提示挡着屏幕时，点两下就关掉（累计两次，单次点击不打断操作） */
+var _toastTaps = 0;
+document.addEventListener('touchstart', function(){
+  var t = document.getElementById('toast');
+  if (!t || !t.classList.contains('show')) return;
+  if (++_toastTaps >= 2){
+    _toastTaps = 0;
+    clearTimeout(t._h);
+    t.classList.remove('show');
+  }
+}, {passive:true});
 
 function askConfirm(msg, onOk, opt){
   var m = document.getElementById('modal');
