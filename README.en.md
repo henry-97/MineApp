@@ -96,10 +96,10 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, launcher icon greys out |
 | **Restrict** | `appops RUN_IN_BACKGROUND` — restricts background activity; milder than freezing, the app can still be launched |
-| **Allowlist (exempt)** | Adds an app to the system's **Battery → No restrictions** list (`MILLET_NO_RESTRICT_APP`), so the system stops throttling it in the background. **It is the same list you would edit in Settings** — this is just a shortcut. Allowlisted apps get a pill and sort to the top |
+| **Allowlist (exempt)** | Adds an app to the system's **Battery → No restrictions** list (`MILLET_NO_RESTRICT_APP`), so the system stops throttling it in the background. **It is the same list you would edit in Settings** — this is just a shortcut. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling |
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
-| **Memory sort** | Sort by PSS to see exactly what is eating RAM; live aggregate of the selected apps' memory |
+| **Memory sort** | Sort by PSS to see exactly what is eating RAM; the footer shows live system-wide memory usage |
 | **Activity monitor** | A **pulsing green dot** on the memory line marks apps that are actually running (based on the system's oom adj — plain cached processes and "recently used, now in background" do not count) |
 | **Per-app cleanup** | An **×** on every row runs `am kill` — clears background processes only. **Auto-start and enabled state are untouched**, so the next launch is a normal cold start. It also reports how much memory was actually freed |
 | **Real app names** | Resolved in two passes — launcher-activity labels, then application labels — so every installed app shows its real name instead of its package name |
