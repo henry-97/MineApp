@@ -605,7 +605,10 @@ public class AdbService {
             String cmd = on
                     ? "cmd package compile -m speed " + pkg
                     : "cmd package compile -m verify " + pkg;
+            long t0 = System.currentTimeMillis();
             String r = shLong(cmd).trim();
+            long elapsedMs = System.currentTimeMillis() - t0;
+            o.put("elapsed_ms", elapsedMs);
             String after = aotStatus(pkg);
             boolean ok = on ? "speed".equals(after) : !"speed".equals(after);
             o.put("ok", ok);
@@ -618,8 +621,16 @@ public class AdbService {
                 if (msg.isEmpty() || msg.equalsIgnoreCase("Failure")
                         || msg.startsWith("Error")) {
                     // 这句话会原样进 toast，太长会顶成一条竖长条 —— 只留有用的信息
-                    msg = "系统没能完成全量编译（内存不足或应用过大），已保持 " + after
-                            + "。日常启动已经够快，不必强求 speed。";
+                    // ArtService 给 dex2oat 子进程设了 570 秒硬上限（不可配置），
+                    // 撞上去的表现就是「跑满 9 分半然后回 Failure」，和内存无关。
+                    if (elapsedMs >= 560000L) {
+                        o.put("timeout", true);
+                        msg = "编译超时：系统给 dex2oat 的上限是 9.5 分钟，这个应用太大编不完"
+                                + "（已保持 " + after + "）。这是系统的硬限制。";
+                    } else {
+                        msg = "系统没能完成全量编译（内存不足或应用过大），已保持 " + after
+                                + "。日常启动已经够快，不必强求 speed。";
+                    }
                 }
             }
             o.put("msg", ok ? msg : msg);
