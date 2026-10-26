@@ -595,6 +595,11 @@ public class AdbService {
                 }
             }
             String before = aotStatus(pkg);
+            // 两个方向都要短路，别白跑一次编译：
+            //   开：已经是 speed → 什么都不用做
+            //   关：本来就不是 speed → 也没有「全量编译」可取消
+            // 之前只做了「开」的方向，导致对 speed-profile 的应用点「关」也会跑一次
+            // verify 编译，大应用还容易撞 570 秒超时，表现为「一会成功一会失败」。
             if (on && "speed".equals(before)) {
                 o.put("ok", true);
                 o.put("aot", true);
@@ -602,9 +607,22 @@ public class AdbService {
                 o.put("msg", "already speed");
                 return o.toString();
             }
+            if (!on && !"speed".equals(before)) {
+                o.put("ok", true);
+                o.put("aot", false);
+                o.put("skipped", true);
+                o.put("status", before);
+                o.put("msg", "not speed");
+                return o.toString();
+            }
+            // 「取消」用 --reset 而不是 -m verify：
+            //   -m verify 会强制把产物做成「只校验、不含机器码」，比系统默认还差；
+            //   --reset 只是撤掉我们那次显式 compile，回到安装时的默认状态，
+            //   之后系统自己的 bg-dexopt 会照常把它优化成 speed-profile。
+            //   实测 --reset 对小应用 2.8 秒完成，也几乎不会撞超时。
             String cmd = on
                     ? "cmd package compile -m speed " + pkg
-                    : "cmd package compile -m verify " + pkg;
+                    : "cmd package compile --reset " + pkg;
             long t0 = System.currentTimeMillis();
             String r = shLong(cmd).trim();
             long elapsedMs = System.currentTimeMillis() - t0;
@@ -930,6 +948,8 @@ public class AdbService {
      * 应用名基本不会变，缓存起来即可，代价是刚装的应用最多 5 分钟内显示包名。
      */
     private Map<String, String> labelCache;
+    /** 包名 → versionCode。和 labelCache 一起填，用于判断 AOT 记录是否因应用更新而失效 */
+    private final Map<String, Long> verCache = new HashMap<String, Long>();
     private long labelCacheAt = 0;
     private int labelCacheCount = -1;
     private static final long LABEL_TTL = 5 * 60 * 1000L;
@@ -966,7 +986,14 @@ public class AdbService {
             }
 
             // 第 2 轮：没有启动入口的包（系统组件、服务类应用）
-            for (android.content.pm.ApplicationInfo ai : pm.getInstalledApplications(0)) {
+            // 用 getInstalledPackages 而不是 getInstalledApplications：顺带拿到 versionCode，
+            // 前端要用它判断「应用更新后 AOT 记录是否失效」
+            for (android.content.pm.PackageInfo pi : pm.getInstalledPackages(0)) {
+                android.content.pm.ApplicationInfo ai = pi.applicationInfo;
+                if (ai == null) continue;
+                try {
+                    verCache.put(ai.packageName, pi.getLongVersionCode());
+                } catch (Throwable ignored) { }
                 try {
                     if (m.containsKey(ai.packageName)) continue;
                     CharSequence cs = ai.loadLabel(pm);
@@ -1025,6 +1052,8 @@ public class AdbService {
             JSONObject a = new JSONObject();
             try {
                 a.put("white", white.contains(pkg));
+                Long vc = verCache.get(pkg);
+                if (vc != null) a.put("ver", vc.longValue());
                 String label = labels.get(pkg);
                 if (label == null) label = AppNames.MAP.containsKey(pkg) ? AppNames.MAP.get(pkg) : pkg;
                 a.put("pkg", pkg);

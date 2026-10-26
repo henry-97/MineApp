@@ -769,6 +769,10 @@ var aotDone = new Set(JSON.parse(localStorage.getItem('aot') || '[]'));
 /* 各应用最后一次前台使用时间（毫秒），供「闲置」排序 */
 var idleMap = null;
 function saveAot(){ localStorage.setItem('aot', JSON.stringify(Array.from(aotDone))); }
+/* AOT 记录按「包名@versionCode」存：应用一更新，versionCode 变了，记录自动失效 ——
+   因为 dexopt 产物和 APK 内容绑定，更新后系统会退回 speed-profile，
+   继续显示「已编译」就是骗人。 */
+function aotKey(a){ return a.pkg + '@' + (a.ver || 0); }
 var busy = false;
 var sortMode = (function(){
   var s = localStorage.getItem('sortMode');
@@ -827,6 +831,7 @@ var I18N = {
     compiling: '编译中', reverting: '还原中',
     tFail: '操作失败：{m}', tCompiled: '预编译完成 {n}s', tReverted: '已取消预编译 {n}s',
     tAlready: '已经是 AOT 状态，无需重复编译',
+    tNotAot: '本来就没有全量编译，无需取消',
     tLowMem: '可用内存只剩 {n}MB，全量编译几乎一定失败，请先清理后台',
     cfmKill: '清理「{n}」的后台进程？仅清理后台，不影响应用自启动。',
     killDontAsk: '下次不再提示',
@@ -925,6 +930,7 @@ var I18N = {
     compiling: 'Compiling', reverting: 'Reverting',
     tFail: 'Failed: {m}', tCompiled: 'Compiled in {n}s', tReverted: 'Reverted in {n}s',
     tAlready: 'Already AOT-compiled, nothing to do',
+    tNotAot: 'Not AOT-compiled, nothing to undo',
     tLowMem: 'Only {n}MB free — full compilation will almost certainly fail. Close some apps first.',
     cfmKill: 'Clear background processes of "{n}"? Background only — auto-start is unaffected.',
     killDontAsk: "Don't ask again",
@@ -1289,7 +1295,7 @@ function rowHtml(a){
   var on = keep.has(a.pkg);
   var cls = 'li' + (a.frozen ? ' frozen' : (a.restricted ? ' restricted' : ''))
           + (on ? ' on' : '');
-  var aotOn = aotDone.has(a.pkg);
+  var aotOn = aotDone.has(aotKey(a));
   return '<li class="' + cls + '" data-pkg="' + a.pkg + '">'
        +  '<span class="chk">' + (on ? '✓' : '') + '</span>'
        +  '<div class="meta"><div class="name"><span class="nm">' + a.label + '</span>'
@@ -1711,10 +1717,12 @@ document.getElementById('list').addEventListener('click', function(e){
         return;
       }
       settle(true);
-      if (wantOn) aotDone.add(pkg); else aotDone.delete(pkg);
+      var one = null;
+      for (var i2 = 0; i2 < apps.length; i2++) if (apps[i2].pkg === pkg) { one = apps[i2]; break; }
+      if (wantOn) aotDone.add(aotKey(one || {pkg: pkg})); else aotDone.delete(aotKey(one || {pkg: pkg}));
       saveAot();
       var secs = Math.round((Date.now() - t0) / 1000);
-      if (d.skipped) toast(T('tAlready'));
+      if (d.skipped) toast(wantOn ? T('tAlready') : T('tNotAot'));
       else toast(wantOn ? T2('tCompiled', {n: secs}) : T2('tReverted', {n: secs}));
     })
     .catch(function(){ settle(false); });
