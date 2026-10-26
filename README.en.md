@@ -94,7 +94,8 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 | Feature | What it does |
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, launcher icon greys out |
-| **Restrict** | Restricts background activity; milder than freezing, the app can still be launched |
+| **Restrict** | `appops RUN_IN_BACKGROUND` — restricts background activity; milder than freezing, the app can still be launched |
+| **Allowlist (exempt)** | Adds an app to the system's **Battery → No restrictions** list (`MILLET_NO_RESTRICT_APP`), so the system stops throttling it in the background. **It is the same list you would edit in Settings** — this is just a shortcut. Allowlisted apps get a pill and sort to the top |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling |
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
 | **Memory sort** | Sort by PSS to see exactly what is eating RAM; live aggregate of the selected apps' memory |
@@ -105,6 +106,19 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 | **Ongoing notification** | Battery health, memory usage and archive count in the status bar; memory ticks every 3 s, battery/counts every 60 s — barely any battery cost |
 | **Appearance** | 6 icon sets (blocks / clover × green / gold / black), two app names, light & dark theme, Chinese & English |
 | **List cache** | The fetched list is cached locally; re-entering within a minute does not refetch |
+
+> **"Restrict" and "Allowlist" are two independent switches — don't conflate them:**
+>
+> | | What it changes | Effect |
+> |---|---|---|
+> | **Restrict** | `appops RUN_IN_BACKGROUND` | The app's background-activity permission |
+> | **Allowlist** | The system power-management list (doze whitelist / `standby bucket = EXEMPTED`) | Whether the system throttles it in the background |
+>
+> They don't override each other, so **an app can be both Restricted and Allowlisted**.
+>
+> Verified on device: all 22 allowlisted apps report `standby bucket = 5 (EXEMPTED)` and appear in
+> `dumpsys deviceidle whitelist`; sampled apps outside the list do not. In other words, the in-app
+> "Millet allowlist" and the system's *Battery → No restrictions* edit **the very same list**.
 
 <p align="center">
   <img src="docs/settings-en.jpg" width="320" alt="Settings">
