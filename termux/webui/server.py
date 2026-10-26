@@ -1910,11 +1910,12 @@ function renderTune(){
   var r = d.root || {};
   var h = '';
   h += trowSwitch('perf', T('tunePerf'), T('tunePerfSub'), d.perf);
+  // 说明紧跟「性能模式」：这个开关最容易被误解成费电，解释要贴着它
+  h += '<div class="info-note" style="border-top:0;margin:2px 0 6px">' + T('perfNote') + '</div>';
   h += trowSwitch('save', T('tuneSave'), T('tuneSaveSub'), d.save);
   h += trowSwitch('balanced', T('tuneBal'), T('tuneBalSub'), d.balanced);
   h += trowSwitch('gpu', T('tuneGpu'), 'GPUTUNER_SWITCH', d.gpu);
   h += trowSwitch('game', T('tuneGame'), 'cloud_periodic_game_enable', d.game);
-  h += '<div class="info-note" style="border-top:0;margin:2px 0 4px">' + T('perfNote') + '</div>';
   h += '<div class="trow"><div style="flex:1"><div class="tl">' + T('milletTitle') + '</div>'
      + '<div class="ts">' + T2('milletSub', {n: (d.millet_count || 0)}) + '</div></div>'
      + '<button class="edit" id="milletOpen">' + T('edit') + '</button></div>';
