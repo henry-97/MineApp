@@ -863,6 +863,7 @@ var I18N = {
     langAuto: '跟随系统', langZh: '中文', langEn: 'English',
     setNameNote: '应用名称会同时改变桌面图标的名称。',
     perfTip: '性能模式',
+    perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
     secTip: '界面提示（ⓘ）', tipShow: '显示', tipHide: '隐藏',
     secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue',
@@ -963,6 +964,7 @@ var I18N = {
     langAuto: 'System', langZh: '中文', langEn: 'English',
     setNameNote: 'The app name also changes the launcher label.',
     perfTip: 'Performance',
+    perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
     secTip: 'Hints (ⓘ)', tipShow: 'Show', tipHide: 'Hide',
     secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     extLicense: 'GPL-3.0 — closed-source distribution not permitted. Need a proprietary licence? Open an issue.',
@@ -1912,6 +1914,7 @@ function renderTune(){
   h += trowSwitch('balanced', T('tuneBal'), T('tuneBalSub'), d.balanced);
   h += trowSwitch('gpu', T('tuneGpu'), 'GPUTUNER_SWITCH', d.gpu);
   h += trowSwitch('game', T('tuneGame'), 'cloud_periodic_game_enable', d.game);
+  h += '<div class="info-note" style="border-top:0;margin:2px 0 4px">' + T('perfNote') + '</div>';
   h += '<div class="trow"><div style="flex:1"><div class="tl">' + T('milletTitle') + '</div>'
      + '<div class="ts">' + T2('milletSub', {n: (d.millet_count || 0)}) + '</div></div>'
      + '<button class="edit" id="milletOpen">' + T('edit') + '</button></div>';

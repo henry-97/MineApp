@@ -11,7 +11,7 @@
 <h1 align="center">Mine App · 应用管理器</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.0.6-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-2.0.7-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-525%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -111,6 +111,25 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 > 实测核对：22 个白名单应用**全部**对应 `standby bucket = 5 (EXEMPTED)`，
 > 且全部出现在 `dumpsys deviceidle whitelist` 里；名单外的抽样应用都不是 5。
 > 也就是说，App 里的「Millet 白名单」和系统「电源管理 → 无限制」操作的是**同一份名单**。
+
+> **关于「性能模式」：它其实不费电**
+>
+> 「性能模式」听起来像个费电开关，其实相反——它只是**解除 CPU 的峰值主频上限**，
+> 并不会让 CPU 一直满血跑。CPU 是按需调度的：前台任务几秒干完就回落到低频，
+> 比被压着主频慢慢磨更省。
+>
+> 真正吃掉待机电量的，是**后台应用偷偷唤醒、联网、刷新**，不是峰值主频。
+> 传统「省电 / 均衡」压主频，前台同样的事要跑更久，后台该醒还是醒——结果往往是
+> **又卡又费电**。
+>
+> 所以推荐的是一个组合：
+>
+> | 动作 | 作用 |
+> |---|---|
+> | 打开**性能模式** | 放开主频上限，前台跑完就退，不拖时间 |
+> | **限制**用不着的应用 | 让后台真正睡下去，砍掉唤醒 |
+>
+> 前台快、后台静，两头都省。
 
 <p align="center">
   <img src="docs/settings.jpg" width="320" alt="设置页">

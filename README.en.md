@@ -11,7 +11,7 @@
 <h1 align="center">Mine App · App Manager</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-2.0.6-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-2.0.7-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-525%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -119,6 +119,25 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 > Verified on device: all 22 allowlisted apps report `standby bucket = 5 (EXEMPTED)` and appear in
 > `dumpsys deviceidle whitelist`; sampled apps outside the list do not. In other words, the in-app
 > "Millet allowlist" and the system's *Battery → No restrictions* edit **the very same list**.
+
+> **On "Performance" mode: it is not actually a battery hog**
+>
+> It sounds like one, but the opposite is true — it only **lifts the CPU's peak-frequency cap**;
+> it does not pin the CPU at full tilt. The CPU is demand-driven: foreground work finishes in
+> seconds and drops back to low clocks, which costs less than grinding along under a cap.
+>
+> What really drains a phone on standby is **background apps waking, going online and refreshing** —
+> not peak frequency. Traditional battery-saver / balanced modes cap the CPU, so the foreground
+> takes longer to do the same work while the background keeps waking: **slower and just as thirsty**.
+>
+> So the recommendation is a combination:
+>
+> | Action | What it does |
+> |---|---|
+> | Turn on **Performance** | Lifts the CPU cap, so foreground work finishes and exits quickly |
+> | **Restrict** the apps you don't need | Puts the background to sleep and removes the wakeups |
+>
+> Fast foreground, quiet background — you save on both ends.
 
 <p align="center">
   <img src="docs/settings-en.jpg" width="320" alt="Settings">
