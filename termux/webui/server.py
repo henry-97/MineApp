@@ -599,6 +599,7 @@ line-height:1.55;font-size:13.5px}
 .ver-row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11.5px;color:var(--ink3)}
 .ver-links{margin-left:auto;flex:none;display:flex;align-items:center;gap:6px}
 .ver-links .ext{font-size:11.5px;padding:2px 0}
+.info-note a{color:#0f6e56;text-decoration:none}
 /* 更新按钮兼作进度条：用背景渐变填充，不改 DOM 结构 */
 .edit.prog{background-image:linear-gradient(to right,#cfe8dc var(--p,0%),transparent var(--p,0%));
   transition:background-image .2s linear}
@@ -753,10 +754,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </div>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="battDesignNote">部分机型可能不支持自动读取容量，可手动输入。</span>
-      <a href="#" id="lnkBattSet" class="ext"
-         style="padding:0 0 0 4px;font-size:11.5px;white-space:nowrap"
-         data-t="battOpenSys">去关于本机页查看 →</a>
+      <span data-t="battDesignNote" data-html="1">部分机型可能不支持自动读取容量，可<a href="#" id="lnkBattSet">查看</a>后手动输入。</span>
     </div>
     <div class="setrow" style="margin-bottom:0">
       <span class="setrow-lb" data-t="keepCard">显示后台卡片</span>
@@ -893,7 +891,7 @@ var I18N = {
     battDesignUser: '手动设置',
     battDesignDevice: '按机型表匹配',
     battDesignDefault: '系统读不到，估算',
-    battDesignNote: '部分机型可能不支持自动读取容量，可手动输入。',
+    battDesignNote: '部分机型可能不支持自动读取容量，可<a href="#" id="lnkBattSet">查看</a>后手动输入。',
     battOpenSys: '去关于本机页查看 →',
     battDesignSaved: '已保存：{n} mAh',
     battDesignCleared: '已清空，回到自动估算',
@@ -1018,7 +1016,7 @@ var I18N = {
     battDesignUser: 'manual',
     battDesignDevice: 'matched by model',
     battDesignDefault: 'unreadable, estimated',
-    battDesignNote: 'Some models cannot read it automatically — enter it manually.',
+    battDesignNote: 'Some models cannot read it automatically — <a href="#" id="lnkBattSet">check here</a> and enter it manually.',
     battOpenSys: 'Open "My device" to see the battery capacity →',
     battDesignSaved: 'Saved: {n} mAh',
     battDesignCleared: 'Cleared — back to auto',
@@ -2331,14 +2329,12 @@ function keepAliveInit(){
 })();
 
 /* 打开系统电池设置：读不到设计容量时，让用户自己去系统里看健康度 */
-(function(){
-  var a = document.getElementById('lnkBattSet');
-  if (!a) return;
-  a.addEventListener('click', function(e){
-    e.preventDefault();
-    fetch('/api/battsettings', {method:'POST'}).catch(function(){});
-  });
-})();
+/* 「查看」是内联在文案里的链接，applyLang 重绘会重建节点 —— 用事件委托才绑得住 */
+document.addEventListener('click', function(e){
+  if (!e.target || e.target.id !== 'lnkBattSet') return;
+  e.preventDefault();
+  fetch('/api/battsettings', {method:'POST'}).catch(function(){});
+});
 
 /* 电池设计容量：留空 = 回到自动探测；填了就以填的为准 */
 (function(){
