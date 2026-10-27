@@ -133,8 +133,19 @@ public class Bridge {
                             .getBoolean("hide_recents", true);
                 } catch (Throwable ignored) { }
                 boolean applied = applyHideFromRecents(hide);
+                // 刚更新完？把「自动打开设置页」的标记取出来并清掉，前端据此跳转
+                boolean openSettings = false;
+                try {
+                    android.content.SharedPreferences sp =
+                            web.getContext().getSharedPreferences("app", 0);
+                    openSettings = sp.getBoolean("open_settings_after_update", false);
+                    if (openSettings) {
+                        sp.edit().putBoolean("open_settings_after_update", false).apply();
+                    }
+                } catch (Throwable ignored) { }
                 return "{\"ok\":true,\"hide_recents\":" + hide
-                        + ",\"applied\":" + applied + "}";
+                        + ",\"applied\":" + applied
+                        + ",\"open_settings\":" + openSettings + "}";
             }
         });
     }
@@ -247,8 +258,16 @@ public class Bridge {
 
                     instPct = 100;
                     instPhase = "install";
+                    // 装完要自动回到设置页：先落一个标记（同一份 app 数据，覆盖安装后还在）
+                    String pkg = web.getContext().getPackageName();
+                    web.getContext().getSharedPreferences("app", 0).edit()
+                            .putBoolean("open_settings_after_update", true).apply();
+
                     service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp);
-                    String res = service.shellLong("pm install -r " + tmp);
+                    // 串一条 am start：shell 是设备侧进程，不会随 App 进程被安装杀掉，
+                    // 所以装完还能把新版本拉起来
+                    String res = service.shellLong("pm install -r " + tmp
+                            + "; sleep 1; am start -n " + pkg + "/.MainActivity");
                     service.shellLong("rm -f " + tmp);
 
                     boolean ok = res != null && res.contains("Success");

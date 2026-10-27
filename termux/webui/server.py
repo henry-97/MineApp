@@ -594,7 +594,7 @@ line-height:1.55;font-size:13.5px}
 .setrow-lb{flex:none;width:84px;font-size:13px;color:var(--ink2);font-weight:500;line-height:1.3;white-space:nowrap;display:flex;align-items:center;gap:1px}
 .setrow .sortbar{flex:1;margin-top:0;gap:10px}
 .setrow-unit{flex:none;font-size:12px;color:var(--ink3)}
-.upd-auto{flex:none;margin-left:auto;font-size:12px;color:var(--ink2)}
+.upd-auto{flex:1;min-width:0;margin-left:8px;text-align:right;font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 版本号与开源/打赏链接同行：左边版本、右边链接 */
 .ver-row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11.5px;color:var(--ink3)}
 .ver-links{margin-left:auto;flex:none;display:flex;align-items:center;gap:6px}
@@ -946,10 +946,10 @@ var I18N = {
     updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
     updCurrent: 'v {v}', updLatest: '已是最新版本 {v}',
     updLatestShort: '已是最新', updNewShort: '发现新版本',
-    updFailShort: '检查失败', updCheckingShort: '检查中',
+    updFailShort: '检查失败', updCheckingShort: '检查中', updRestart: '将自动重启',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
     updPermNote: '更新可自动继承 adb 授权。',
-    updInstall: '下载并安装', updInstalling: '更新中……', updDownloading: '下载中 {p}%',
+    updInstall: '更新', updInstalling: '更新中……', updDownloading: '下载中 {p}%',
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
     updAuto: '每 24 小时自动检查并更新',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
@@ -1071,10 +1071,10 @@ var I18N = {
     updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
     updCurrent: 'v {v}', updLatest: 'Up to date ({v})',
     updLatestShort: 'Up to date', updNewShort: 'Update found',
-    updFailShort: 'Check failed', updCheckingShort: 'Checking',
+    updFailShort: 'Check failed', updCheckingShort: 'Checking', updRestart: 'Will restart',
     updNew: 'New version {v} available', updOpen: 'Get it',
     updPermNote: 'Updates inherit the ADB grant.',
-    updInstall: 'Download & install', updInstalling: 'Updating…', updDownloading: 'Downloading {p}%',
+    updInstall: 'Update', updInstalling: 'Updating…', updDownloading: 'Downloading {p}%',
     updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
     updFail: 'Check failed — network problem?',
     updAuto: 'Auto-check & update every 24 h',
@@ -2297,7 +2297,12 @@ function renderKeep(){
 function keepAliveInit(){
   fetch('/api/keepalive', {method:'POST'})
     .then(function(r){ return r.json(); })
-    .then(function(d){ if (d && d.ok){ keepHide = !!d.hide_recents; renderKeep(); } })
+    .then(function(d){
+      if (!d || !d.ok) return;
+      keepHide = !!d.hide_recents; renderKeep();
+      // 刚更新完 → 自动打开设置页（标记由 Java 侧读取后即清除）
+      if (d.open_settings) setTimeout(function(){ openSettings(); }, 400);
+    })
     .catch(function(){});
 }
 
@@ -2401,6 +2406,8 @@ function renderUpdState(){
   var el = document.getElementById('updLabel');
   if (!el) return;
   if (updTimer){ clearTimeout(updTimer); updTimer = null; }
+  // 「将自动重启」是进行中状态，必须常驻，不能 1 秒后弹回版本号
+  if (updKind === 'restarting'){ el.textContent = T('updRestart'); return; }
   var k = {latest:'updLatestShort', new:'updNewShort',
            fail:'updFailShort', checking:'updCheckingShort'}[updKind];
   if (!k){ el.textContent = T2('updCurrent', {v: curVer()}); return; }
@@ -2488,7 +2495,7 @@ function pollProg(){
 function installUpdate(){
   var btn = document.getElementById('updBtn');
   if (btn){ btn.disabled = true; btn.textContent = T('updInstalling'); }
-  setUpdState('installing');
+  setUpdState('restarting');          // 常驻：将自动重启
   showProg(true);
   pollProg();
   if (progTimer) clearInterval(progTimer);
