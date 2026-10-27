@@ -2402,10 +2402,11 @@ function renderUpdState(){
   var el = document.getElementById('updLabel');
   if (!el) return;
   if (updTimer){ clearTimeout(updTimer); updTimer = null; }
-  // 「将自动重启」是进行中状态，必须常驻，不能 1 秒后弹回版本号
+  // 进行中状态（检查中 / 将自动重启）必须常驻，直到被下一个状态替换 ——
+  // 只有终态（已是最新 / 发现新版本 / 检查失败）才需要 2 秒后回落到版本号
   if (updKind === 'restarting'){ el.textContent = T('updRestart'); return; }
-  var k = {latest:'updLatestShort', new:'updNewShort',
-           fail:'updFailShort', checking:'updCheckingShort'}[updKind];
+  if (updKind === 'checking'){ el.textContent = T('updCheckingShort'); return; }
+  var k = {latest:'updLatestShort', new:'updNewShort', fail:'updFailShort'}[updKind];
   if (!k){ el.textContent = T2('updCurrent', {v: curVer()}); return; }
   el.textContent = updVar ? T2(k, {v: updVar}) : T(k);
   updTimer = setTimeout(function(){
@@ -2486,7 +2487,7 @@ function pollProg(){
       } else if (d.phase === 'finishing'){
         paintProg(100, T('updFinishing'));   // 满格停留，随后才重启
       } else if (d.phase === 'install'){
-        paintProg(100, T('updInstalling'));
+        paintProg(100, T('updFinishing'));   // 不再用「更新中」：三个字会把按钮撑宽
       } else if (d.phase === 'done'){
         paintProg(100, T('updDone'));
       } else if (d.phase === 'fail'){
