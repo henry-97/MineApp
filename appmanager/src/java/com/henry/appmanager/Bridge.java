@@ -278,9 +278,18 @@ public class Bridge {
                     // 同一条 shell 里后面的 sleep/am start 也一起没了（实测：更新成功但停在桌面）。
                     // setsid 把拉起任务脱离当前会话，它就不再受安装影响；
                     // --activity-single-top 让重复调用只触发 onNewIntent，不会叠出多个实例。
-                    String relaunch = "(setsid sh -c 'for i in 1 2 3; do sleep 2; "
+                    // 不再固定 sleep 等：每轮先试着拉起，再用 dumpsys 确认是否真的到前台，
+                    // 成功就立刻退出。安装完成的那一刻就能拉起，比死等 2 秒快得多；
+                    // 装得慢也不会漏（最多重试 15 轮 ≈ 8 秒）。
+                    String relaunch = "(setsid sh -c '"
+                            + "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do "
                             + "am start --activity-single-top -n " + pkg + "/.MainActivity >> "
-                            + log + " 2>&1; done' >/dev/null 2>&1 &)";
+                            + log + " 2>&1; "
+                            + "sleep 0.2; "
+                            + "dumpsys activity activities 2>/dev/null "
+                            + "| grep -q \"topResumedActivity.*" + pkg + "\" && exit 0; "
+                            + "sleep 0.3; "
+                            + "done' >/dev/null 2>&1 &)";
 
                     String res = service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp
                             + " ; echo '--- update '$(date) >> " + log
