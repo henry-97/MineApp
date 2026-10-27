@@ -4,8 +4,6 @@
 
 <p align="center">
   <img src="docs/app-icon.png" width="96" alt="Mine App">
-  &nbsp;&nbsp;
-  <img src="docs/app-icon-clover.png" width="96" alt="Mine App">
 </p>
 
 <h1 align="center">Mine App · 应用管理器</h1>
@@ -144,6 +142,11 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 
 <p align="center">
   <img src="docs/icon-set.png" width="760" alt="六套图标">
+</p>
+
+<p align="center">
+  <sub>支持多种自定义图标：内置 6 套（方块 / 四叶草 × 墨绿 / 金 / 黑），名称与图标都能在设置里随时切换。<br>
+  后续会持续增加，也欢迎在开源社区 PR 贡献版权合规的图标。</sub>
 </p>
 
 ## 环境要求

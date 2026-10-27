@@ -4,8 +4,6 @@
 
 <p align="center">
   <img src="docs/app-icon.png" width="96" alt="Mine App">
-  &nbsp;&nbsp;
-  <img src="docs/app-icon-clover.png" width="96" alt="Mine App">
 </p>
 
 <h1 align="center">Mine App · App Manager</h1>
@@ -152,6 +150,12 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 <p align="center">
   <img src="docs/icon-set.png" width="760" alt="Six icon sets">
+</p>
+
+<p align="center">
+  <sub>Customisable icons: six built-in sets (square / clover × green / gold / black), switchable
+  together with the app name from Settings.<br>
+  More will be added over time — pull requests with licence-compliant icons are welcome.</sub>
 </p>
 
 ## Requirements
