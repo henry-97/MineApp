@@ -42,9 +42,37 @@ public class MainActivity extends Activity {
                 & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
     }
 
+    /**
+     * 隐藏/显示本应用在最近任务里的卡片。
+     *
+     * 为什么要在 onCreate 里就调一次：AppTask.setExcludeFromRecents 只影响**之后**创建的
+     * 任务，对已经在最近任务里的条目不会重新评估。所以「默认隐藏」必须赶在任务进
+     * recents 之前设好，否则首次启动会漏出一张卡片（实测确认过这个时序）。
+     *
+     * MIUI 那种「上锁」没有公开 API，这里只做隐藏。
+     */
+    static boolean applyHideFromRecents(android.content.Context ctx, boolean hide) {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager)
+                    ctx.getSystemService(android.content.Context.ACTIVITY_SERVICE);
+            java.util.List<android.app.ActivityManager.AppTask> tasks = am.getAppTasks();
+            for (android.app.ActivityManager.AppTask t : tasks) {
+                t.setExcludeFromRecents(hide);
+            }
+            return !tasks.isEmpty();
+        } catch (Throwable e) {
+            android.util.Log.w("MainActivity", "隐藏后台卡片失败: " + e);
+            return false;
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // 默认隐藏：赶在任务进入最近任务之前设好（见 applyHideFromRecents 注释）
+        boolean hide = getSharedPreferences("app", 0).getBoolean("hide_recents", true);
+        applyHideFromRecents(this, hide);
 
         // 必须在 setContentView 之前：该标志在 generateLayout() 里才被读取
         prepareEdgeToEdge();

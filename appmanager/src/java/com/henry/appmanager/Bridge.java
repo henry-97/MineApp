@@ -128,8 +128,9 @@ public class Bridge {
                 service.ensureSelfWhitelisted();
                 boolean hide = false;
                 try {
+                    // 默认隐藏：卡片不在最近任务里，就没有被误划的可能
                     hide = web.getContext().getSharedPreferences("app", 0)
-                            .getBoolean("hide_recents", false);
+                            .getBoolean("hide_recents", true);
                 } catch (Throwable ignored) { }
                 boolean applied = applyHideFromRecents(hide);
                 return "{\"ok\":true,\"hide_recents\":" + hide
@@ -163,20 +164,9 @@ public class Bridge {
         });
     }
 
-    /** 真正去改任务属性。失败返回 false —— 有的 ROM 会抛 SecurityException。 */
+    /** 真正去改任务属性。实现放在 MainActivity，那边 onCreate 也要用。 */
     private boolean applyHideFromRecents(boolean hide) {
-        try {
-            android.app.ActivityManager am = (android.app.ActivityManager)
-                    web.getContext().getSystemService(android.content.Context.ACTIVITY_SERVICE);
-            java.util.List<android.app.ActivityManager.AppTask> tasks = am.getAppTasks();
-            for (android.app.ActivityManager.AppTask t : tasks) {
-                t.setExcludeFromRecents(hide);
-            }
-            return !tasks.isEmpty();
-        } catch (Throwable e) {
-            android.util.Log.w("Bridge", "隐藏后台卡片失败: " + e);
-            return false;
-        }
+        return MainActivity.applyHideFromRecents(web.getContext(), hide);
     }
 
     @JavascriptInterface
