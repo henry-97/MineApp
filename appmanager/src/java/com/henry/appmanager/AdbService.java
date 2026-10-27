@@ -1039,8 +1039,18 @@ public class AdbService {
         }
     }
 
+    /** 只读查询，给常驻服务做「被系统改回去了吗」的判断 */
+    public boolean perfOn() { return getPerfMode(); }
+
     public String setPerf(boolean on) {
         JSONObject o = new JSONObject();
+        // 记住用户意图，供 KeepAliveService 在后台守着自己重新施加
+        try {
+            if (appCtx != null) {
+                appCtx.getSharedPreferences("app", 0).edit()
+                        .putBoolean("perfWanted", on).apply();
+            }
+        } catch (Throwable ignored) { }
         try {
             // 三个模式互斥：省电 / 均衡 / 性能，同时只能有一个为 1。
             // 只开性能而不关省电，会被省电模式压回去 —— 这是「总回退」的根因。

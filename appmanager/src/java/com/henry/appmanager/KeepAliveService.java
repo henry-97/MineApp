@@ -84,7 +84,38 @@ public class KeepAliveService extends Service {
         handler.postDelayed(tick, 8000);
     }
 
+    /**
+     * 性能模式常开：用户开了就一直守着。
+     *
+     * MIUI 的 powerkeeper 在电量低、温度高、切省电模式时会把 POWER_PERFORMANCE_MODE_OPEN
+     * 改回去 —— 界面原来只在「列表刷新」时才纠正，两次刷新之间就一直是关的。
+     * 这里挪到常驻服务，每轮都查一次；电量低于 20% 时不再强推，交给系统决定。
+     */
+    private long lastPerfFix = 0;
+    private boolean lowBattery() {
+        try {
+            android.os.BatteryManager bm =
+                    (android.os.BatteryManager) getSystemService(BATTERY_SERVICE);
+            int pct = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+            return pct > 0 && pct < 20;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+    private void keepPerfMode() {
+        try {
+            if (!getSharedPreferences("app", 0).getBoolean("perfWanted", false)) return;
+            if (lowBattery()) return;
+            long now = System.currentTimeMillis();
+            if (now - lastPerfFix < 30000L) return;     // 最多 30 秒纠正一次，避免和系统来回拉锯
+            if (service == null || service.perfOn()) return;
+            lastPerfFix = now;
+            service.setPerf(true);
+        } catch (Throwable ignored) { }
+    }
+
     private void refresh(boolean full) {
+        keepPerfMode();
         String text;
         String title = appLabel();
         try {
