@@ -59,6 +59,7 @@ SHIM = r"""
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
     else if (url.indexOf('/api/battsettings') === 0) p = call('battSettings', '');
     else if (url.indexOf('/api/keepalive') === 0) p = call('keepalive', '');
+    else if (url.indexOf('/api/installupdate') === 0) p = call('installupdate', String(body.url || ''));
     else if (url.indexOf('/api/hiderecents') === 0) p = call('hiderecents', body.on ? '1' : '0');
     else p = Promise.resolve({});
     return p.then(function(d){

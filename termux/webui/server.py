@@ -937,6 +937,8 @@ var I18N = {
     updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
     updCurrent: '当前版本 {v}', updLatest: '已是最新版本 {v}',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
+    updInstall: '下载并安装', updInstalling: '正在下载安装…',
+    updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
     updAuto: '每 24 小时自动检查',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
     extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。',
@@ -1057,6 +1059,8 @@ var I18N = {
     updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
     updCurrent: 'Current version {v}', updLatest: 'Up to date ({v})',
     updNew: 'New version {v} available', updOpen: 'Get it',
+    updInstall: 'Download & install', updInstalling: 'Downloading…',
+    updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
     updFail: 'Check failed — network problem?',
     updAuto: 'Auto-check every 24 h',
     updAutoOn: 'Auto-check enabled', updAutoOff: 'Auto-check disabled',
@@ -2345,7 +2349,7 @@ function keepAliveInit(){
    默认不联网：只有用户点「检查」或开了自动检查且距上次超过 24 小时，才会发一次 GET。
    请求只带 GitHub 公开 API 的常规头，不上传任何本机信息。 */
 var UPD_AUTO = 'updAuto', UPD_LAST = 'updLast';
-var updUrl = '';
+var updUrl = '', updApk = '';
 
 function cmpVer(a, b){
   a = String(a || '').replace(/^v/i, '').split('.');
@@ -2378,8 +2382,8 @@ var updKind = 'current', updVar = '';
 function renderUpdState(){
   var el = document.getElementById('updState');
   if (!el) return;
-  var k = {current:'updCurrent', latest:'updLatest', new:'updNew',
-           fail:'updFail', checking:'updChecking'}[updKind] || 'updCurrent';
+  var k = {current:'updCurrent', latest:'updLatest', new:'updNew', fail:'updFail',
+           checking:'updChecking', installing:'updInstalling'}[updKind] || 'updCurrent';
   el.textContent = updVar ? T2(k, {v: updVar}) : T(k);
 }
 function setUpdState(kind, v){ updKind = kind; updVar = v || ''; renderUpdState(); }
@@ -2401,11 +2405,13 @@ function checkUpdate(silent){
       var latest = String(d.tag || '').replace(/^v/i, '');
       if (cmpVer(latest, curVer()) > 0){
         updUrl = d.url || '';
+        updApk = d.apk || '';                 // 有资产地址就走应用内静默安装
         setUpdState('new', latest);
         toast(T2('updNew', {v: latest}));
-        if (btn){ btn.textContent = T('updOpen'); btn.setAttribute('data-t', 'updOpen'); }
+        var label = updApk ? 'updInstall' : 'updOpen';
+        if (btn){ btn.textContent = T(label); btn.setAttribute('data-t', label); }
       } else {
-        updUrl = '';
+        updUrl = ''; updApk = '';
         setUpdState('latest', curVer());
         if (!silent) toast(T2('updLatest', {v: curVer()}));
         if (btn){ btn.textContent = T('updCheck'); btn.setAttribute('data-t', 'updCheck'); }
@@ -2418,8 +2424,32 @@ function checkUpdate(silent){
     });
 }
 
+/* 应用内静默安装：下载 → cp 到 /data/local/tmp → pm install -r，全程无系统安装器弹窗。
+   失败（签名变了 / 系统拒绝）就退回浏览器下载，不让用户卡住。 */
+function installUpdate(){
+  var btn = document.getElementById('updBtn');
+  if (btn){ btn.disabled = true; btn.textContent = T('updInstalling'); }
+  setUpdState('installing');
+  fetch('/api/installupdate', {method:'POST', headers:{'Content-Type':'application/json'},
+                               body: JSON.stringify({url: updApk})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.ok){ toast(T('updInstallDone')); return; }   // 进程随后会被系统替换
+      fallbackDownload();
+    })
+    .catch(fallbackDownload);
+}
+
+function fallbackDownload(){
+  var btn = document.getElementById('updBtn');
+  if (btn){ btn.disabled = false; btn.textContent = T('updOpen'); }
+  toast(T('updInstallFail'));
+  if (updUrl) openExtUrl(updUrl);
+}
+
 document.getElementById('updBtn').addEventListener('click', function(){
-  if (updUrl){ openExtUrl(updUrl); return; }   // 已经发现新版 → 直接去下载页
+  if (updApk){ installUpdate(); return; }      // 有安装包 → 应用内装
+  if (updUrl){ openExtUrl(updUrl); return; }   // 只有网页 → 去下载页
   checkUpdate(false);
 });
 

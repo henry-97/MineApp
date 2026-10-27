@@ -200,6 +200,15 @@ public class AdbService {
     private AdbClient longConn;
     private final Object longLock = new Object();
 
+    /** 给外部（自更新流程）用的长命令入口，走同一套连接和超时。 */
+    public String shellLong(String cmd) {
+        try {
+            return shLong(cmd);
+        } catch (Exception e) {
+            return "ERR: " + e;
+        }
+    }
+
     private String shLong(String cmd) throws Exception {
         synchronized (longLock) {
             if (longConn == null || !longConn.isConnected()) {

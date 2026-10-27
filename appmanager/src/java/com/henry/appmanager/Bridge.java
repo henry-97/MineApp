@@ -169,6 +169,74 @@ public class Bridge {
         return MainActivity.applyHideFromRecents(web.getContext(), hide);
     }
 
+    /**
+     * 应用内静默安装更新。三步，缺一不可：
+     *
+     *   ① 下载 APK 到外部私有目录 getExternalFilesDir()
+     *   ② cp 到 /data/local/tmp/ —— 关键一步。实测 /sdcard 下的文件 system_server 打不开
+     *      （FUSE 挂载，报 "Failed to load asset path ... from fd"），pm install 直接失败；
+     *      /data/local/tmp 是 shell 可写、system_server 可读的位置，adb install 本来就用它。
+     *   ③ pm install -r —— 走自己的 ADB 通道，等价于 adb install，无系统安装器弹窗
+     *
+     * 装完本进程会被系统杀掉，属正常现象（新版本随即启动）。
+     * 前提是签名一致 —— 自己发的包必然一致；一旦换签名，这里会失败，退回浏览器下载。
+     */
+    @JavascriptInterface
+    public void installupdate(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                java.io.File apk = null;
+                String tmp = "/data/local/tmp/mineapp_update.apk";
+                try {
+                    apk = new java.io.File(web.getContext().getExternalFilesDir(null), "update.apk");
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                            new java.net.URL(arg).openConnection();
+                    c.setConnectTimeout(10000);
+                    c.setReadTimeout(30000);
+                    c.setRequestProperty("User-Agent", "MineApp");
+                    int code = c.getResponseCode();
+                    if (code != 200) return err("HTTP " + code);
+                    java.io.InputStream in = c.getInputStream();
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(apk);
+                    byte[] buf = new byte[16384];
+                    int n;
+                    long total = 0;
+                    while ((n = in.read(buf)) > 0) { fos.write(buf, 0, n); total += n; }
+                    fos.close();
+                    in.close();
+                    c.disconnect();
+
+                    service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp);
+                    String res = service.shellLong("pm install -r " + tmp);
+                    service.shellLong("rm -f " + tmp);
+
+                    boolean ok = res != null && res.contains("Success");
+                    JSONObject o = new JSONObject();
+                    o.put("ok", ok);
+                    o.put("bytes", total);
+                    if (!ok) o.put("msg", res == null ? "" : res.trim());
+                    return o.toString();
+                } catch (Throwable e) {
+                    return err(String.valueOf(e.getMessage()));
+                } finally {
+                    if (apk != null) apk.delete();
+                }
+            }
+        });
+    }
+
+    private String err(String msg) {
+        try {
+            JSONObject o = new JSONObject();
+            o.put("ok", false);
+            o.put("msg", msg);
+            return o.toString();
+        } catch (Exception e) {
+            return "{\"ok\":false}";
+        }
+    }
+
     @JavascriptInterface
     public void battSettings(int id, String arg) {
         dispatch(id, new Task() {
@@ -233,6 +301,20 @@ public class Bridge {
                     o.put("tag", r.optString("tag_name"));
                     o.put("url", r.optString("html_url"));
                     o.put("name", r.optString("name"));
+                    // 找 Release 里第一个 .apk 资产 —— 有它才能做应用内静默安装
+                    org.json.JSONArray assets = r.optJSONArray("assets");
+                    if (assets != null) {
+                        for (int i = 0; i < assets.length(); i++) {
+                            org.json.JSONObject a = assets.optJSONObject(i);
+                            if (a == null) continue;
+                            String nm = a.optString("name");
+                            if (nm != null && nm.toLowerCase().endsWith(".apk")) {
+                                o.put("apk", a.optString("browser_download_url"));
+                                o.put("size", a.optLong("size"));
+                                break;
+                            }
+                        }
+                    }
                     return o.toString();
                 } catch (Throwable e) {
                     try {
