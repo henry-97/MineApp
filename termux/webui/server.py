@@ -787,7 +787,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
         <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
       </span>
     </div>
-    <div class="ext-note" data-t="extLicense">本项目（GPL-3.0）禁止自行闭源分发，如有商务合作需求，可提 Issue。</div>
+    <div class="ext-note" data-t="extLicense">本项目(GPL-3.0)禁止自行闭源分发，如需商务合作，可提 Issue。</div>
   </div>
 </div>
 <div id="risk" class="risk show">
@@ -795,7 +795,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <h3 data-t="riskTitle">使用前请留意</h3>
     <p data-t="riskBody">本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电等。</p>
     <a class="risk-link" id="lnkTerms" href="https://github.com/henry-97/MineApp/blob/main/docs/TERMS.md" data-t="riskLink">查看完整「使用须知」→</a>
-    <p class="risk-foot" data-t="riskFoot">继续使用本软件，即表示你自行承担因使用不当造成的风险。</p>
+    <p class="risk-foot" data-t="riskFoot">继续使用本软件，即表示自行承担因使用不当造成的风险。</p>
     <div class="risk-btns">
       <button class="ghost" id="riskQuit" data-t="riskQuit">退出</button>
       <button class="primary" id="riskOk" data-t="riskAgree">同意并使用</button>
@@ -953,11 +953,11 @@ var I18N = {
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
     updAuto: '每 24 小时自动检查并更新',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
-    extLicense: '本项目（GPL-3.0）禁止自行闭源分发，如有商务合作需求，可提 Issue。',
+    extLicense: '本项目(GPL-3.0)禁止自行闭源分发，如需商务合作，可提 Issue。',
     riskTitle: '使用前请留意',
     riskBody: '本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电等。',
     riskLink: '查看完整「使用须知」→',
-    riskFoot: '继续使用本软件，即表示你自行承担因使用不当造成的风险。',
+    riskFoot: '继续使用本软件，即表示自行承担因使用不当造成的风险。',
     riskAgree: '同意并使用', riskQuit: '退出',
     secIcon: '应用图标',
     icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
@@ -1083,7 +1083,7 @@ var I18N = {
     riskTitle: 'Before you start',
     riskBody: 'This app drives system commands directly through ADB and is genuinely powerful. Do not freeze or restrict components the system depends on (Clock, launcher, keyboard, …) — alarms, the home screen and incoming calls can break, among other things.',
     riskLink: 'Read the full usage notes →',
-    riskFoot: 'By continuing, you accept responsibility for any risk caused by misuse.',
+    riskFoot: 'Continued use means accepting responsibility for any risk caused by misuse.',
     riskAgree: 'Agree and continue', riskQuit: 'Quit',
     secIcon: 'App icon',
     icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
