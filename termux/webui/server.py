@@ -744,11 +744,11 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </div>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="battDesignNote">留空则按 5000 估算。系统节点读不到时，填上你机型的实际设计容量，健康度才准。</span><br>
-      <a href="#" id="lnkBattSet" class="ext" style="padding:4px 0;display:inline-block"
+      <span data-t="battDesignNote">留空按 5000 估算。「我的设备」页里的「电池容量」就是设计容量，照它填最准。</span>
+      <a href="#" id="lnkBattSet" class="ext"
+         style="padding:0 0 0 4px;font-size:11.5px;white-space:nowrap"
          data-t="battOpenSys">去「我的设备」看电池容量 →</a>
     </div>
-    <div class="sec" data-t="secKeep">保持运行</div>
     <div class="setrow">
       <span class="setrow-lb" data-t="keepCard">后台卡片</span>
       <div class="sortbar" id="keepBar">
@@ -888,6 +888,7 @@ var I18N = {
     battDesign: '设计容量',
     battDesignAuto: '系统读取',
     battDesignUser: '手动设置',
+    battDesignDevice: '按机型表匹配',
     battDesignDefault: '系统读不到，估算',
     battDesignNote: '留空按 5000 估算。「我的设备」页里的「电池容量」就是设计容量，照它填最准。',
     battOpenSys: '去「我的设备」看电池容量 →',
@@ -932,7 +933,7 @@ var I18N = {
     perfTip: '性能模式',
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
     secTip: '界面提示', tipShow: '显示', tipHide: '隐藏',
-    secKeep: '保持运行', keepCard: '后台卡片', keepOn: '隐藏', keepOff: '显示',
+    keepCard: '后台卡片', keepOn: '隐藏', keepOff: '显示',
     keepNote: '后台只做少量 shell 查询（内存 3 秒、电池 60 秒各一次），能耗极低，可放心常驻。',
     keepHideNote: '开启后需重新打开一次应用才生效；部分系统会直接忽略此设置，届时用下面的手动方法。',
     keepLockNote: '若仍被杀，在最近任务里给它上锁 + 允许通知，两步就能明显提升存活率。',
@@ -1009,6 +1010,7 @@ var I18N = {
     battDesign: 'Design capacity',
     battDesignAuto: 'from system',
     battDesignUser: 'manual',
+    battDesignDevice: 'matched by model',
     battDesignDefault: 'unreadable, estimated',
     battDesignNote: "Blank = assume 5000 mAh. The \"Battery capacity\" line under My device is the design capacity — copy that.",
     battOpenSys: 'Open "My device" to see the battery capacity →',
@@ -1053,7 +1055,7 @@ var I18N = {
     perfTip: 'Performance',
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
     secTip: 'Hints', tipShow: 'Show', tipHide: 'Hide',
-    secKeep: 'Staying alive', keepCard: 'Recents card', keepOn: 'Hide', keepOff: 'Show',
+    keepCard: 'Recents card', keepOn: 'Hide', keepOff: 'Show',
     keepNote: 'In the background this app only runs a few shell queries (memory every 3 s, battery every 60 s) — the power cost is negligible, so it is safe to keep resident.',
     keepHideNote: 'Takes effect after the app is reopened once. Some ROMs ignore the setting outright — use the manual method below then.',
     keepLockNote: 'If it still gets killed, lock it in the recents screen and allow notifications — those two steps make a real difference.',
@@ -1527,7 +1529,8 @@ function showBatteryInfo(){
   kv('Min', b.learned_min, T('battMin'));
   if (b.design_mah > 0){
     var srcKey = 'battDesign' + (b.design_src === 'auto' ? 'Auto'
-                               : b.design_src === 'user' ? 'User' : 'Default');
+                               : b.design_src === 'user' ? 'User'
+                               : b.design_src === 'device' ? 'Device' : 'Default');
     kv(T('battDesign'), b.design_mah, T2(srcKey, {n: b.design_mah}));
   }
   askInfo(

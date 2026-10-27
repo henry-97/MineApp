@@ -420,6 +420,47 @@ public class AdbService {
      * 为什么不能写死：5000 只对一部分机型成立。换 4500 的机器健康度会虚低 10%，
      * 换 6000 的会虚高 20%，而且用户完全看不出来。
      */
+    /**
+     * 常见机型的标称容量（mAh）。键是 ro.product.device（代号，跨地区版本稳定）。
+     *
+     * 🔴 加新条目之前请核对官方参数页。填错比不填更糟 —— 用户看到「93%」不会怀疑
+     * 这个分母本身是错的。界面会显示来源「按机型表」，所以错了至少是可见的。
+     *
+     * 只收本应用真正会遇到的机型（小米 / 红米 / POCO，走 MIUI / HyperOS）。
+     */
+    private static final Map<String, Integer> DESIGN_TABLE = new HashMap<String, Integer>();
+    static {
+        DESIGN_TABLE.put("marble", 5000);    // Redmi Note 12 Turbo / POCO F5 —— 本机「我的设备」页实测
+        DESIGN_TABLE.put("fuxi", 4500);      // Xiaomi 13
+        DESIGN_TABLE.put("ishtar", 4820);    // Xiaomi 13 Pro
+        DESIGN_TABLE.put("nuwa", 4500);      // Xiaomi 13 Lite
+        DESIGN_TABLE.put("mayfly", 4500);    // Xiaomi 12S
+        DESIGN_TABLE.put("thor", 4860);      // Xiaomi 12S Ultra
+        DESIGN_TABLE.put("unicorn", 4600);   // Xiaomi 12S Pro
+        DESIGN_TABLE.put("zeus", 4600);      // Xiaomi 12 Pro
+        DESIGN_TABLE.put("cupid", 4500);     // Xiaomi 12
+        DESIGN_TABLE.put("mondrian", 5500);  // Redmi K60
+        DESIGN_TABLE.put("rembrandt", 5000); // Redmi K60 Pro
+        DESIGN_TABLE.put("socrates", 5500);  // Redmi K60E
+        DESIGN_TABLE.put("sweet", 5020);     // Redmi Note 10 Pro
+        DESIGN_TABLE.put("curtana", 5020);   // Redmi Note 9S / 9 Pro (India)
+        DESIGN_TABLE.put("vili", 5000);      // Xiaomi 11T
+        DESIGN_TABLE.put("umi", 4780);       // Xiaomi 10
+        DESIGN_TABLE.put("cmi", 4500);       // Xiaomi 10 Pro
+    }
+
+    /** 机型表命中的容量；没命中返回 0 */
+    private int designFromTable() {
+        try {
+            String dev = shR("getprop ro.product.device").trim();
+            if (dev.isEmpty()) return 0;
+            Integer v = DESIGN_TABLE.get(dev);
+            return v == null ? 0 : v;
+        } catch (Throwable e) {
+            return 0;
+        }
+    }
+
     private int designMah() {
         if (designMahCache >= 0) return designMahCache;
         try {
@@ -446,6 +487,14 @@ public class AdbService {
                 }
             } catch (Throwable ignored) { }
         }
+        // ③ 机型表
+        int fromTable = designFromTable();
+        if (fromTable > 0) {
+            designMahCache = fromTable;
+            designSrc = "device";
+            return designMahCache;
+        }
+        // ④ 兜底
         designMahCache = DESIGN_FALLBACK_MAH;
         designSrc = "default";
         return designMahCache;
