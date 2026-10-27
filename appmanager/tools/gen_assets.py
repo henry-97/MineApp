@@ -56,6 +56,8 @@ SHIM = r"""
     else if (url.indexOf('/api/kill') === 0) p = call('kill', (body.pkg || '') + '|' + (body.pss || 0));
     else if (url.indexOf('/api/aot') === 0) p = call('aot', (body.pkg || '') + '|' + (body.on ? '1' : '0'));
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
+    else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
+    else if (url.indexOf('/api/battsettings') === 0) p = call('battSettings', '');
     else p = Promise.resolve({});
     return p.then(function(d){
       return { ok: true, json: function(){ return Promise.resolve(d); } };

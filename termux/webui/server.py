@@ -268,6 +268,9 @@ def get_battery():
     return {
         "level": level,
         "health": health,
+        # Termux 版没有 ADB，读不到 sysfs；值来自环境变量，没设就按 5000 估算
+        "design_mah": BATTERY_DESIGN_MAH,
+        "design_src": "user" if os.environ.get("BATTERY_DESIGN_MAH") else "default",
         "health_text": HEALTH_TEXT.get(health, "未知"),
         "health_pct": health_pct,
         "temp": temp,
@@ -589,6 +592,7 @@ line-height:1.55;font-size:13.5px}
 .setrow{display:flex;align-items:center;gap:36px;margin:17px 0}
 .setrow-lb{flex:none;width:64px;font-size:13px;color:var(--ink2);font-weight:500;line-height:1.3;white-space:nowrap}
 .setrow .sortbar{flex:1;margin-top:0;gap:10px}
+.setrow-unit{flex:none;font-size:12px;color:var(--ink3)}
 #appTitle{cursor:pointer;display:flex;align-items:center;gap:5px;min-width:0}
 #appNameTx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 三处 ⓘ 提示统一用同一个字符字形，保证视觉大小完全一致（11.5px = 电池行/性能模式行字号） */
@@ -728,6 +732,22 @@ padding-top:10px;border-top:0.5px solid var(--line)}
         <button class="seg" data-tip="0" data-t="tipHide">隐藏</button>
       </div>
     </div>
+    <div class="setrow">
+      <span class="setrow-lb" data-t="battDesign">电池容量</span>
+      <div style="flex:1;display:flex;align-items:center;gap:8px">
+        <input id="battDesignIn" type="number" inputmode="numeric" min="1000" max="30000" step="100"
+               placeholder="5000"
+               style="flex:1;min-width:0;text-align:right;padding:8px 12px;font-size:14px;
+                      border:0.5px solid var(--line);border-radius:10px;
+                      background:var(--card);color:var(--ink);outline:none;-webkit-appearance:none">
+        <span class="setrow-unit">mAh</span>
+      </div>
+    </div>
+    <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
+      <span data-t="battDesignNote">留空则按 5000 估算。系统节点读不到时，填上你机型的实际设计容量，健康度才准。</span><br>
+      <a href="#" id="lnkBattSet" class="ext" style="padding:4px 0;display:inline-block"
+         data-t="battOpenSys">去系统设置看电池健康度 →</a>
+    </div>
     <div class="sec" data-t="secAbout">关于</div>
     <div class="trow" style="padding:9px 0;border-bottom:0">
       <div style="flex:1">
@@ -851,7 +871,16 @@ var I18N = {
     battTitle: '电池健康度 {p}',
     battLevel: '当前电量', battSys: '系统状态',
     battMax: '历史最高', battLast: '最近一次学习', battMin: '历史最低（采用值）',
-    battNote: '系统在每次完整充电后，会用实际充入的电量反推电池当时的真实满电容量，记为一个学习值。<br>健康度 = 学习容量 ÷ 设计容量（5000 mAh）。<br>因为电池健康只会下降不会回升，这里取<b>历史最低值 Min</b> 作为依据，避免个别偏高的学习值把结果拉高。<br>这个口径偏保守，结果可能略低于实际值，但偏差在可控范围内。'
+    battDesign: '设计容量',
+    battDesignAuto: '系统读取',
+    battDesignUser: '手动设置',
+    battDesignDefault: '系统读不到，估算',
+    battDesignNote: '留空按 5000 估算；读不到系统节点时，填真实容量更准。',
+    battOpenSys: '去系统设置看电池健康度 →',
+    battDesignSaved: '已保存：{n} mAh',
+    battDesignCleared: '已清空，回到自动估算',
+    battDesignBad: '请填 1000~30000 之间的数值',
+    battNote: '系统在每次完整充电后，会用实际充入的电量反推电池当时的真实满电容量，记为一个学习值。<br>健康度 = 学习容量 ÷ 设计容量。<br>因为电池健康只会下降不会回升，这里取<b>历史最低值 Min</b> 作为依据，避免个别偏高的学习值把结果拉高。<br>这个口径偏保守，结果可能略低于实际值，但偏差在可控范围内。'
       + '<br><br><b>关于数值波动</b>：首次检测结果可能滞后或有波动，这是系统的学习机制决定的 —— 它需要若干个完整的充放电周期才能收敛。'
       + '<b>日常使用一周左右</b>即可得到比较稳定的值；刚装好时看到的数字仅供参考，不必在意一两天的跳动。',
     tSaved: '已保存 {n} 个应用', tCompiling: '正在编译，请稍候',
@@ -957,7 +986,16 @@ var I18N = {
     battTitle: 'Battery health {p}',
     battLevel: 'Level', battSys: 'System status',
     battMax: 'All-time high', battLast: 'Latest learned', battMin: 'All-time low (used)',
-    battNote: 'After each full charge the system infers the real full capacity from the charge actually delivered, and records it as a learned value.<br>Health = learned capacity ÷ design capacity (5000 mAh).<br>Battery health only decreases, so the <b>all-time low (Min)</b> is used to keep occasional high readings from inflating the result.<br>This is deliberately conservative: the figure may sit slightly below the true capacity, but the deviation stays within a small, predictable range.'
+    battDesign: 'Design capacity',
+    battDesignAuto: 'from system',
+    battDesignUser: 'manual',
+    battDesignDefault: 'unreadable, estimated',
+    battDesignNote: "Blank = assume 5000 mAh. Enter the real value if the system node is unreadable.",
+    battOpenSys: 'Open the system battery settings →',
+    battDesignSaved: 'Saved: {n} mAh',
+    battDesignCleared: 'Cleared — back to auto',
+    battDesignBad: 'Enter a value between 1000 and 30000',
+    battNote: 'After each full charge the system infers the real full capacity from the charge actually delivered, and records it as a learned value.<br>Health = learned capacity ÷ design capacity.<br>Battery health only decreases, so the <b>all-time low (Min)</b> is used to keep occasional high readings from inflating the result.<br>This is deliberately conservative: the figure may sit slightly below the true capacity, but the deviation stays within a small, predictable range.'
       + '<br><br><b>About fluctuations</b>: the first reading may lag or bounce around. That is how the system learns — it needs a few complete charge cycles to converge. '
       + 'Expect a stable figure after <b>about a week of normal use</b>; right after installing, treat the number as a rough reference and do not worry about day-to-day jitter.',
     tSaved: 'Saved {n} apps', tCompiling: 'Compiling, please wait',
@@ -1148,6 +1186,14 @@ function applyTheme(){
 }
 
 function renderSettings(){
+  var din = document.getElementById('battDesignIn');
+  if (din && lastBattery && lastBattery.design_mah > 0){
+    // 只有「用户手动设的」才回填到输入框；自动读到/兜底值只做 placeholder，
+    // 否则会让人以为自己设过
+    var isUser = lastBattery.design_src === 'user';
+    din.value = isUser ? String(lastBattery.design_mah) : '';
+    din.placeholder = String(lastBattery.design_mah);
+  }
   var n = document.querySelectorAll('#nameBar .seg');
   for (var i = 0; i < n.length; i++)
     n[i].classList.toggle('on', n[i].getAttribute('data-name') === appName);
@@ -1453,6 +1499,11 @@ function showBatteryInfo(){
   kv('Max', b.learned_max, T('battMax'));
   kv('Last', b.learned_last, T('battLast'));
   kv('Min', b.learned_min, T('battMin'));
+  if (b.design_mah > 0){
+    var srcKey = 'battDesign' + (b.design_src === 'auto' ? 'Auto'
+                               : b.design_src === 'user' ? 'User' : 'Default');
+    kv(T('battDesign'), b.design_mah, T2(srcKey, {n: b.design_mah}));
+  }
   askInfo(
     '<div class="info-title">' + T2('battTitle', {p: (b.health_pct > 0 ? b.health_pct + '%' : '—')}) + '</div>'
     + '<div class="info-t">' + T('battLevel') + ' <b>' + b.level + '%</b>'
@@ -2186,6 +2237,40 @@ document.getElementById('tipBar').addEventListener('click', function(e){
   applyTip();
   renderSettings();
 });
+
+/* 打开系统电池设置：读不到设计容量时，让用户自己去系统里看健康度 */
+(function(){
+  var a = document.getElementById('lnkBattSet');
+  if (!a) return;
+  a.addEventListener('click', function(e){
+    e.preventDefault();
+    fetch('/api/battsettings', {method:'POST'}).catch(function(){});
+  });
+})();
+
+/* 电池设计容量：留空 = 回到自动探测；填了就以填的为准 */
+(function(){
+  var din = document.getElementById('battDesignIn');
+  if (!din) return;
+  din.addEventListener('change', function(){
+    var raw = din.value.trim();
+    var v = raw === '' ? 0 : parseInt(raw, 10);
+    if (raw !== '' && (isNaN(v) || v < 1000 || v > 30000)){
+      toast(T('battDesignBad'));
+      din.value = '';
+      return;
+    }
+    fetch('/api/design', {method:'POST', headers:{'Content-Type':'application/json'},
+                          body: JSON.stringify({mah: v})})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d || !d.ok){ toast(T('tFail')); return; }
+        toast(v ? T2('battDesignSaved', {n: v}) : T('battDesignCleared'));
+        load(true);          // 重拉列表，健康度按新容量立刻重算
+      })
+      .catch(function(){ toast(T('tFail')); });
+  });
+})();
 
 /* ---------- 检查更新 ----------
    默认不联网：只有用户点「检查」或开了自动检查且距上次超过 24 小时，才会发一次 GET。

@@ -20,8 +20,8 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="91"
-    android:versionName="2.0.8">
+    android:versionCode="95"
+    android:versionName="2.0.9">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 

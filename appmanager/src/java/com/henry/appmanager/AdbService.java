@@ -39,8 +39,12 @@ public class AdbService {
      */
     private static final int AOT_NEED_MB = 2560;
 
-    /** 电池设计容量（mAh）。Redmi Note 12 Turbo = 5000。 */
-    private static final int BATTERY_DESIGN_MAH = 5000;
+    /** 设计容量缓存：-1 = 还没探测 */
+    private int designMahCache = -1;
+    /** auto / user / default —— 界面据此提示数据来源 */
+    private String designSrc = "default";
+    /** 探测不到、用户也没填时的兜底值 */
+    private static final int DESIGN_FALLBACK_MAH = 5000;
 
     private static final Map<Integer, String> HEALTH_TEXT = new HashMap<Integer, String>();
     static {
@@ -405,6 +409,60 @@ public class AdbService {
         return new int[]{last, min, max};
     }
 
+    /**
+     * 电池设计容量（mAh）。三级来源，按可靠性排序：
+     *
+     *   ① 系统节点 charge_full_design（µAh）—— 最准。但很多机型对 shell 直接 Permission denied，
+     *      实测 Redmi Note 12 Turbo / HyperOS：整个 /sys/class/power_supply/battery 目录都读不了。
+     *   ② 用户在设置里填的值 —— 自动探测失败时的主要来源。
+     *   ③ 兜底 5000 —— 返回 design_src=default，界面提示「按 5000 mAh 估算」。
+     *
+     * 为什么不能写死：5000 只对一部分机型成立。换 4500 的机器健康度会虚低 10%，
+     * 换 6000 的会虚高 20%，而且用户完全看不出来。
+     */
+    private int designMah() {
+        if (designMahCache >= 0) return designMahCache;
+        try {
+            String out = shR("cat /sys/class/power_supply/battery/charge_full_design 2>/dev/null;"
+                           + " cat /sys/class/power_supply/bms/charge_full_design 2>/dev/null");
+            for (String line : out.split("\n")) {
+                String t = line.trim();
+                if (!t.matches("\\d+")) continue;
+                long v = Long.parseLong(t);
+                if (v >= 1000000L) {                 // µAh；小于 1Ah 的肯定是坏数据
+                    designMahCache = (int) (v / 1000);
+                    designSrc = "auto";
+                    return designMahCache;
+                }
+            }
+        } catch (Throwable ignored) { }
+        if (appCtx != null) {
+            try {
+                int v = appCtx.getSharedPreferences("app", 0).getInt("design_mah", 0);
+                if (v >= 1000 && v <= 30000) {
+                    designMahCache = v;
+                    designSrc = "user";
+                    return designMahCache;
+                }
+            } catch (Throwable ignored) { }
+        }
+        designMahCache = DESIGN_FALLBACK_MAH;
+        designSrc = "default";
+        return designMahCache;
+    }
+
+    /** 用户在设置里改设计容量后调用：清缓存 + 落盘 */
+    public void setDesignMah(int mah) {
+        designMahCache = -1;
+        designSrc = "default";
+        if (appCtx != null && mah >= 1000 && mah <= 30000) {
+            try {
+                appCtx.getSharedPreferences("app", 0).edit()
+                        .putInt("design_mah", mah).apply();
+            } catch (Throwable ignored) { }
+        }
+    }
+
     private JSONObject getBattery() throws Exception {
         JSONObject o = new JSONObject();
         Map<String, String> info = new HashMap<String, String>();
@@ -446,9 +504,10 @@ public class AdbService {
             } catch (Throwable ignored) { }
         }
 
+        int designMah = designMah();
         int healthPct = 0;
-        if (capMin > 0 && BATTERY_DESIGN_MAH > 0) {
-            healthPct = (int) Math.round(capMin * 100.0 / BATTERY_DESIGN_MAH);
+        if (capMin > 0 && designMah > 0) {
+            healthPct = (int) Math.round(capMin * 100.0 / designMah);
         }
         try {
             o.put("level", level);
@@ -460,6 +519,8 @@ public class AdbService {
             o.put("learned_last", learnedLast);
             o.put("learned_min", capMin);
             o.put("learned_max", learnedMax);
+            o.put("design_mah", designMah);
+            o.put("design_src", designSrc);
         } catch (Exception ignored) { }
         return o;
     }

@@ -102,6 +102,48 @@ public class Bridge {
      * 只在两种情况下发请求：用户主动点「检查更新」，或开了自动检查且距上次超过 24 小时。
      * 只做一次 GET，不上传任何东西，也没有任何埋点。
      */
+    /**
+     * 保存用户填的电池设计容量（mAh）。传 0 表示清空、回到自动探测。
+     * 存在 SharedPreferences 里，重启后仍然有效。
+     */
+    /**
+     * 打开系统的电池设置页，方便用户自己去看电池健康度。
+     *
+     * 用 ACTION_POWER_USAGE_SUMMARY 而不是厂商私有页面 —— 这个 intent 各家 ROM 都能解析，
+     * 落到「设置 → 电池」。电池健康度具体在哪个子页面各家不同，只能用户自己点进去。
+     */
+    @JavascriptInterface
+    public void battSettings(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                try {
+                    android.content.Intent i =
+                            new android.content.Intent("android.intent.action.POWER_USAGE_SUMMARY");
+                    i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    web.getContext().startActivity(i);
+                    return "{\"ok\":true}";
+                } catch (Throwable e) {
+                    return "{\"ok\":false}";
+                }
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void design(int id, String arg) {
+        int v = 0;
+        try { v = Integer.parseInt(arg.trim()); } catch (Throwable ignored) { }
+        final int mah = v;
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                service.setDesignMah(mah);
+                return "{\"ok\":true,\"design_mah\":" + mah + "}";
+            }
+        });
+    }
+
     @JavascriptInterface
     public void update(int id, String arg) {
         dispatch(id, new Task() {
