@@ -263,11 +263,23 @@ public class Bridge {
                     web.getContext().getSharedPreferences("app", 0).edit()
                             .putBoolean("open_settings_after_update", true).apply();
 
-                    service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp);
-                    // 串一条 am start：shell 是设备侧进程，不会随 App 进程被安装杀掉，
-                    // 所以装完还能把新版本拉起来
-                    String res = service.shellLong("pm install -r " + tmp
-                            + "; sleep 1.5; am start -n " + pkg + "/.MainActivity");
+                    String log = "/data/local/tmp/mineapp_update.log";
+                    // 🔴 拉起必须「先脱离、再安装」。
+                    // 直接把 am start 串在 pm install 后面是错的：安装过程中本进程被杀，
+                    // 同一条 shell 里后面的 sleep/am start 也一起没了（实测：更新成功但停在桌面）。
+                    // setsid 把拉起任务脱离当前会话，它就不再受安装影响；
+                    // --activity-single-top 让重复调用只触发 onNewIntent，不会叠出多个实例。
+                    String relaunch = "(setsid sh -c 'for i in 1 2 3; do sleep 2; "
+                            + "am start --activity-single-top -n " + pkg + "/.MainActivity >> "
+                            + log + " 2>&1; done' >/dev/null 2>&1 &)";
+
+                    String res = service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp
+                            + " ; echo '--- update '$(date) >> " + log
+                            + " ; " + relaunch
+                            + " ; echo 'relaunch detached' >> " + log
+                            + " ; pm install -r " + tmp + " >> " + log + " 2>&1"
+                            + " ; echo 'install returned' >> " + log
+                            + " ; cat " + log);
                     service.shellLong("rm -f " + tmp);
 
                     boolean ok = res != null && res.contains("Success");

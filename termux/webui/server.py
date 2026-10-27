@@ -945,7 +945,7 @@ var I18N = {
     extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
     updCurrent: 'v {v}', updLatest: '已是最新版本 {v}',
-    updLatestShort: '已是最新', updNewShort: '发现新版本',
+    updLatestShort: '已是最新', updNewShort: '发现 v {v}',
     updFailShort: '检查失败', updCheckingShort: '检查中', updRestart: '将自动重启',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
     updPermNote: '更新可自动继承 adb 授权。',
@@ -1070,7 +1070,7 @@ var I18N = {
     extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
     updCurrent: 'v {v}', updLatest: 'Up to date ({v})',
-    updLatestShort: 'Up to date', updNewShort: 'Update found',
+    updLatestShort: 'Up to date', updNewShort: 'v {v} found',
     updFailShort: 'Check failed', updCheckingShort: 'Checking', updRestart: 'Will restart',
     updNew: 'New version {v} available', updOpen: 'Get it',
     updPermNote: 'Updates inherit the ADB grant.',
@@ -2411,11 +2411,11 @@ function renderUpdState(){
   var k = {latest:'updLatestShort', new:'updNewShort',
            fail:'updFailShort', checking:'updCheckingShort'}[updKind];
   if (!k){ el.textContent = T2('updCurrent', {v: curVer()}); return; }
-  el.textContent = T(k);
+  el.textContent = updVar ? T2(k, {v: updVar}) : T(k);
   updTimer = setTimeout(function(){
     updKind = 'current';
     el.textContent = T2('updCurrent', {v: curVer()});
-  }, 1000);
+  }, 2000);
 }
 function setUpdState(kind, v){ updKind = kind; updVar = v || ''; renderUpdState(); }
 
