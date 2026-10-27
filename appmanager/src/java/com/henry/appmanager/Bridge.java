@@ -328,6 +328,100 @@ public class Bridge {
         }
     }
 
+    /**
+     * 批量同步 AOT 状态。
+     *
+     * 前端把「哪些包已 AOT」记在 localStorage（pkg@ver），pm clear / 重装后这份记录就没了，
+     * 但设备上的编译结果还在 —— 于是界面全显示「未开启」，与实际不符。
+     * 这里用 `dumpsys package dexopt` 一次性把所有包的 compiler status 取回来，
+     * 前端据此把 status=speed 的包标成已开启。
+     */
+    @JavascriptInterface
+    public void aotsync(int id, String arg) {
+        dispatchHeavy(id, new Task() {
+            @Override
+            public String run() {
+                try {
+                    // 全量 dump 有 430KB / 4000 行，传回来太重（实测拿不到完整内容）。
+                    // 在设备侧先用 grep 只留「包名行」和「status=speed 行」，量级降到几十行。
+                    String out = service.shellLong(
+                            "dumpsys package dexopt | grep -E '^  \\[|status=speed\\]'");
+                    JSONObject map = new JSONObject();
+                    String cur = null;
+                    String[] lines = out.split("\n");
+                    for (int i = 0; i < lines.length; i++) {
+                        String t = lines[i].trim();
+                        // 包名行形如 "[com.tencent.mm]"：方括号包裹、内部无空格
+                        if (t.length() > 2 && t.charAt(0) == '[' && t.charAt(t.length() - 1) == ']'
+                                && t.indexOf(' ') < 0 && t.indexOf('.') > 0) {
+                            cur = t.substring(1, t.length() - 1);
+                        } else if (cur != null && t.contains("status=")) {
+                            int a = t.indexOf("status=") + 7;
+                            int b = t.indexOf(']', a);
+                            String st = b > a ? t.substring(a, b) : "";
+                            if (!map.has(cur)) map.put(cur, st);   // 只取首个（主 abi）
+                        }
+                    }
+                    return map.toString();
+                } catch (Throwable e) {
+                    android.util.Log.w("Bridge", "aotsync 失败: " + e);
+                    return "{}";
+                }
+            }
+        });
+    }
+
+    /**
+     * 跳到某个系统设置页。这两项 App 无法自动授予：
+     *   通知 —— Android 13+ 要用户点「允许」，这里直接打开本应用的通知设置；
+     *   自启动 —— MIUI 存在 com.miui.powerkeeper 私有库里，只能跳过去让用户手动开，
+     *             顺带失败时退回应用详情页（那里也有自启动入口）。
+     */
+    @JavascriptInterface
+    public void opensetting(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                try {
+                    String pkg = web.getContext().getPackageName();
+                    String cmd;
+                    if ("power".equals(arg)) {
+                        // 直达「电量详情」页（就是带省电策略四个单选项的那页）。
+                        // 实测：PowerDetailActivity 必须带 --es package_name，否则自己 finish 掉退回桌面。
+                        // 策略本身存在 com.miui.powerkeeper 私有库，shell 写不了，只能跳过去让用户点。
+                        String out = service.shellLong("am start -n com.miui.securitycenter"
+                                + "/com.miui.powercenter.legacypowerrank.PowerDetailActivity"
+                                + " --es package_name " + pkg);
+                        if (out == null || out.contains("Error")) {
+                            service.shellLong("am start -a android.settings.APPLICATION_DETAILS_SETTINGS"
+                                    + " -d package:" + pkg);
+                        }
+                        return "{\"ok\":true}";
+                    }
+                    if ("notif".equals(arg)) {
+                        cmd = "am start -a android.settings.APP_NOTIFICATION_SETTINGS"
+                            + " --es android.provider.extra.APP_PACKAGE " + pkg;
+                    } else {
+                        // 先试 MIUI 的自启动页；失败（有的 ROM 没这个 Activity）再退应用详情页。
+                        // 不用 shell 的 || —— 交给 Java 判返回值更可靠，也便于打日志。
+                        String out = service.shellLong("am start -n com.miui.securitycenter"
+                                + "/com.miui.permcenter.autostart.AutoStartManagementActivity");
+                        android.util.Log.i("Bridge", "autostart -> " + out);
+                        if (out == null || out.contains("Error")) {
+                            service.shellLong("am start -a android.settings.APPLICATION_DETAILS_SETTINGS"
+                                    + " -d package:" + pkg);
+                        }
+                        return "{\"ok\":true}";
+                    }
+                    service.shellLong(cmd);
+                    return "{\"ok\":true}";
+                } catch (Throwable e) {
+                    return "{\"ok\":false}";
+                }
+            }
+        });
+    }
+
     @JavascriptInterface
     public void battSettings(int id, String arg) {
         dispatch(id, new Task() {

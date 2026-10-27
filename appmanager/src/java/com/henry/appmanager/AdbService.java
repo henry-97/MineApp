@@ -989,12 +989,27 @@ public class AdbService {
         try {
             String cur = shR("settings get system MILLET_NO_RESTRICT_APP").trim();
             if ("null".equals(cur)) cur = "";
+
+            // 🔴 MIUI 按「逗号 + 空格」拆分这份列表。曾经用 "," 追加，写进去变成
+            //    "...,com.microsoft.office.outlook,com.henry.appmanager" —— 两个包名被当成一个，
+            //    本应用等于没进白名单，系统界面显示「智能限制」。
+            //    而 split(",") 又能把它拆出来，于是「已在名单里」判定为真，永远不自我修复。
+            // 所以这里整表规范化：拆开 → 去空 → 去重 → 用 ", " 重新拼。
+            java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
             for (String p : cur.split(",")) {
-                if (p.trim().equals(self)) return;          // 已经在名单里
+                String t = p.trim();
+                if (!t.isEmpty()) set.add(t);
             }
-            String csv = cur.isEmpty() ? self : cur + "," + self;
+            set.add(self);
+            StringBuilder sb = new StringBuilder();
+            for (String p : set) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(p);
+            }
+            String csv = sb.toString();
+            if (csv.equals(cur)) return;        // 已经是规范格式，不重复写
             sh("settings put system MILLET_NO_RESTRICT_APP '" + csv + "'");
-            Log.i(TAG, "已把自己加入电源管理白名单");
+            Log.i(TAG, "电源管理白名单已规范化并包含本应用");
         } catch (Throwable e) {
             Log.w(TAG, "加入白名单失败: " + e);
         }

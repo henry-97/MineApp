@@ -457,6 +457,7 @@ font-weight:600;color:#fff;background:#0f6e56}
 /* 标题旁的 ⓘ 点开才展开说明，不占常驻空间 */
 .sheet-hd h2{display:flex;align-items:center;gap:5px}
 .sheet-hd h2 .i-dot{cursor:pointer;padding:2px 0}
+.panel-loading{padding:48px 16px;text-align:center;font-size:13px;color:var(--ink3);letter-spacing:.3px}
 .millet-note{font-size:12px;color:var(--ink3);line-height:1.6;background:var(--bg);
 margin:8px 16px 0;padding:9px 12px;border-radius:10px}
 .sheet-body{flex:1;overflow-y:auto;padding:8px 16px calc(16px + env(safe-area-inset-bottom))}
@@ -611,6 +612,8 @@ transition:color .12s}
 #appTitle:active .i-dot{color:var(--ink2)}
 .tip-i{font-style:normal}
 body.no-info .tip-i{display:none}
+/* 白名单面板标题上的 ⓘ 是查看说明的唯一入口，不能跟着界面提示一起隐藏 */
+body.no-info #milletInfo{display:inline-flex}
 /* 设置页的图标选择器 */
 .icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:6px}
 .icon-cell{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;
@@ -691,7 +694,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
   <div class="sheet-hd"><h2><span data-t="milletTitle">Millet 白名单</span><i class="i-dot tip-i" id="milletInfo" role="button" aria-label="info">ⓘ</i></h2>
     <button class="hd-save" id="milletSave" data-t="save">保存</button>
     <button class="close" id="milletClose">×</button></div>
-  <div class="millet-note" id="milletNote" style="display:none" data-t="milletNote">本名单就是系统「电源管理 → 无限制」那份名单。在小米 HyperOS 实测，与应用「省电策略 → 无限制」完全等价。</div>
+  <div class="millet-note" id="milletNote" style="display:none" data-t="milletNote">把应用加进系统的 doze / standby 白名单（MILLET_NO_RESTRICT_APP），系统不再按「长时间未使用」压制它的后台活动。注意：这不改变 MIUI 界面里的「省电策略」—— 那个开关是 powerkeeper 自己维护的另一套状态，需要到应用信息页单独设成「无限制」。</div>
   <div class="msearch"><input type="search" id="mq" data-tp="searchPh" placeholder="搜索应用名或包名"></div>
   <div class="sortbar" id="milletSort" style="margin:8px 16px 0">
     <button class="seg on" data-msort="default" data-t="sortDefault">默认</button>
@@ -713,8 +716,8 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="setrow">
       <span class="setrow-lb" data-t="secName">应用名称</span>
       <div class="sortbar" id="nameBar">
-        <button class="seg" data-name="manager">应用管理器</button>
         <button class="seg" data-name="mine">Mine App</button>
+        <button class="seg" data-name="manager">应用管理器</button>
       </div>
     </div>
     <div class="setrow">
@@ -733,7 +736,11 @@ padding-top:10px;border-top:0.5px solid var(--line)}
         <button class="seg" data-lang="en" data-t="langEn">English</button>
       </div>
     </div>
-    <div class="sec" data-t="secIcon">应用图标</div>
+    <div class="sec" style="display:flex;align-items:center;margin-bottom:12px">
+      <span data-t="secIcon">应用图标</span>
+      <a href="#" id="iconToggle" style="margin-left:auto;color:#0f6e56;font-size:12px;
+         text-decoration:none;cursor:pointer">展开</a>
+    </div>
     <div class="icon-grid" id="iconGrid"></div>
     <div class="setrow">
       <span class="setrow-lb" data-t="battDesign">电池设计容量</span>
@@ -762,7 +769,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </label>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:4px;margin-bottom:12px">
-      <span data-t="keepNote">本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知和自启动可进一步降低被误杀的概率。</span>
+      <span data-t="keepNote" data-html="1">显示后台卡片易导致被误杀，默认不显示，可按需开启。后台只做少量 shell 查询，能耗极低，可放心常驻。建议手动允许本 App 的&nbsp;&nbsp;<a href="#" id="lnkNotif">通知</a>&nbsp;&nbsp;和&nbsp;&nbsp;<a href="#" id="lnkAuto">自启动</a>&nbsp;&nbsp;，及&nbsp;&nbsp;<a href="#" id="lnkPower">电源管理设置无限制</a>&nbsp;&nbsp;，可进一步防止被误杀。</span>
     </div>
 
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
@@ -779,7 +786,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
         <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
       </span>
     </div>
-    <div class="ext-note" data-t="extLicense">本项目(GPL-3.0)禁止自行闭源分发，如需商务合作，可提 Issue。</div>
+    <div class="ext-note" style="margin-top:9px" data-t="extLicense">本项目(GPL-3.0)禁止自行闭源分发，如需商务合作，可提 Issue。</div>
   </div>
 </div>
 <div id="risk" class="risk show">
@@ -826,6 +833,27 @@ var aotDone = new Set(JSON.parse(localStorage.getItem('aot') || '[]'));
 /* 各应用最后一次前台使用时间（毫秒），供「闲置」排序 */
 var idleMap = null;
 function saveAot(){ localStorage.setItem('aot', JSON.stringify(Array.from(aotDone))); }
+
+/* 从设备批量拉回 AOT 状态，补进 localStorage 记录。
+   重装 / pm clear 后本地记录会清空，但设备上的编译结果还在 —— 不同步就会全显示「未开启」。 */
+var aotSynced = false;
+function syncAot(){
+  fetch('/api/aotsync', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(m){
+      if (!m || typeof m !== 'object') return;
+      var changed = false;
+      for (var i = 0; i < apps.length; i++){
+        var a = apps[i];
+        if (m[a.pkg] === 'speed'){            // speed = 全量 AOT；speed-profile 只是按 profile
+          var k = aotKey(a);
+          if (!aotDone.has(k)){ aotDone.add(k); changed = true; }
+        }
+      }
+      if (changed){ saveAot(); render(); }
+    })
+    .catch(function(){});
+}
 /* AOT 记录按「包名@versionCode」存：应用一更新，versionCode 变了，记录自动失效 ——
    因为 dexopt 产物和 APK 内容绑定，更新后系统会退回 speed-profile，
    继续显示「已编译」就是骗人。 */
@@ -865,7 +893,7 @@ var I18N = {
     picked: '已选',
     tagArchived: '已归档', tagRestricted: '已限制', tagWhite: '白名单', tagSystem: '系统', tagNormal: '正常',
     milletNow: '当前名单 {n} 个',
-    milletNote: '本名单就是系统「电源管理 → 无限制」那份名单。在小米 HyperOS 实测，与应用「省电策略 → 无限制」完全等价。',
+    milletNote: '把应用加进系统的 doze / standby 白名单（MILLET_NO_RESTRICT_APP），系统不再按「长时间未使用」压制它的后台活动。注意：这不改变 MIUI 界面里的「省电策略」—— 那个开关是 powerkeeper 自己维护的另一套状态，需要到应用信息页单独设成「无限制」。',
     cfmMillet: '保存后白名单会从 {a} 个变成 {b} 个（整体覆盖），确定吗？',
     agoNever: '24h 以上',
     bannerOff: '调试通道未连接', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip 5555',
@@ -934,7 +962,7 @@ var I18N = {
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
     secTip: '显示界面提示', tipHelp: '控制界面上那些 ⓘ 提示要不要显示。', tipShow: '显示', tipHide: '隐藏',
     keepCard: '显示后台卡片',
-    keepNote: '本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知和自启动可进一步降低被误杀的概率。',
+    keepNote: '显示后台卡片易导致被误杀，默认不显示，可按需开启。后台只做少量 shell 查询，能耗极低，可放心常驻。建议手动允许本 App 的&nbsp;&nbsp;<a href="#" id="lnkNotif">通知</a>&nbsp;&nbsp;和&nbsp;&nbsp;<a href="#" id="lnkAuto">自启动</a>&nbsp;&nbsp;，及&nbsp;&nbsp;<a href="#" id="lnkPower">电源管理设置无限制</a>&nbsp;&nbsp;，可进一步防止被误杀。',
     keepHidden: '已隐藏后台卡片', keepShown: '已显示后台卡片',
     keepFail: '系统没接受这个设置',
     extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
@@ -954,7 +982,7 @@ var I18N = {
     riskLink: '查看完整「使用须知」→',
     riskFoot: '继续使用本软件，即表示自行承担因使用不当造成的风险。',
     riskAgree: '同意并使用', riskQuit: '退出',
-    secIcon: '应用图标',
+    secIcon: '应用图标', iconExpand: '展开', iconCollapse: '折叠', loading: '读取中…',
     icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
     tIconOk: '图标已切换，桌面可能需要几秒刷新', tIconFail: '图标切换失败',
     tBusy: '正在处理，请稍候',
@@ -990,7 +1018,7 @@ var I18N = {
     picked: 'Picked',
     tagArchived: 'Archived', tagRestricted: 'Restricted', tagWhite: 'Allowlisted', tagSystem: 'System', tagNormal: 'Normal',
     milletNow: 'currently {n}',
-    milletNote: 'This is the same list as the system\'s Battery → No restrictions. Verified on Xiaomi HyperOS: identical to an app\'s battery-saver setting "No restrictions".',
+    milletNote: 'Adds the app to the system doze / standby allowlist (MILLET_NO_RESTRICT_APP) so the OS stops throttling it as "unused". Note: this does NOT change the battery policy in MIUI\'s UI — that toggle is separate state kept by powerkeeper and has to be set to "No restrictions" on the app-info page.',
     cfmMillet: 'Saving replaces the allowlist: {a} → {b}. Continue?',
     agoNever: '>24h',
     bannerOff: 'ADB channel not connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip 5555',
@@ -1058,8 +1086,8 @@ var I18N = {
     perfTip: 'Performance',
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
     secTip: 'Show hints', tipHelp: 'Controls whether the little ⓘ hints are shown in the UI.', tipShow: 'Show', tipHide: 'Hide',
-    keepCard: 'Show recents card',
-    keepNote: 'The app allowlists itself so it can keep running in the background. Showing the recents card actually makes it easier to kill by accident, so it stays hidden by default. In the background it only runs a few shell queries — the power cost is negligible, so it is safe to keep resident. Enabling notifications and autostart further reduces the chance of it being killed.',
+    keepCard: 'Recents card',
+    keepNote: 'Showing the recents card makes the app easier to kill by accident — it is hidden by default; enable it only if you need it. In the background it only runs a few shell queries, so the power cost is negligible and it is safe to keep resident. We recommend granting the <a href="#" id="lnkNotif">notifications</a> of this app and <a href="#" id="lnkAuto">autostart</a> manually, and setting <a href="#" id="lnkPower">battery saver to "no restrictions"</a>, to help prevent the app from being killed.',
     keepHidden: 'Recents card hidden', keepShown: 'Recents card shown',
     keepFail: 'The system refused this setting',
     extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
@@ -1072,7 +1100,7 @@ var I18N = {
     updInstall: 'Update', updInstalling: 'Updating', updFinishing: 'Done', updDone: 'Done',
     updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
     updFail: 'Check failed — network problem?',
-    updAuto: 'Auto-check & update every 24 h',
+    updAuto: 'Auto-check daily',
     updAutoOn: 'Auto-check enabled', updAutoOff: 'Auto-check disabled',
     extLicense: 'Licensed under GPL-3.0 — closed-source redistribution is not permitted. For commercial licensing, open an issue.',
     riskTitle: 'Before you start',
@@ -1080,7 +1108,7 @@ var I18N = {
     riskLink: 'Read the full usage notes →',
     riskFoot: 'Continued use means accepting responsibility for any risk caused by misuse.',
     riskAgree: 'Agree and continue', riskQuit: 'Quit',
-    secIcon: 'App icon',
+    secIcon: 'App icon', iconExpand: 'More', iconCollapse: 'Less', loading: 'Loading…',
     icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
     tIconOk: 'Icon changed; the launcher may take a few seconds', tIconFail: 'Failed to change icon',
     tBusy: 'Working, please wait',
@@ -1205,17 +1233,27 @@ function iconLabel(k){
   return T(p[0] === 'cl' ? 'icCl' : 'icSq') + '·' + T('ic' + p[1].toUpperCase());
 }
 
+/* 图标网格默认折叠，只露前 3 个（方块系列）；「展开」看全部，再点「折叠」收回去。
+   如果当前选中的是后半部分，默认就展开 —— 否则选中态看不见。 */
+var ICON_FOLD = 3;
+var iconExpanded = false;
+
 function renderIcons(){
   var g = document.getElementById('iconGrid');
   if (!g) return;
+  var idx = ICONS.indexOf(iconKey);
+  if (idx >= ICON_FOLD) iconExpanded = true;
+  var n = iconExpanded ? ICONS.length : Math.min(ICON_FOLD, ICONS.length);
   var h = '';
-  for (var i = 0; i < ICONS.length; i++){
+  for (var i = 0; i < n; i++){
     var k = ICONS[i];
     h += '<div class="icon-cell' + (k === iconKey ? ' on' : '') + '" data-icon="' + k + '">'
        + '<img src="icon-' + k + '.png" alt="">'
        + '<span>' + iconLabel(k) + '</span></div>';
   }
   g.innerHTML = h;
+  var t = document.getElementById('iconToggle');
+  if (t) t.textContent = iconExpanded ? T('iconCollapse') : T('iconExpand');
 }
 
 function applyTheme(){
@@ -1640,6 +1678,7 @@ function applyData(d){
   }
   document.getElementById('perfChk').checked = (d.perf === true) || perfWanted;
   apps = d.apps || [];
+  if (!aotSynced){ aotSynced = true; syncAot(); }
   if (d.with_pss) {
     hasPss = true;
     memTotal = d.mem_total || 0;
@@ -2059,7 +2098,12 @@ function renderTune(){
 
 function openTune(){
   document.getElementById('tune').classList.add('show');
-  tunePost('').then(function(d){ tuneData = d; renderTune(); });
+  // 面板立刻弹出；数据没到之前先给个占位，别让用户以为点空了
+  if (!tuneData){
+    var tb = document.getElementById('tuneBody');
+    if (tb) tb.innerHTML = '<div class="panel-loading">' + T('loading') + '</div>';
+  }
+  tunePost('').then(function(d){ tuneData = d; renderTune(); }).catch(function(){});
 }
 
 /* 用事件委托绑定，避免元素尚未就绪时绑定失效 */
@@ -2093,19 +2137,28 @@ var milletSaved = new Set();   // 服务端当前白名单，只用于展示胶�
 var milletSortMode = 'default';
 
 function openMillet(){
+  // 🔴 先开面板再拉数据。
+  // 桥的 worker 是单线程，刷新列表时 /api/list 会独占它几秒 ——
+  // 原来这里等 fetch 回来才 show，那几秒里点「白名单」完全没反应，像是卡死。
+  // 现在立刻用上一次的数据画出面板，拿到新数据再重绘。
+  document.getElementById('mq').value = '';
+  milletSet = new Set();
+  document.getElementById('millet').classList.add('show');
+  renderMillet();
+  ensureIdle(renderMillet);
+
   fetch('/api/millet', {method:'POST', headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({})})
     .then(function(r){ return r.json(); })
     .then(function(d){
+      if (!d) return;
       milletSaved = new Set((d.list || '').split(',')
         .map(function(s){ return s.trim(); }).filter(function(s){ return s.length; }));
       // 不再预勾选：白名单状态由行内的「白名单」胶囊表达，勾选框只表示「本次要加入」
-      milletSet = new Set();
-      document.getElementById('mq').value = '';
-      document.getElementById('millet').classList.add('show');
       renderMillet();
       ensureIdle(renderMillet);
-    });
+    })
+    .catch(function(){});
 }
 
 function renderMillet(){
@@ -2325,6 +2378,18 @@ function keepAliveInit(){
 })();
 
 /* 打开系统电池设置：读不到设计容量时，让用户自己去系统里看健康度 */
+/* 文案里的内联链接（查看 / 通知 / 自启动）都用事件委托 —— applyLang 重绘会重建节点 */
+document.addEventListener('click', function(e){
+  if (!e.target) return;
+  var id = e.target.id;
+  if (id !== 'lnkNotif' && id !== 'lnkAuto' && id !== 'lnkPower') return;
+  e.preventDefault();
+  var k = id === 'lnkNotif' ? 'notif' : (id === 'lnkAuto' ? 'autostart' : 'power');
+  fetch('/api/opensetting', {method:'POST', headers:{'Content-Type':'application/json'},
+                             body: JSON.stringify({k: k})})
+    .catch(function(){});
+});
+
 /* 「查看」是内联在文案里的链接，applyLang 重绘会重建节点 —— 用事件委托才绑得住 */
 document.addEventListener('click', function(e){
   if (!e.target || e.target.id !== 'lnkBattSet') return;
@@ -2545,6 +2610,12 @@ setTimeout(function(){
   if (Date.now() - last < 24 * 3600 * 1000) return;
   checkUpdate(true);
 }, 6000);
+
+document.getElementById('iconToggle').addEventListener('click', function(e){
+  e.preventDefault();
+  iconExpanded = !iconExpanded;
+  renderIcons();
+});
 
 document.getElementById('iconGrid').addEventListener('click', function(e){
   var c = e.target.closest('[data-icon]');

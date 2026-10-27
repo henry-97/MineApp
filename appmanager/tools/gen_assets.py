@@ -54,9 +54,13 @@ SHIM = r"""
     else if (url.indexOf('/api/name') === 0) p = call('name', body.name || '');
     else if (url.indexOf('/api/icon') === 0) p = call('icon', body.key || '');
     else if (url.indexOf('/api/kill') === 0) p = call('kill', (body.pkg || '') + '|' + (body.pss || 0));
+    // 🔴 aotsync 必须排在 aot 前面：'/api/aotsync'.indexOf('/api/aot') === 0，
+    // 顺序反了会被当成 aot 接口（编译），拿到的是 ok/aot/skipped/status/msg
+    else if (url.indexOf('/api/aotsync') === 0) p = call('aotsync', '');
     else if (url.indexOf('/api/aot') === 0) p = call('aot', (body.pkg || '') + '|' + (body.on ? '1' : '0'));
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
+    else if (url.indexOf('/api/opensetting') === 0) p = call('opensetting', String(body.k || ''));
     else if (url.indexOf('/api/battsettings') === 0) p = call('battSettings', '');
     else if (url.indexOf('/api/keepalive') === 0) p = call('keepalive', '');
     else if (url.indexOf('/api/installupdate') === 0) p = call('installupdate', String(body.url || ''));
