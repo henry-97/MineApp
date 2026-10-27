@@ -780,7 +780,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <div class="upd-prog-txt" id="updProgTxt"></div>
     </div>
     <div class="ver-row">
-      <span data-t="updPermNote">更新可自动继承 adb 授权</span>
+      <span data-t="updPermNote">更新可自动继承 adb 授权。</span>
       <span class="ver-links">
         <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
         <span class="ext-sep">|</span>
@@ -948,7 +948,7 @@ var I18N = {
     updLatestShort: '已是最新', updNewShort: '发现新版本',
     updFailShort: '检查失败', updCheckingShort: '检查中',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
-    updPermNote: '更新可自动继承 adb 授权',
+    updPermNote: '更新可自动继承 adb 授权。',
     updInstall: '下载并安装', updInstalling: '更新中……', updDownloading: '下载中 {p}%',
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
     updAuto: '每 24 小时自动检查并更新',
@@ -1073,7 +1073,7 @@ var I18N = {
     updLatestShort: 'Up to date', updNewShort: 'Update found',
     updFailShort: 'Check failed', updCheckingShort: 'Checking',
     updNew: 'New version {v} available', updOpen: 'Get it',
-    updPermNote: 'Updates inherit the ADB grant',
+    updPermNote: 'Updates inherit the ADB grant.',
     updInstall: 'Download & install', updInstalling: 'Updating…', updDownloading: 'Downloading {p}%',
     updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
     updFail: 'Check failed — network problem?',
