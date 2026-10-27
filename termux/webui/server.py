@@ -748,6 +748,20 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <a href="#" id="lnkBattSet" class="ext" style="padding:4px 0;display:inline-block"
          data-t="battOpenSys">去系统设置看电池健康度 →</a>
     </div>
+    <div class="sec" data-t="secKeep">保持运行</div>
+    <div class="setrow">
+      <span class="setrow-lb" data-t="keepCard">后台卡片</span>
+      <div class="sortbar" id="keepBar">
+        <button class="seg" data-keep="1" data-t="keepOn">隐藏</button>
+        <button class="seg" data-keep="0" data-t="keepOff">显示</button>
+      </div>
+    </div>
+    <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
+      <span data-t="keepNote">后台只做少量 shell 查询（内存 3 秒、电池 60 秒各一次），能耗极低，可放心常驻。</span><br>
+      <span data-t="keepHideNote">部分系统会忽略这个设置。隐藏后请在最近任务里确认一次；卡片还在的话，用下面的手动方法。</span><br>
+      <span data-t="keepLockNote">手动方法：最近任务里下拉卡片上锁 + 允许通知，两步能明显提升存活率。</span>
+    </div>
+
     <div class="sec" data-t="secAbout">关于</div>
     <div class="trow" style="padding:9px 0;border-bottom:0">
       <div style="flex:1">
@@ -918,6 +932,12 @@ var I18N = {
     perfTip: '性能模式',
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
     secTip: '界面提示', tipShow: '显示', tipHide: '隐藏',
+    secKeep: '保持运行', keepCard: '后台卡片', keepOn: '隐藏', keepOff: '显示',
+    keepNote: '后台只做少量 shell 查询（内存 3 秒、电池 60 秒各一次），能耗极低，可放心常驻。',
+    keepHideNote: '开启后需重新打开一次应用才生效；部分系统会直接忽略此设置，届时用下面的手动方法。',
+    keepLockNote: '若仍被杀，在最近任务里给它上锁 + 允许通知，两步就能明显提升存活率。',
+    keepHidden: '已隐藏后台卡片', keepShown: '已恢复显示',
+    keepFail: '系统没接受，请在最近任务里手动上锁',
     secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
     updCurrent: '当前版本 {v}', updLatest: '已是最新版本 {v}',
@@ -1033,6 +1053,12 @@ var I18N = {
     perfTip: 'Performance',
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
     secTip: 'Hints', tipShow: 'Show', tipHide: 'Hide',
+    secKeep: 'Staying alive', keepCard: 'Recents card', keepOn: 'Hide', keepOff: 'Show',
+    keepNote: 'In the background this app only runs a few shell queries (memory every 3 s, battery every 60 s) — the power cost is negligible, so it is safe to keep resident.',
+    keepHideNote: 'Takes effect after the app is reopened once. Some ROMs ignore the setting outright — use the manual method below then.',
+    keepLockNote: 'If it still gets killed, lock it in the recents screen and allow notifications — those two steps make a real difference.',
+    keepHidden: 'Recents card hidden', keepShown: 'Recents card restored',
+    keepFail: 'The system refused this — lock it manually in recents instead',
     secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
     updCurrent: 'Current version {v}', updLatest: 'Up to date ({v})',
@@ -1608,6 +1634,8 @@ function applyData(d){
     memAvail = d.mem_avail || 0;
   }
   if (d.battery) updateBattery(d.battery);
+  // 第一次拿到数据说明 ADB 通了，这时才做保活初始化（加白名单要执行 shell）
+  if (!keepInited){ keepInited = true; keepAliveInit(); }
   else document.getElementById('battery').textContent = '电量 —';
   // 右上角固定显示归档/限制数量（内存总量已在底部汇总里）
   lastFrozen = d.frozen || 0;
@@ -2237,6 +2265,45 @@ document.getElementById('tipBar').addEventListener('click', function(e){
   applyTip();
   renderSettings();
 });
+
+/* ---------- 保活 ----------
+   启动时静默做两件事：把自己加进电源管理白名单（界面不展示这条）、
+   按上次保存的选择决定是否隐藏最近任务卡片。 */
+var keepHide = false, keepInited = false;
+
+function renderKeep(){
+  var bs = document.querySelectorAll('#keepBar .seg');
+  for (var i = 0; i < bs.length; i++)
+    bs[i].classList.toggle('on', (bs[i].getAttribute('data-keep') === '1') === keepHide);
+}
+
+function keepAliveInit(){
+  fetch('/api/keepalive', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d && d.ok){ keepHide = !!d.hide_recents; renderKeep(); } })
+    .catch(function(){});
+}
+
+(function(){
+  var bar = document.getElementById('keepBar');
+  if (!bar) return;
+  bar.addEventListener('click', function(e){
+    var b = e.target.closest('[data-keep]');
+    if (!b) return;
+    var on = b.getAttribute('data-keep') === '1';
+    if (on === keepHide) return;
+    fetch('/api/hiderecents', {method:'POST', headers:{'Content-Type':'application/json'},
+                               body: JSON.stringify({on: on})})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        // ok=false：系统没接受（个别 ROM 会拒绝），提示用户改用手动上锁
+        if (!d || !d.ok){ toast(T('keepFail')); return; }
+        keepHide = on; renderKeep();
+        toast(on ? T('keepHidden') : T('keepShown'));
+      })
+      .catch(function(){ toast(T('tFail')); });
+  });
+})();
 
 /* 打开系统电池设置：读不到设计容量时，让用户自己去系统里看健康度 */
 (function(){

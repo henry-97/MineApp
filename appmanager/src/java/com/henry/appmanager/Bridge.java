@@ -112,6 +112,69 @@ public class Bridge {
      * 用 ACTION_POWER_USAGE_SUMMARY 而不是厂商私有页面 —— 这个 intent 各家 ROM 都能解析，
      * 落到「设置 → 电池」。电池健康度具体在哪个子页面各家不同，只能用户自己点进去。
      */
+    /**
+     * 保活初始化：把自己加进电源管理白名单，并按保存的设置隐藏最近任务卡片。
+     * 前端启动时调一次。
+     */
+    @JavascriptInterface
+    public void keepalive(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                service.ensureSelfWhitelisted();
+                boolean hide = false;
+                try {
+                    hide = web.getContext().getSharedPreferences("app", 0)
+                            .getBoolean("hide_recents", false);
+                } catch (Throwable ignored) { }
+                boolean applied = applyHideFromRecents(hide);
+                return "{\"ok\":true,\"hide_recents\":" + hide
+                        + ",\"applied\":" + applied + "}";
+            }
+        });
+    }
+
+    /**
+     * 开关「隐藏后台卡片」。
+     *
+     * 用 ActivityManager.AppTask.setExcludeFromRecents —— 这是唯一能让自己的任务
+     * 不出现在最近任务里的公开 API。MIUI 那种「上锁」没有公开接口，做不到，
+     * 只能在界面上提示用户手动上锁。
+     *
+     * 返回 applied=false 表示系统没接受（个别 ROM 会拒绝），前端据此提示用户改用手动方式。
+     */
+    @JavascriptInterface
+    public void hiderecents(int id, String arg) {
+        final boolean hide = "1".equals(arg);
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                boolean applied = applyHideFromRecents(hide);
+                try {
+                    web.getContext().getSharedPreferences("app", 0).edit()
+                            .putBoolean("hide_recents", hide).apply();
+                } catch (Throwable ignored) { }
+                return "{\"ok\":" + applied + ",\"hide_recents\":" + hide + "}";
+            }
+        });
+    }
+
+    /** 真正去改任务属性。失败返回 false —— 有的 ROM 会抛 SecurityException。 */
+    private boolean applyHideFromRecents(boolean hide) {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager)
+                    web.getContext().getSystemService(android.content.Context.ACTIVITY_SERVICE);
+            java.util.List<android.app.ActivityManager.AppTask> tasks = am.getAppTasks();
+            for (android.app.ActivityManager.AppTask t : tasks) {
+                t.setExcludeFromRecents(hide);
+            }
+            return !tasks.isEmpty();
+        } catch (Throwable e) {
+            android.util.Log.w("Bridge", "隐藏后台卡片失败: " + e);
+            return false;
+        }
+    }
+
     @JavascriptInterface
     public void battSettings(int id, String arg) {
         dispatch(id, new Task() {

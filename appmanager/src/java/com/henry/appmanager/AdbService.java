@@ -915,6 +915,33 @@ public class AdbService {
         }
     }
 
+    /**
+     * 确保本应用在系统的电源管理白名单里。
+     *
+     * 为什么要自动加：这个 App 的价值全靠常驻（常驻通知 + 定时刷新），
+     * 一旦被系统按「很少使用」压进 RARE 桶，后台会被反复掐掉，
+     * 表现就是通知断更、数据不刷新。用户自己不会想到去加白名单。
+     *
+     * 为什么不展示：白名单页只列第三方应用（listJson 已排除自己），
+     * 所以这条记录不会出现在界面上，用户也就没有机会误删。
+     */
+    public void ensureSelfWhitelisted() {
+        if (appCtx == null) return;
+        String self = appCtx.getPackageName();
+        try {
+            String cur = shR("settings get system MILLET_NO_RESTRICT_APP").trim();
+            if ("null".equals(cur)) cur = "";
+            for (String p : cur.split(",")) {
+                if (p.trim().equals(self)) return;          // 已经在名单里
+            }
+            String csv = cur.isEmpty() ? self : cur + "," + self;
+            sh("settings put system MILLET_NO_RESTRICT_APP '" + csv + "'");
+            Log.i(TAG, "已把自己加入电源管理白名单");
+        } catch (Throwable e) {
+            Log.w(TAG, "加入白名单失败: " + e);
+        }
+    }
+
     public String setMillet(String csv) {
         try {
             sh("settings put system MILLET_NO_RESTRICT_APP '" + csv + "'");
