@@ -267,7 +267,7 @@ public class Bridge {
                     // 串一条 am start：shell 是设备侧进程，不会随 App 进程被安装杀掉，
                     // 所以装完还能把新版本拉起来
                     String res = service.shellLong("pm install -r " + tmp
-                            + "; sleep 1; am start -n " + pkg + "/.MainActivity");
+                            + "; sleep 1.5; am start -n " + pkg + "/.MainActivity");
                     service.shellLong("rm -f " + tmp);
 
                     boolean ok = res != null && res.contains("Success");
