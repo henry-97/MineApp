@@ -3,7 +3,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
     android:versionCode="133"
-    android:versionName="3.1">
+    android:versionName="3.0.7">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
