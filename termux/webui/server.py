@@ -590,9 +590,14 @@ line-height:1.55;font-size:13.5px}
 .sec{font-size:13px;color:var(--ink2);font-weight:500;margin:16px 0 5px}
 /* 设置页：标签放左边、按钮放右边，一行搞定，比「标题一行 + 按钮一行」省一半竖向空间 */
 .setrow{display:flex;align-items:center;gap:36px;margin:17px 0}
-.setrow-lb{flex:none;width:64px;font-size:13px;color:var(--ink2);font-weight:500;line-height:1.3;white-space:nowrap}
+.setrow-lb{flex:none;width:84px;font-size:13px;color:var(--ink2);font-weight:500;line-height:1.3;white-space:nowrap;display:flex;align-items:center;gap:1px}
 .setrow .sortbar{flex:1;margin-top:0;gap:10px}
 .setrow-unit{flex:none;font-size:12px;color:var(--ink3)}
+.upd-auto{flex:none;margin-left:auto;font-size:12px;color:var(--ink2)}
+/* 版本号与开源/打赏链接同行：左边版本、右边链接 */
+.ver-row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11.5px;color:var(--ink3)}
+.ver-links{margin-left:auto;flex:none;display:flex;align-items:center;gap:6px}
+.ver-links .ext{font-size:11.5px;padding:2px 0}
 #appTitle{cursor:pointer;display:flex;align-items:center;gap:5px;min-width:0}
 #appNameTx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 三处 ⓘ 提示统一用同一个字符字形，保证视觉大小完全一致（11.5px = 电池行/性能模式行字号） */
@@ -726,7 +731,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="sec" data-t="secIcon">应用图标</div>
     <div class="icon-grid" id="iconGrid"></div>
     <div class="setrow">
-      <span class="setrow-lb" data-t="secTip">界面提示</span>
+      <span class="setrow-lb"><span data-t="secTip">界面提示</span><i class="i-dot" id="tipHelp" role="button">（ⓘ）</i></span>
       <div class="sortbar" id="tipBar">
         <button class="seg" data-tip="1" data-t="tipShow">显示</button>
         <button class="seg" data-tip="0" data-t="tipHide">隐藏</button>
@@ -749,35 +754,29 @@ padding-top:10px;border-top:0.5px solid var(--line)}
          style="padding:0 0 0 4px;font-size:11.5px;white-space:nowrap"
          data-t="battOpenSys">去「我的设备」看电池容量 →</a>
     </div>
-    <div class="setrow">
-      <span class="setrow-lb" data-t="keepCard">显示卡片</span>
+    <div class="setrow" style="margin-bottom:0">
+      <span class="setrow-lb" data-t="keepCard">显示后台卡片</span>
       <label class="switch" style="margin-left:auto">
         <input type="checkbox" id="showCardChk"><span class="slider"></span>
       </label>
     </div>
-    <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="keepNote" data-html="1">本应用会自动允许自身后台运行。显示卡片反而更容易被误杀，所以默认不显示。<br>后台只做少量 shell 查询（内存 3 秒、电池 60 秒各一次），能耗极低，可放心常驻。<br>开启通知可进一步降低被误杀的概率。</span>
+    <div class="info-note" style="border-top:0;padding-top:0;margin-top:4px;margin-bottom:12px">
+      <span data-t="keepNote">本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知可进一步降低被误杀的概率。</span>
     </div>
 
-    <div class="sec" data-t="secAbout">关于</div>
-    <div class="trow" style="padding:9px 0;border-bottom:0">
-      <div style="flex:1">
-        <div class="tl" data-t="updTitle">检查更新</div>
-        <div class="ts" id="updState" data-ver="__APP_VERSION__">—</div>
-      </div>
-      <button class="edit" id="updBtn" data-t="updCheck">检查</button>
-    </div>
-    <div class="trow" style="padding:9px 0">
-      <div style="flex:1">
-        <div class="tl" data-t="updAuto">自动检查更新</div>
-        <div class="ts" data-t="updAutoSub">每 24 小时检查一次，默认关闭，可按需主动开启</div>
-      </div>
+    <div class="setrow" style="gap:8px;margin:8px 0 2px">
+      <span class="setrow-lb" data-t="updTitle">检查更新</span>
+      <button class="edit" id="updBtn" data-t="updCheck" style="padding:0 12px">检查</button>
+      <span class="upd-auto" data-t="updAuto">每 24 小时自动检查</span>
       <label class="switch"><input type="checkbox" id="updAutoChk"><span class="slider"></span></label>
     </div>
-    <div class="ext-row">
-      <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
-      <span class="ext-sep">|</span>
-      <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
+    <div class="ver-row">
+      <span id="updState" data-ver="__APP_VERSION__">—</span>
+      <span class="ver-links">
+        <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
+        <span class="ext-sep">|</span>
+        <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
+      </span>
     </div>
     <div class="ext-note" data-t="extLicense">本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。</div>
   </div>
@@ -929,16 +928,16 @@ var I18N = {
     langAuto: '跟随系统', langZh: '中文', langEn: 'English',
     perfTip: '性能模式',
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
-    secTip: '界面提示', tipShow: '显示', tipHide: '隐藏',
-    keepCard: '显示卡片',
-    keepNote: '本应用会自动允许自身后台运行。显示卡片反而更容易被误杀，所以默认不显示。<br>后台只做少量 shell 查询（内存 3 秒、电池 60 秒各一次），能耗极低，可放心常驻。<br>开启通知可进一步降低被误杀的概率。',
+    secTip: '界面提示', tipHelp: '控制界面上那些 ⓘ 提示要不要显示。', tipShow: '显示', tipHide: '隐藏',
+    keepCard: '显示后台卡片',
+    keepNote: '本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知可进一步降低被误杀的概率。',
     keepHidden: '已隐藏后台卡片', keepShown: '已显示后台卡片',
     keepFail: '系统没接受这个设置',
-    secAbout: '关于', extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
+    extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
     updCurrent: '当前版本 {v}', updLatest: '已是最新版本 {v}',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
-    updAuto: '自动检查更新', updAutoSub: '每 24 小时检查一次，默认关闭，可按需主动开启',
+    updAuto: '每 24 小时自动检查',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
     extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。',
     riskTitle: '使用前请留意',
@@ -1049,17 +1048,17 @@ var I18N = {
     langAuto: 'System', langZh: '中文', langEn: 'English',
     perfTip: 'Performance',
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
-    secTip: 'Hints', tipShow: 'Show', tipHide: 'Hide',
-    keepCard: 'Show card',
-    keepNote: 'The app allowlists itself so it can keep running in the background. Showing the recents card actually makes it easier to kill by accident, so it stays hidden by default.<br>In the background it only runs a few shell queries (memory every 3 s, battery every 60 s) — the power cost is negligible, so it is safe to keep resident.<br>Enabling notifications further reduces the chance of it being killed.',
+    secTip: 'Hints', tipHelp: 'Controls whether the little ⓘ hints are shown in the UI.', tipShow: 'Show', tipHide: 'Hide',
+    keepCard: 'Show recents card',
+    keepNote: 'The app allowlists itself so it can keep running in the background. Showing the recents card actually makes it easier to kill by accident, so it stays hidden by default. In the background it only runs a few shell queries — the power cost is negligible, so it is safe to keep resident. Enabling notifications further reduces the chance of it being killed.',
     keepHidden: 'Recents card hidden', keepShown: 'Recents card shown',
     keepFail: 'The system refused this setting',
-    secAbout: 'About', extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
+    extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
     updCurrent: 'Current version {v}', updLatest: 'Up to date ({v})',
     updNew: 'New version {v} available', updOpen: 'Get it',
     updFail: 'Check failed — network problem?',
-    updAuto: 'Auto-check for updates', updAutoSub: 'Checked every 24 h — off by default, turn it on if you want',
+    updAuto: 'Auto-check every 24 h',
     updAutoOn: 'Auto-check enabled', updAutoOff: 'Auto-check disabled',
     extLicense: 'GPL-3.0 — closed-source distribution not permitted. Need a proprietary licence? Open an issue.',
     riskTitle: 'Before you start',
@@ -2299,6 +2298,13 @@ function keepAliveInit(){
       })
       .catch(function(){ toast(T('tFail')); c.checked = !c.checked; });
   });
+})();
+
+/* 「界面提示」这个词本身看不出指什么，点 ⓘ 给一句解释 */
+(function(){
+  var i = document.getElementById('tipHelp');
+  if (!i) return;
+  i.addEventListener('click', function(e){ e.stopPropagation(); toast(T('tipHelp')); });
 })();
 
 /* 打开系统电池设置：读不到设计容量时，让用户自己去系统里看健康度 */
