@@ -346,9 +346,9 @@ Issues and pull requests are just as welcome — they help a lot too.
 
 [GPL-3.0](LICENSE).
 
-Use it, modify it, redistribute it — but **derivatives must stay open source; you may not repackage it
-with ads and ship it closed-source**. If you need it inside a proprietary product, open an issue to
-discuss a licence.
+Use it, modify it, redistribute it — but **derivatives must stay open source; repackaging it with ads
+and shipping it closed-source is strictly prohibited**. If you need it inside a proprietary product,
+open an issue to discuss a licence.
 
 ## Usage notes
 
