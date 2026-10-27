@@ -770,7 +770,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     </div>
 
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
-      <span class="setrow-lb" data-t="updTitle">检查更新</span>
+      <span class="setrow-lb" id="updLabel" data-ver="__APP_VERSION__">v —</span>
       <button class="edit" id="updBtn" data-t="updCheck" style="padding:0 12px">检查</button>
       <span class="upd-auto" data-t="updAuto">每 24 小时自动检查</span>
       <label class="switch"><input type="checkbox" id="updAutoChk"><span class="slider"></span></label>
@@ -780,15 +780,12 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <div class="upd-prog-txt" id="updProgTxt"></div>
     </div>
     <div class="ver-row">
-      <span id="updState" data-ver="__APP_VERSION__">—</span>
+      <span data-t="updPermNote">更新可自动继承 adb 授权</span>
       <span class="ver-links">
         <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
         <span class="ext-sep">|</span>
         <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
       </span>
-    </div>
-    <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="updPermNote">更新后自动继承权限，无需再次 adb 授权。</span>
     </div>
     <div class="ext-note" data-t="extLicense">本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。</div>
   </div>
@@ -948,8 +945,10 @@ var I18N = {
     extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
     updCurrent: 'v {v}', updLatest: '已是最新版本 {v}',
+    updLatestShort: '已是最新', updNewShort: '发现新版本',
+    updFailShort: '检查失败', updCheckingShort: '检查中',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
-    updPermNote: '更新后自动继承权限，无需再次 adb 授权。',
+    updPermNote: '更新可自动继承 adb 授权',
     updInstall: '下载并安装', updInstalling: '更新中……', updDownloading: '下载中 {p}%',
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
     updAuto: '每 24 小时自动检查并更新',
@@ -1071,8 +1070,10 @@ var I18N = {
     extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
     updCurrent: 'v {v}', updLatest: 'Up to date ({v})',
+    updLatestShort: 'Up to date', updNewShort: 'Update found',
+    updFailShort: 'Check failed', updCheckingShort: 'Checking',
     updNew: 'New version {v} available', updOpen: 'Get it',
-    updPermNote: 'Updates inherit the ADB grant — no re-authorization needed.',
+    updPermNote: 'Updates inherit the ADB grant',
     updInstall: 'Download & install', updInstalling: 'Updating…', updDownloading: 'Downloading {p}%',
     updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
     updFail: 'Check failed — network problem?',
@@ -2393,12 +2394,22 @@ function openExtUrl(url){
 
 /* 记录状态而不是直接写死文案：切换语言时要能按新语言重绘 */
 var updKind = 'current', updVar = '';
+/* 标题栏直接显示版本号；检查结果只临时顶替 1 秒，随后自动回到版本号。
+   用短文案（4~5 字）而不是「已是最新版本 2.1.0」，因为标签列只有 84px。 */
+var updTimer = null;
+
 function renderUpdState(){
-  var el = document.getElementById('updState');
+  var el = document.getElementById('updLabel');
   if (!el) return;
-  var k = {current:'updCurrent', latest:'updLatest', new:'updNew', fail:'updFail',
-           checking:'updChecking', installing:'updInstalling'}[updKind] || 'updCurrent';
-  el.textContent = updVar ? T2(k, {v: updVar}) : T(k);
+  if (updTimer){ clearTimeout(updTimer); updTimer = null; }
+  var k = {latest:'updLatestShort', new:'updNewShort',
+           fail:'updFailShort', checking:'updCheckingShort'}[updKind];
+  if (!k){ el.textContent = T2('updCurrent', {v: curVer()}); return; }
+  el.textContent = T(k);
+  updTimer = setTimeout(function(){
+    updKind = 'current';
+    el.textContent = T2('updCurrent', {v: curVer()});
+  }, 1000);
 }
 function setUpdState(kind, v){ updKind = kind; updVar = v || ''; renderUpdState(); }
 
