@@ -612,13 +612,22 @@ public class Bridge {
             int dis = android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
             int flags = android.content.pm.PackageManager.DONT_KILL_APP;
 
-            pm.setComponentEnabledSetting(new android.content.ComponentName(pkg, pkg + "." + target),
-                    en, flags);
+            // 🔴 只在状态真的不一致时才改。
+            // 无条件重设会广播 PACKAGE_CHANGED，桌面重新查组件时可能把图标当新组件重排，
+            // 表现就是「更新后图标跑到应用列表末尾」。默认名称/图标的情况下，
+            // 覆盖安装后 manifest 里的状态本来就对，这里一次都不用调。
+            android.content.ComponentName on = new android.content.ComponentName(pkg, pkg + "." + target);
+            if (pm.getComponentEnabledSetting(on) != en) {
+                pm.setComponentEnabledSetting(on, en, flags);
+            }
             String[] all = allAliases();
             for (int i = 0; i < all.length; i++) {
                 if (all[i].equals(target)) continue;
-                pm.setComponentEnabledSetting(
-                        new android.content.ComponentName(pkg, pkg + "." + all[i]), dis, flags);
+                android.content.ComponentName off =
+                        new android.content.ComponentName(pkg, pkg + "." + all[i]);
+                if (pm.getComponentEnabledSetting(off) != dis) {
+                    pm.setComponentEnabledSetting(off, dis, flags);
+                }
             }
 
             // 记下当前选择：常驻通知的标题要跟着变，升级/重启后也要能还原
