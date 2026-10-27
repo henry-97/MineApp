@@ -754,7 +754,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </div>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="battDesignNote" data-html="1">部分机型可能不支持自动读取容量，可<a href="#" id="lnkBattSet">查看</a>后手动输入。</span>
+      <span data-t="battDesignNote" data-html="1">部分机型可能不支持自动读取容量，可&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。</span>
     </div>
     <div class="setrow" style="margin-bottom:0">
       <span class="setrow-lb" data-t="keepCard">显示后台卡片</span>
@@ -891,7 +891,7 @@ var I18N = {
     battDesignUser: '手动设置',
     battDesignDevice: '按机型表匹配',
     battDesignDefault: '系统读不到，估算',
-    battDesignNote: '部分机型可能不支持自动读取容量，可<a href="#" id="lnkBattSet">查看</a>后手动输入。',
+    battDesignNote: '部分机型可能不支持自动读取容量，可&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。',
     battOpenSys: '去关于本机页查看 →',
     battDesignSaved: '已保存：{n} mAh',
     battDesignCleared: '已清空，回到自动估算',
