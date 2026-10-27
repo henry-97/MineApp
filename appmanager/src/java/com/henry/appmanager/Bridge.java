@@ -107,10 +107,14 @@ public class Bridge {
      * 存在 SharedPreferences 里，重启后仍然有效。
      */
     /**
-     * 打开系统的电池设置页，方便用户自己去看电池健康度。
+     * 打开「关于手机 / 我的设备」页 —— 电池设计容量在那里。
      *
-     * 用 ACTION_POWER_USAGE_SUMMARY 而不是厂商私有页面 —— 这个 intent 各家 ROM 都能解析，
-     * 落到「设置 → 电池」。电池健康度具体在哪个子页面各家不同，只能用户自己点进去。
+     * 为什么不是电池设置页：实测 Redmi Note 12 Turbo / HyperOS，
+     * 「我的设备」页直接写着「5000mAh(typ) 电池容量」，而「省电与电池 → 电池保护」
+     * 只有「电池健康度：正常」这种状态词，没有容量也没有百分比。
+     * 用户要填设计容量，就该看得到这个数字的页面。
+     *
+     * DEVICE_INFO_SETTINGS 是标准 action，各家 ROM 都解析，落点会因厂商略有差异。
      */
     /**
      * 保活初始化：把自己加进电源管理白名单，并按保存的设置隐藏最近任务卡片。
@@ -182,7 +186,7 @@ public class Bridge {
             public String run() {
                 try {
                     android.content.Intent i =
-                            new android.content.Intent("android.intent.action.POWER_USAGE_SUMMARY");
+                            new android.content.Intent("android.settings.DEVICE_INFO_SETTINGS");
                     i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
                     web.getContext().startActivity(i);
                     return "{\"ok\":true}";

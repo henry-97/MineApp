@@ -746,7 +746,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
       <span data-t="battDesignNote">留空则按 5000 估算。系统节点读不到时，填上你机型的实际设计容量，健康度才准。</span><br>
       <a href="#" id="lnkBattSet" class="ext" style="padding:4px 0;display:inline-block"
-         data-t="battOpenSys">去系统设置看电池健康度 →</a>
+         data-t="battOpenSys">去「我的设备」看电池容量 →</a>
     </div>
     <div class="sec" data-t="secKeep">保持运行</div>
     <div class="setrow">
@@ -889,8 +889,8 @@ var I18N = {
     battDesignAuto: '系统读取',
     battDesignUser: '手动设置',
     battDesignDefault: '系统读不到，估算',
-    battDesignNote: '留空按 5000 估算；读不到系统节点时，填真实容量更准。',
-    battOpenSys: '去系统设置看电池健康度 →',
+    battDesignNote: '留空按 5000 估算。「我的设备」页里的「电池容量」就是设计容量，照它填最准。',
+    battOpenSys: '去「我的设备」看电池容量 →',
     battDesignSaved: '已保存：{n} mAh',
     battDesignCleared: '已清空，回到自动估算',
     battDesignBad: '请填 1000~30000 之间的数值',
@@ -1010,8 +1010,8 @@ var I18N = {
     battDesignAuto: 'from system',
     battDesignUser: 'manual',
     battDesignDefault: 'unreadable, estimated',
-    battDesignNote: "Blank = assume 5000 mAh. Enter the real value if the system node is unreadable.",
-    battOpenSys: 'Open the system battery settings →',
+    battDesignNote: "Blank = assume 5000 mAh. The \"Battery capacity\" line under My device is the design capacity — copy that.",
+    battOpenSys: 'Open "My device" to see the battery capacity →',
     battDesignSaved: 'Saved: {n} mAh',
     battDesignCleared: 'Cleared — back to auto',
     battDesignBad: 'Enter a value between 1000 and 30000',
