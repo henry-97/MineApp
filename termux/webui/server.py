@@ -766,7 +766,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </label>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:4px;margin-bottom:12px">
-      <span data-t="keepNote">本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知可进一步降低被误杀的概率。</span>
+      <span data-t="keepNote">本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知和自启动可进一步降低被误杀的概率。</span>
     </div>
 
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
@@ -942,7 +942,7 @@ var I18N = {
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
     secTip: '界面提示', tipHelp: '控制界面上那些 ⓘ 提示要不要显示。', tipShow: '显示', tipHide: '隐藏',
     keepCard: '显示后台卡片',
-    keepNote: '本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知可进一步降低被误杀的概率。',
+    keepNote: '本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知和自启动可进一步降低被误杀的概率。',
     keepHidden: '已隐藏后台卡片', keepShown: '已显示后台卡片',
     keepFail: '系统没接受这个设置',
     extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
@@ -1065,7 +1065,7 @@ var I18N = {
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
     secTip: 'Hints', tipHelp: 'Controls whether the little ⓘ hints are shown in the UI.', tipShow: 'Show', tipHide: 'Hide',
     keepCard: 'Show recents card',
-    keepNote: 'The app allowlists itself so it can keep running in the background. Showing the recents card actually makes it easier to kill by accident, so it stays hidden by default. In the background it only runs a few shell queries — the power cost is negligible, so it is safe to keep resident. Enabling notifications further reduces the chance of it being killed.',
+    keepNote: 'The app allowlists itself so it can keep running in the background. Showing the recents card actually makes it easier to kill by accident, so it stays hidden by default. In the background it only runs a few shell queries — the power cost is negligible, so it is safe to keep resident. Enabling notifications and autostart further reduces the chance of it being killed.',
     keepHidden: 'Recents card hidden', keepShown: 'Recents card shown',
     keepFail: 'The system refused this setting',
     extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
