@@ -257,6 +257,9 @@ public class Bridge {
                     c.disconnect();
 
                     instPct = 100;
+                    // 先让进度条填满停留 1 秒再开始装 —— 否则界面还空着就被重启了，观感很差
+                    instPhase = "finishing";
+                    try { Thread.sleep(1000); } catch (InterruptedException ignored) { }
                     instPhase = "install";
                     // 装完要自动回到设置页：先落一个标记（同一份 app 数据，覆盖安装后还在）
                     String pkg = web.getContext().getPackageName();

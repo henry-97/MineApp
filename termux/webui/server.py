@@ -599,10 +599,9 @@ line-height:1.55;font-size:13.5px}
 .ver-row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11.5px;color:var(--ink3)}
 .ver-links{margin-left:auto;flex:none;display:flex;align-items:center;gap:6px}
 .ver-links .ext{font-size:11.5px;padding:2px 0}
-.upd-prog{margin:6px 0 2px}
-.upd-prog-bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
-.upd-prog-bar i{display:block;height:100%;width:0;background:#0f6e56;transition:width .25s ease}
-.upd-prog-txt{font-size:11.5px;color:var(--ink3);margin-top:5px}
+/* 更新按钮兼作进度条：用背景渐变填充，不改 DOM 结构 */
+.edit.prog{background-image:linear-gradient(to right,#cfe8dc var(--p,0%),transparent var(--p,0%));
+  transition:background-image .2s linear}
 #appTitle{cursor:pointer;display:flex;align-items:center;gap:5px;min-width:0}
 #appNameTx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 三处 ⓘ 提示统一用同一个字符字形，保证视觉大小完全一致（11.5px = 电池行/性能模式行字号） */
@@ -775,10 +774,6 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <span class="upd-auto" data-t="updAuto">每 24 小时自动检查</span>
       <label class="switch"><input type="checkbox" id="updAutoChk"><span class="slider"></span></label>
     </div>
-    <div class="upd-prog" id="updProg" style="display:none">
-      <div class="upd-prog-bar"><i id="updProgFill"></i></div>
-      <div class="upd-prog-txt" id="updProgTxt"></div>
-    </div>
     <div class="ver-row">
       <span data-t="updPermNote">更新可自动继承 adb 授权。</span>
       <span class="ver-links">
@@ -806,10 +801,13 @@ padding-top:10px;border-top:0.5px solid var(--line)}
 /* 每次安装（versionCode 变化）只提示并确认一次。
    按 versionCode 判断而不是布尔标记：覆盖安装时 localStorage 会保留，
    只认"同意过"就再也不会弹；只认布尔 false 又每次都弹。 */
-var RISK_VER = '__VERSION_CODE__';
-if (localStorage.getItem('riskOkVer') === RISK_VER) {
+/* 只在「全新安装」时提示：标记落 localStorage（覆盖安装保留、卸载清空）。
+   老版本用的是按 versionCode 记的 riskOkVer，这里做一次兼容迁移。 */
+if (localStorage.getItem('riskOk') === '1' || localStorage.getItem('riskOkVer')) {
+  localStorage.setItem('riskOk', '1');
   document.getElementById('risk').classList.remove('show');
 }
+
 </script>
 <div id="toast"></div>
 <div id="modal" class="modal">
@@ -949,7 +947,7 @@ var I18N = {
     updFailShort: '检查失败', updCheckingShort: '检查中', updRestart: '将自动重启',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
     updPermNote: '更新可自动继承 adb 授权。',
-    updInstall: '更新', updInstalling: '更新中……', updDownloading: '下载中 {p}%',
+    updInstall: '更新', updInstalling: '更新中', updFinishing: '完成', updDone: '完成',
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
     updAuto: '每 24 小时自动检查并更新',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
@@ -1074,7 +1072,7 @@ var I18N = {
     updFailShort: 'Check failed', updCheckingShort: 'Checking', updRestart: 'Will restart',
     updNew: 'New version {v} available', updOpen: 'Get it',
     updPermNote: 'Updates inherit the ADB grant.',
-    updInstall: 'Update', updInstalling: 'Updating…', updDownloading: 'Downloading {p}%',
+    updInstall: 'Update', updInstalling: 'Updating', updFinishing: 'Done', updDone: 'Done',
     updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
     updFail: 'Check failed — network problem?',
     updAuto: 'Auto-check & update every 24 h',
@@ -2263,7 +2261,9 @@ document.getElementById('themeBar').addEventListener('click', function(e){
 
 /* 启动风险提示：只能通过「同意并使用」关闭，点遮罩无效 */
 document.getElementById('riskOk').addEventListener('click', function(){
-  localStorage.setItem('riskOkVer', RISK_VER);   // 记住"这个版本已同意"
+  // 记「已同意」而不是「这个版本已同意」：覆盖安装保留、卸载重装清空，
+  // 正好对应「只有全新安装才需要再看一次」
+  localStorage.setItem('riskOk', '1');
   document.getElementById('risk').classList.remove('show');
 });
 document.getElementById('riskQuit').addEventListener('click', function(){
@@ -2459,34 +2459,44 @@ function checkUpdate(silent){
    失败（签名变了 / 系统拒绝）就退回浏览器下载，不让用户卡住。 */
 var progTimer = null;
 
-function showProg(on){
-  var box = document.getElementById('updProg');
-  if (box) box.style.display = on ? 'block' : 'none';
-  if (!on){
-    if (progTimer){ clearInterval(progTimer); progTimer = null; }
-    var f = document.getElementById('updProgFill');
-    if (f) f.style.width = '0';
-  }
+function stopProg(){
+  if (progTimer){ clearInterval(progTimer); progTimer = null; }
 }
 
-/* 每 300ms 拉一次进度：下载阶段画百分比，装包阶段显示「更新中……」 */
+/* 把「更新」按钮本身当进度条：背景按百分比填充，文字跟着变 */
+function paintProg(pct, text){
+  var btn = document.getElementById('updBtn');
+  if (!btn) return;
+  btn.classList.add('prog');
+  btn.style.setProperty('--p', (pct || 0) + '%');
+  if (text != null) btn.textContent = text;
+}
+
+function clearProg(){
+  var btn = document.getElementById('updBtn');
+  if (!btn) return;
+  btn.classList.remove('prog');
+  btn.style.removeProperty('--p');
+}
+
+/* 每 300ms 拉一次进度 */
 function pollProg(){
   fetch('/api/installprogress', {method:'POST'})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d) return;
-      var f = document.getElementById('updProgFill');
-      var t = document.getElementById('updProgTxt');
       if (d.phase === 'download'){
-        if (f) f.style.width = (d.pct || 0) + '%';
-        if (t) t.textContent = T2('updDownloading', {p: d.pct || 0});
+        paintProg(d.pct || 0, (d.pct || 0) + '%');
+      } else if (d.phase === 'finishing'){
+        paintProg(100, T('updFinishing'));   // 满格停留，随后才重启
       } else if (d.phase === 'install'){
-        if (f) f.style.width = '100%';
-        if (t) t.textContent = T('updInstalling');
+        paintProg(100, T('updInstalling'));
       } else if (d.phase === 'done'){
-        if (t) t.textContent = T('updInstallDone');
+        paintProg(100, T('updDone'));
       } else if (d.phase === 'fail'){
-        if (t) t.textContent = T('updInstallFail');
+        clearProg();
+        var b = document.getElementById('updBtn');
+        if (b) b.textContent = T('updInstallFail');
       }
     })
     .catch(function(){});
@@ -2494,11 +2504,11 @@ function pollProg(){
 
 function installUpdate(){
   var btn = document.getElementById('updBtn');
-  if (btn){ btn.disabled = true; btn.textContent = T('updInstalling'); }
+  if (btn) btn.disabled = true;
   setUpdState('restarting');          // 常驻：将自动重启
-  showProg(true);
+  paintProg(0, '0%');                 // 按钮自己当进度条
   pollProg();
-  if (progTimer) clearInterval(progTimer);
+  stopProg();
   progTimer = setInterval(pollProg, 300);
   fetch('/api/installupdate', {method:'POST', headers:{'Content-Type':'application/json'},
                                body: JSON.stringify({url: updApk})})
@@ -2506,10 +2516,10 @@ function installUpdate(){
     .then(function(d){
       pollProg();
       if (d && d.ok){ toast(T('updInstallDone')); return; }   // 进程随后会被系统替换
-      showProg(false);
+      stopProg(); clearProg();
       fallbackDownload();
     })
-    .catch(function(){ showProg(false); fallbackDownload(); });
+    .catch(function(){ stopProg(); clearProg(); fallbackDownload(); });
 }
 
 function fallbackDownload(){
