@@ -736,13 +736,6 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="sec" data-t="secIcon">应用图标</div>
     <div class="icon-grid" id="iconGrid"></div>
     <div class="setrow">
-      <span class="setrow-lb"><span data-t="secTip">界面提示</span><i class="i-dot" id="tipHelp" role="button">（ⓘ）</i></span>
-      <div class="sortbar" id="tipBar">
-        <button class="seg" data-tip="1" data-t="tipShow">显示</button>
-        <button class="seg" data-tip="0" data-t="tipHide">隐藏</button>
-      </div>
-    </div>
-    <div class="setrow">
       <span class="setrow-lb" data-t="battDesign">电池设计容量</span>
       <div style="flex:1;display:flex;align-items:center;gap:8px">
         <input id="battDesignIn" type="number" inputmode="numeric" min="1000" max="30000" step="100"
@@ -756,10 +749,16 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
       <span data-t="battDesignNote" data-html="1">部分机型可能不支持自动读取容量，可&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。</span>
     </div>
-    <div class="setrow" style="margin-bottom:0">
+    <div class="setrow" style="margin-bottom:0;gap:8px">
       <span class="setrow-lb" data-t="keepCard">显示后台卡片</span>
-      <label class="switch" style="margin-left:auto">
+      <label class="switch">
         <input type="checkbox" id="showCardChk"><span class="slider"></span>
+      </label>
+      <span class="setrow-lb" style="width:auto;margin-left:auto;white-space:nowrap">
+        <span data-t="secTip">显示界面提示</span><i class="i-dot" id="tipHelp" role="button">(ⓘ)</i>
+      </span>
+      <label class="switch">
+        <input type="checkbox" id="tipChk"><span class="slider"></span>
       </label>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:4px;margin-bottom:12px">
@@ -933,7 +932,7 @@ var I18N = {
     langAuto: '跟随系统', langZh: '中文', langEn: 'English',
     perfTip: '性能模式',
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
-    secTip: '界面提示', tipHelp: '控制界面上那些 ⓘ 提示要不要显示。', tipShow: '显示', tipHide: '隐藏',
+    secTip: '显示界面提示', tipHelp: '控制界面上那些 ⓘ 提示要不要显示。', tipShow: '显示', tipHide: '隐藏',
     keepCard: '显示后台卡片',
     keepNote: '本应用会自动允许自身后台运行。显示后台卡片反而更容易被误杀，所以默认不显示。后台只做少量 shell 查询，能耗极低，可放心常驻。开启通知和自启动可进一步降低被误杀的概率。',
     keepHidden: '已隐藏后台卡片', keepShown: '已显示后台卡片',
@@ -1058,7 +1057,7 @@ var I18N = {
     langAuto: 'System', langZh: '中文', langEn: 'English',
     perfTip: 'Performance',
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
-    secTip: 'Hints', tipHelp: 'Controls whether the little ⓘ hints are shown in the UI.', tipShow: 'Show', tipHide: 'Hide',
+    secTip: 'Show hints', tipHelp: 'Controls whether the little ⓘ hints are shown in the UI.', tipShow: 'Show', tipHide: 'Hide',
     keepCard: 'Show recents card',
     keepNote: 'The app allowlists itself so it can keep running in the background. Showing the recents card actually makes it easier to kill by accident, so it stays hidden by default. In the background it only runs a few shell queries — the power cost is negligible, so it is safe to keep resident. Enabling notifications and autostart further reduces the chance of it being killed.',
     keepHidden: 'Recents card hidden', keepShown: 'Recents card shown',
@@ -1243,9 +1242,8 @@ function renderSettings(){
   var g = document.querySelectorAll('#langBar .seg');
   for (var m = 0; m < g.length; m++)
     g[m].classList.toggle('on', g[m].getAttribute('data-lang') === langMode);
-  var p = document.querySelectorAll('#tipBar .seg');
-  for (var q = 0; q < p.length; q++)
-    p[q].classList.toggle('on', (p[q].getAttribute('data-tip') === '1') === showTip);
+  var tc = document.getElementById('tipChk');
+  if (tc) tc.checked = showTip;
   renderIcons();
 }
 
@@ -2270,10 +2268,8 @@ document.getElementById('riskQuit').addEventListener('click', function(){
   window.close();
 });
 
-document.getElementById('tipBar').addEventListener('click', function(e){
-  var b = e.target.closest('[data-tip]');
-  if (!b) return;
-  showTip = b.getAttribute('data-tip') === '1';
+document.getElementById('tipChk').addEventListener('change', function(){
+  showTip = this.checked;
   localStorage.setItem('showTip', showTip ? '1' : '0');
   // 重新打开「界面提示」时，把「清理不再提示」也一起复位 ——
   // 否则用户勾过一次之后，就再也没有入口能把它改回来了
