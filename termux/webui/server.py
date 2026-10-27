@@ -424,7 +424,8 @@ padding:7px 0;border-bottom:0.5px solid var(--line);color:var(--ink2)}
 .info-step b:first-child{flex:none;width:19px;height:19px;border-radius:50%;background:var(--bg);
 border:0.5px solid var(--line);color:var(--ink);font-size:11.5px;font-weight:600;
 display:flex;align-items:center;justify-content:center;margin-top:1px}
-.info-step code{background:var(--bg);padding:1px 6px;border-radius:5px;
+.info-step>span{flex:1;min-width:0}
+.info-step code{white-space:nowrap;display:inline-block;background:var(--bg);padding:1px 6px;border-radius:5px;
 font-family:ui-monospace,monospace;font-size:12px;color:var(--ink)}
 .info-note{font-size:12px;color:var(--ink3);line-height:1.65;margin-top:12px;
 padding-top:10px;border-top:0.5px solid var(--line)}
@@ -598,6 +599,10 @@ line-height:1.55;font-size:13.5px}
 .ver-row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11.5px;color:var(--ink3)}
 .ver-links{margin-left:auto;flex:none;display:flex;align-items:center;gap:6px}
 .ver-links .ext{font-size:11.5px;padding:2px 0}
+.upd-prog{margin:6px 0 2px}
+.upd-prog-bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.upd-prog-bar i{display:block;height:100%;width:0;background:#0f6e56;transition:width .25s ease}
+.upd-prog-txt{font-size:11.5px;color:var(--ink3);margin-top:5px}
 #appTitle{cursor:pointer;display:flex;align-items:center;gap:5px;min-width:0}
 #appNameTx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 三处 ⓘ 提示统一用同一个字符字形，保证视觉大小完全一致（11.5px = 电池行/性能模式行字号） */
@@ -738,7 +743,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </div>
     </div>
     <div class="setrow">
-      <span class="setrow-lb" data-t="battDesign">电池容量</span>
+      <span class="setrow-lb" data-t="battDesign">电池设计容量</span>
       <div style="flex:1;display:flex;align-items:center;gap:8px">
         <input id="battDesignIn" type="number" inputmode="numeric" min="1000" max="30000" step="100"
                placeholder="5000"
@@ -749,10 +754,10 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </div>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="battDesignNote">留空按 5000 估算。「我的设备」页里的「电池容量」就是设计容量，照它填最准。</span>
+      <span data-t="battDesignNote">部分机型可能不支持自动读取容量，可手动输入。</span>
       <a href="#" id="lnkBattSet" class="ext"
          style="padding:0 0 0 4px;font-size:11.5px;white-space:nowrap"
-         data-t="battOpenSys">去「我的设备」看电池容量 →</a>
+         data-t="battOpenSys">去关于本机页查看 →</a>
     </div>
     <div class="setrow" style="margin-bottom:0">
       <span class="setrow-lb" data-t="keepCard">显示后台卡片</span>
@@ -770,6 +775,10 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <span class="upd-auto" data-t="updAuto">每 24 小时自动检查</span>
       <label class="switch"><input type="checkbox" id="updAutoChk"><span class="slider"></span></label>
     </div>
+    <div class="upd-prog" id="updProg" style="display:none">
+      <div class="upd-prog-bar"><i id="updProgFill"></i></div>
+      <div class="upd-prog-txt" id="updProgTxt"></div>
+    </div>
     <div class="ver-row">
       <span id="updState" data-ver="__APP_VERSION__">—</span>
       <span class="ver-links">
@@ -777,6 +786,9 @@ padding-top:10px;border-top:0.5px solid var(--line)}
         <span class="ext-sep">|</span>
         <a class="ext" id="lnkFund" href="https://github.com/henry-97/MineApp#sponsor">打赏</a>
       </span>
+    </div>
+    <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
+      <span data-t="updPermNote">更新后自动继承权限，无需再次 adb 授权。</span>
     </div>
     <div class="ext-note" data-t="extLicense">本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。</div>
   </div>
@@ -876,18 +888,18 @@ var I18N = {
     guide3: '用数据线连接电脑，在电脑上执行：',
     guide4: '回到本应用，点右上角刷新',
     guide5: '手机弹出「允许 USB 调试吗」时，勾选「一律允许」再点确定',
-    guideNote: '以上步骤只需在每次手机重启后重做第 3、5 步；不重启则可长期使用。本应用不需要 Termux、Python 或 root。',
+    guideNote: '以上步骤只需在每次手机重启后重做第 3、5 步；不重启则可长期使用。本应用不需要 Termux、Python 或 root。<br>软件更新（覆盖安装）不会丢授权 —— adb 的授权记录在系统侧，与安装包无关。',
     ok: '知道了', cancel: '取消', confirm: '确定',
     battTitle: '电池健康度 {p}',
     battLevel: '当前电量', battSys: '系统状态',
     battMax: '历史最高', battLast: '最近一次学习', battMin: '历史最低（采用值）',
-    battDesign: '设计容量',
+    battDesign: '电池设计容量',
     battDesignAuto: '系统读取',
     battDesignUser: '手动设置',
     battDesignDevice: '按机型表匹配',
     battDesignDefault: '系统读不到，估算',
-    battDesignNote: '留空按 5000 估算。「我的设备」页里的「电池容量」就是设计容量，照它填最准。',
-    battOpenSys: '去「我的设备」看电池容量 →',
+    battDesignNote: '部分机型可能不支持自动读取容量，可手动输入。',
+    battOpenSys: '去关于本机页查看 →',
     battDesignSaved: '已保存：{n} mAh',
     battDesignCleared: '已清空，回到自动估算',
     battDesignBad: '请填 1000~30000 之间的数值',
@@ -935,11 +947,12 @@ var I18N = {
     keepFail: '系统没接受这个设置',
     extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
     updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
-    updCurrent: '当前版本 {v}', updLatest: '已是最新版本 {v}',
+    updCurrent: 'v {v}', updLatest: '已是最新版本 {v}',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
-    updInstall: '下载并安装', updInstalling: '正在下载安装…',
+    updPermNote: '更新后自动继承权限，无需再次 adb 授权。',
+    updInstall: '下载并安装', updInstalling: '更新中……', updDownloading: '下载中 {p}%',
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
-    updAuto: '每 24 小时自动检查',
+    updAuto: '每 24 小时自动检查并更新',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
     extLicense: '本项目以 GPL-3.0 开源，禁止闭源分发；如有闭源合作需求，可以提 Issue。',
     riskTitle: '使用前请留意',
@@ -1008,7 +1021,7 @@ var I18N = {
     battDesignUser: 'manual',
     battDesignDevice: 'matched by model',
     battDesignDefault: 'unreadable, estimated',
-    battDesignNote: "Blank = assume 5000 mAh. The \"Battery capacity\" line under My device is the design capacity — copy that.",
+    battDesignNote: 'Some models cannot read it automatically — enter it manually.',
     battOpenSys: 'Open "My device" to see the battery capacity →',
     battDesignSaved: 'Saved: {n} mAh',
     battDesignCleared: 'Cleared — back to auto',
@@ -1057,12 +1070,13 @@ var I18N = {
     keepFail: 'The system refused this setting',
     extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
     updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
-    updCurrent: 'Current version {v}', updLatest: 'Up to date ({v})',
+    updCurrent: 'v {v}', updLatest: 'Up to date ({v})',
     updNew: 'New version {v} available', updOpen: 'Get it',
-    updInstall: 'Download & install', updInstalling: 'Downloading…',
+    updPermNote: 'Updates inherit the ADB grant — no re-authorization needed.',
+    updInstall: 'Download & install', updInstalling: 'Updating…', updDownloading: 'Downloading {p}%',
     updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
     updFail: 'Check failed — network problem?',
-    updAuto: 'Auto-check every 24 h',
+    updAuto: 'Auto-check & update every 24 h',
     updAutoOn: 'Auto-check enabled', updAutoOff: 'Auto-check disabled',
     extLicense: 'GPL-3.0 — closed-source distribution not permitted. Need a proprietary licence? Open an issue.',
     riskTitle: 'Before you start',
@@ -1331,11 +1345,11 @@ function askInfo(html){
 function showGuide(){
   askInfo(
     '<div class="info-title">' + T('guideTitle') + '</div>'
-    + '<div class="info-step"><b>1</b>' + T('guide1') + '</div>'
-    + '<div class="info-step"><b>2</b>' + T('guide2') + '</div>'
-    + '<div class="info-step"><b>3</b>' + T('guide3') + '<br><code>adb tcpip 5555</code></div>'
-    + '<div class="info-step"><b>4</b>' + T('guide4') + ' <b>↻</b></div>'
-    + '<div class="info-step"><b>5</b>' + T('guide5') + '</div>'
+    + '<div class="info-step"><b>1</b><span>' + T('guide1') + '</span></div>'
+    + '<div class="info-step"><b>2</b><span>' + T('guide2') + '</span></div>'
+    + '<div class="info-step"><b>3</b><span>' + T('guide3') + '<br><code>adb tcpip 5555</code></span></div>'
+    + '<div class="info-step"><b>4</b><span>' + T('guide4') + ' ↻</span></div>'
+    + '<div class="info-step"><b>5</b><span>' + T('guide5') + '</span></div>'
     + '<div class="info-note">' + T('guideNote') + '</div>'
   );
 }
@@ -2426,18 +2440,59 @@ function checkUpdate(silent){
 
 /* 应用内静默安装：下载 → cp 到 /data/local/tmp → pm install -r，全程无系统安装器弹窗。
    失败（签名变了 / 系统拒绝）就退回浏览器下载，不让用户卡住。 */
+var progTimer = null;
+
+function showProg(on){
+  var box = document.getElementById('updProg');
+  if (box) box.style.display = on ? 'block' : 'none';
+  if (!on){
+    if (progTimer){ clearInterval(progTimer); progTimer = null; }
+    var f = document.getElementById('updProgFill');
+    if (f) f.style.width = '0';
+  }
+}
+
+/* 每 300ms 拉一次进度：下载阶段画百分比，装包阶段显示「更新中……」 */
+function pollProg(){
+  fetch('/api/installprogress', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d) return;
+      var f = document.getElementById('updProgFill');
+      var t = document.getElementById('updProgTxt');
+      if (d.phase === 'download'){
+        if (f) f.style.width = (d.pct || 0) + '%';
+        if (t) t.textContent = T2('updDownloading', {p: d.pct || 0});
+      } else if (d.phase === 'install'){
+        if (f) f.style.width = '100%';
+        if (t) t.textContent = T('updInstalling');
+      } else if (d.phase === 'done'){
+        if (t) t.textContent = T('updInstallDone');
+      } else if (d.phase === 'fail'){
+        if (t) t.textContent = T('updInstallFail');
+      }
+    })
+    .catch(function(){});
+}
+
 function installUpdate(){
   var btn = document.getElementById('updBtn');
   if (btn){ btn.disabled = true; btn.textContent = T('updInstalling'); }
   setUpdState('installing');
+  showProg(true);
+  pollProg();
+  if (progTimer) clearInterval(progTimer);
+  progTimer = setInterval(pollProg, 300);
   fetch('/api/installupdate', {method:'POST', headers:{'Content-Type':'application/json'},
                                body: JSON.stringify({url: updApk})})
     .then(function(r){ return r.json(); })
     .then(function(d){
+      pollProg();
       if (d && d.ok){ toast(T('updInstallDone')); return; }   // 进程随后会被系统替换
+      showProg(false);
       fallbackDownload();
     })
-    .catch(fallbackDownload);
+    .catch(function(){ showProg(false); fallbackDownload(); });
 }
 
 function fallbackDownload(){

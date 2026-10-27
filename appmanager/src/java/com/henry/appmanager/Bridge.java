@@ -169,6 +169,31 @@ public class Bridge {
         return MainActivity.applyHideFromRecents(web.getContext(), hide);
     }
 
+    /** 自更新的进度：idle / download / install / done / fail */
+    private static volatile String instPhase = "idle";
+    private static volatile int instPct = 0;
+    private static volatile long instBytes = 0, instTotal = 0;
+
+    /** 前端每 300ms 拉一次，用来画进度条 */
+    @JavascriptInterface
+    public void installprogress(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                try {
+                    JSONObject o = new JSONObject();
+                    o.put("phase", instPhase);
+                    o.put("pct", instPct);
+                    o.put("bytes", instBytes);
+                    o.put("total", instTotal);
+                    return o.toString();
+                } catch (Exception e) {
+                    return "{\"phase\":\"idle\",\"pct\":0}";
+                }
+            }
+        });
+    }
+
     /**
      * 应用内静默安装更新。三步，缺一不可：
      *
@@ -188,6 +213,10 @@ public class Bridge {
             public String run() {
                 java.io.File apk = null;
                 String tmp = "/data/local/tmp/mineapp_update.apk";
+                instPhase = "download";
+                instPct = 0;
+                instBytes = 0;
+                instTotal = 0;
                 try {
                     apk = new java.io.File(web.getContext().getExternalFilesDir(null), "update.apk");
                     java.net.HttpURLConnection c = (java.net.HttpURLConnection)
@@ -197,27 +226,40 @@ public class Bridge {
                     c.setRequestProperty("User-Agent", "MineApp");
                     int code = c.getResponseCode();
                     if (code != 200) return err("HTTP " + code);
+                    instTotal = c.getContentLength();
                     java.io.InputStream in = c.getInputStream();
                     java.io.FileOutputStream fos = new java.io.FileOutputStream(apk);
                     byte[] buf = new byte[16384];
                     int n;
                     long total = 0;
-                    while ((n = in.read(buf)) > 0) { fos.write(buf, 0, n); total += n; }
+                    int mark = 0;
+                    while ((n = in.read(buf)) > 0) {
+                        fos.write(buf, 0, n);
+                        total += n;
+                        instBytes = total;
+                        if (instTotal > 0) instPct = (int) (total * 100 / instTotal);
+                        // 每 ~3% 刷一次，避免过于频繁
+                        if (instPct >= mark + 3) mark = instPct;
+                    }
                     fos.close();
                     in.close();
                     c.disconnect();
 
+                    instPct = 100;
+                    instPhase = "install";
                     service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp);
                     String res = service.shellLong("pm install -r " + tmp);
                     service.shellLong("rm -f " + tmp);
 
                     boolean ok = res != null && res.contains("Success");
+                    instPhase = ok ? "done" : "fail";
                     JSONObject o = new JSONObject();
                     o.put("ok", ok);
                     o.put("bytes", total);
                     if (!ok) o.put("msg", res == null ? "" : res.trim());
                     return o.toString();
                 } catch (Throwable e) {
+                    instPhase = "fail";
                     return err(String.valueOf(e.getMessage()));
                 } finally {
                     if (apk != null) apk.delete();
