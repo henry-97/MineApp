@@ -40,9 +40,10 @@ Mine App takes a different route: **single-app deployment, without giving up an 
 Run `adb tcpip 5555` **once, at install time** — over a USB cable or through Wireless debugging
 (see **First-time setup** below). That makes adbd listen on `127.0.0.1:5555`.
 The app ships a minimal ADB client, authenticates with a key kept in its private storage, and then
-talks to `pm` / `am` / `cmd` directly.
+talks to `pm` / `am` / `cmd` directly. That key survives a covering install untouched —
+**so updates inherit the authorization automatically, with no need to run `adb` again**.
 
-**One app, and that is the whole setup.** A single 525 KB APK with zero third-party dependencies:
+**One app, and that is the whole setup.** A single 553 KB APK with zero third-party dependencies:
 no Shizuku, no Ice Box, no Hail, no resident daemon, no extra permissions.
 
 <p align="center">
@@ -161,7 +162,7 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 ## Install
 
-1. Grab `app-manager.apk` (~525 KB) from [Releases](https://github.com/henry-97/MineApp/releases)
+1. Grab `app-manager.apk` (~553 KB) from [Releases](https://github.com/henry-97/MineApp/releases)
 2. Or build it yourself (see below)
 
 ### First-time setup (once only)
