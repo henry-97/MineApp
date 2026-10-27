@@ -1655,7 +1655,6 @@ function applyData(d){
   if (d.battery) updateBattery(d.battery);
   // 第一次拿到数据说明 ADB 通了，这时才做保活初始化（加白名单要执行 shell）
   if (!keepInited){ keepInited = true; keepAliveInit(); }
-  else document.getElementById('battery').textContent = '电量 —';
   // 右上角固定显示归档/限制数量（内存总量已在底部汇总里）
   lastFrozen = d.frozen || 0;
   lastRestricted = d.restricted_count || 0;
