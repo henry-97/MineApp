@@ -686,6 +686,11 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <button class="ghost" id="btnUnrestrict" data-t="unrestrict">解限</button>
   </div>
 </footer>
+<div id="alert" class="sheet">
+  <div class="sheet-hd"><h2 id="alertTitle">提示</h2>
+    <button class="close" id="alertClose">×</button></div>
+  <div class="sheet-body" id="alertBody"></div>
+</div>
 <div id="tune" class="sheet">
   <div class="sheet-hd"><h2 data-t="tuneTitle">性能调优</h2><button class="close" id="tuneClose">×</button></div>
   <div class="sheet-body" id="tuneBody"></div>
@@ -983,6 +988,12 @@ var I18N = {
     riskFoot: '继续使用本软件，即表示自行承担因使用不当造成的风险。',
     riskAgree: '同意并使用', riskQuit: '退出',
     secIcon: '应用图标', iconExpand: '展开', iconCollapse: '折叠', loading: '读取中…',
+    secAgo: ' 秒前', minAgo: ' 分钟前',
+    perfPausedTitle: '系统频繁关闭性能模式',
+    perfPausedBody: '最近 1 分钟内被系统关闭了 {n} 次（{when}）。\n'
+      + '为避免和系统反复拉锯，已暂停自动维持性能模式。\n'
+      + '建议先到系统「省电与电池」里检查电源管理设置，或确认是否处于低电量 / 高温保护状态。\n'
+      + '再次手动打开性能模式即可恢复自动维持。',
     icSq: '方块', icCl: '四叶草', icG: '墨绿', icY: '金色', icK: '黑色',
     tIconOk: '图标已切换，桌面可能需要几秒刷新', tIconFail: '图标切换失败',
     tBusy: '正在处理，请稍候',
@@ -1109,6 +1120,13 @@ var I18N = {
     riskFoot: 'Continued use means accepting responsibility for any risk caused by misuse.',
     riskAgree: 'Agree and continue', riskQuit: 'Quit',
     secIcon: 'App icon', iconExpand: 'More', iconCollapse: 'Less', loading: 'Loading…',
+    secAgo: 's ago', minAgo: 'm ago',
+    perfPausedTitle: 'The system keeps turning performance mode off',
+    perfPausedBody: 'It was switched off {n} times in the last minute ({when}).\n'
+      + 'Auto-maintenance is paused so the app stops fighting the system.\n'
+      + 'Check the battery settings in Settings, or whether the phone is on low battery / '
+      + 'thermal protection.\n'
+      + 'Turning performance mode on again resumes auto-maintenance.',
     icSq: 'Blocks', icCl: 'Clover', icG: 'Green', icY: 'Gold', icK: 'Black',
     tIconOk: 'Icon changed; the launcher may take a few seconds', tIconFail: 'Failed to change icon',
     tBusy: 'Working, please wait',
@@ -1669,6 +1687,14 @@ function updateBanner(d){
    不再自动重拉一次列表；手动点刷新永远重新拉。 */
 var CACHE_KEY = 'listCache', CACHE_TTL = 60 * 1000;
 
+/* 通用说明面板 */
+function showAlert(title, body){
+  document.getElementById('alertTitle').textContent = title;
+  document.getElementById('alertBody').innerHTML = '<div class="panel-loading" style="padding:8px 4px 0">'
+    + body.replace(/\n/g, '<br>') + '</div>';
+  document.getElementById('alert').classList.add('show');
+}
+
 function applyData(d){
   updateBanner(d);
   // 用户希望保持性能模式：一旦发现被系统回退，立即重新施加
@@ -1679,6 +1705,21 @@ function applyData(d){
   document.getElementById('perfChk').checked = (d.perf === true) || perfWanted;
   apps = d.apps || [];
   if (!aotSynced){ aotSynced = true; syncAot(); }
+  // 系统反复取消性能模式 → 后台已暂停维持，这里说明一次（同一个时间点只弹一次）
+  if (d.perf_paused){
+    var sig = 'perfPausedShown:' + (d.perf_reverts || '');
+    if (localStorage.getItem(sig) !== '1'){
+      localStorage.setItem(sig, '1');
+      var parts = (d.perf_reverts || '').split(',').filter(function(x){ return x; });
+      var now = Date.now(), ago = [];
+      for (var i = parts.length - 1; i >= 0; i--){
+        var s2 = Math.round((now - parseInt(parts[i], 10)) / 1000);
+        ago.push(s2 < 60 ? s2 + T('secAgo') : Math.round(s2 / 60) + T('minAgo'));
+      }
+      showAlert(T('perfPausedTitle'),
+                T2('perfPausedBody', {n: parts.length, when: ago.join('、')}));
+    }
+  }
   if (d.with_pss) {
     hasPss = true;
     memTotal = d.mem_total || 0;
@@ -2111,6 +2152,9 @@ document.addEventListener('click', function(e){
   if (e.target && e.target.closest && e.target.closest('#btnTune')) openTune();
 });
 console.log('tune-ready');
+document.getElementById('alertClose').onclick = function(){
+  document.getElementById('alert').classList.remove('show');
+};
 document.getElementById('tuneClose').onclick = function(){
   document.getElementById('tune').classList.remove('show');
 };

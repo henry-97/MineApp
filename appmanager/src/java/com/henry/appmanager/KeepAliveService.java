@@ -91,7 +91,6 @@ public class KeepAliveService extends Service {
      * 改回去 —— 界面原来只在「列表刷新」时才纠正，两次刷新之间就一直是关的。
      * 这里挪到常驻服务，每轮都查一次；电量低于 20% 时不再强推，交给系统决定。
      */
-    private long lastPerfFix = 0;
     private boolean lowBattery() {
         try {
             android.os.BatteryManager bm =
@@ -102,14 +101,50 @@ public class KeepAliveService extends Service {
             return false;
         }
     }
+    /** 1 分钟内被系统取消超过这个次数，就停止对抗，交给用户处理 */
+    private static final int PERF_REVERT_LIMIT = 3;
+    private static final long PERF_WINDOW_MS = 60000L;
+
     private void keepPerfMode() {
         try {
-            if (!getSharedPreferences("app", 0).getBoolean("perfWanted", false)) return;
+            android.content.SharedPreferences sp = getSharedPreferences("app", 0);
+            if (!sp.getBoolean("perfWanted", false)) return;
+            if (sp.getBoolean("perfPaused", false)) return;   // 已暂停，等用户重新打开
             if (lowBattery()) return;
+            if (service == null) return;
+            if (service.perfOn()) return;                     // 还开着，什么都不做
+
+            // 到这里说明「用户要开、但系统把它关了」—— 记一次
             long now = System.currentTimeMillis();
-            if (now - lastPerfFix < 30000L) return;     // 最多 30 秒纠正一次，避免和系统来回拉锯
-            if (service == null || service.perfOn()) return;
-            lastPerfFix = now;
+            java.util.ArrayList<Long> ts = new java.util.ArrayList<Long>();
+            String raw = sp.getString("perfReverts", "");
+            if (raw != null && raw.length() > 0) {
+                for (String t : raw.split(",")) {
+                    try { ts.add(Long.parseLong(t.trim())); } catch (Exception ignored) { }
+                }
+            }
+            ts.add(now);
+            // 只保留最近 1 分钟内的
+            java.util.ArrayList<Long> keep = new java.util.ArrayList<Long>();
+            for (Long t : ts) if (now - t <= PERF_WINDOW_MS) keep.add(t);
+
+            if (keep.size() > PERF_REVERT_LIMIT) {
+                // 系统在反复取消 —— 停止对抗，让用户在界面上看到并自己决定
+                StringBuilder sb = new StringBuilder();
+                for (Long t : keep) {
+                    if (sb.length() > 0) sb.append(",");
+                    sb.append(t);
+                }
+                sp.edit().putBoolean("perfPaused", true)
+                        .putString("perfReverts", sb.toString()).apply();
+                return;
+            }
+            StringBuilder sb = new StringBuilder();
+            for (Long t : keep) {
+                if (sb.length() > 0) sb.append(",");
+                sb.append(t);
+            }
+            sp.edit().putString("perfReverts", sb.toString()).apply();
             service.setPerf(true);
         } catch (Throwable ignored) { }
     }

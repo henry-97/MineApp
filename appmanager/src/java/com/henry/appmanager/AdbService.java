@@ -1044,11 +1044,15 @@ public class AdbService {
 
     public String setPerf(boolean on) {
         JSONObject o = new JSONObject();
-        // 记住用户意图，供 KeepAliveService 在后台守着自己重新施加
+        // 记住用户意图，供 KeepAliveService 在后台守着自己重新施加。
+        // 用户主动打开 = 重置「频繁被系统取消」的计数与暂停状态。
         try {
             if (appCtx != null) {
-                appCtx.getSharedPreferences("app", 0).edit()
-                        .putBoolean("perfWanted", on).apply();
+                android.content.SharedPreferences.Editor e =
+                        appCtx.getSharedPreferences("app", 0).edit()
+                                .putBoolean("perfWanted", on);
+                if (on) e.putBoolean("perfPaused", false).putString("perfReverts", "");
+                e.apply();
             }
         } catch (Throwable ignored) { }
         try {
@@ -1279,6 +1283,13 @@ public class AdbService {
             out.put("adb_state", "ok");
             out.put("adb_msg", "");
             out.put("perf", getPerfMode());
+            // 「系统频繁取消性能模式」的暂停状态：前端据此弹一次说明
+            try {
+                android.content.SharedPreferences sp = appCtx.getSharedPreferences("app", 0);
+                boolean paused = sp.getBoolean("perfPaused", false);
+                out.put("perf_paused", paused);
+                if (paused) out.put("perf_reverts", sp.getString("perfReverts", ""));
+            } catch (Throwable ignored) { }
             if (withPss) {
                 long[] mem = getMemInfo();
                 out.put("mem_total", mem[0]);

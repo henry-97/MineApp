@@ -281,14 +281,24 @@ public class Bridge {
                     // 不再固定 sleep 等：每轮先试着拉起，再用 dumpsys 确认是否真的到前台，
                     // 成功就立刻退出。安装完成的那一刻就能拉起，比死等 2 秒快得多；
                     // 装得慢也不会漏（最多重试 15 轮 ≈ 8 秒）。
+                    // 🔴 分两段：先等安装把旧进程杀掉，再拉。
+                    // 原来只有一段「拉起来就确认前台」—— 而拉起的瞬间安装还没开始，
+                    // 应用本来就还在前台，第一轮就判定成功退出；紧接着 pm install 杀进程，
+                    // 结果更新完停在桌面（实测 2026-10-28 00:39 那次就是这样）。
                     String relaunch = "(setsid sh -c '"
-                            + "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do "
+                            // 第 1 段：等进程消失（= 安装真的开始替换了），最多等 15 秒
+                            + "for i in $(seq 1 150); do "
+                            + "pidof " + pkg + " >/dev/null 2>&1 || break; "
+                            + "sleep 0.1; "
+                            + "done; "
+                            // 第 2 段：进程没了再拉，拉到前台才退出
+                            + "for i in $(seq 1 20); do "
                             + "am start --activity-single-top -n " + pkg + "/.MainActivity >> "
                             + log + " 2>&1; "
-                            + "sleep 0.2; "
+                            + "sleep 0.3; "
                             + "dumpsys activity activities 2>/dev/null "
                             + "| grep -q \"topResumedActivity.*" + pkg + "\" && exit 0; "
-                            + "sleep 0.3; "
+                            + "sleep 0.2; "
                             + "done' >/dev/null 2>&1 &)";
 
                     String res = service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp
