@@ -185,24 +185,30 @@ public class Bridge {
     private static volatile int instPct = 0;
     private static volatile long instBytes = 0, instTotal = 0;
 
-    /** 前端每 300ms 拉一次，用来画进度条 */
+    /**
+     * 前端每 300ms 拉一次，用来画进度条。
+     *
+     * 🔴 这里**不能走 dispatch**：worker 是单线程池，installupdate 会独占它跑完整个
+     * 下载 + 安装，排在后面的进度查询永远轮不到 —— 界面就一直是 0%，直到进程被重启。
+     * 所以只读几个 volatile 字段，直接在 main 线程回调，不占队列。
+     */
     @JavascriptInterface
     public void installprogress(int id, String arg) {
-        dispatch(id, new Task() {
-            @Override
-            public String run() {
-                try {
-                    JSONObject o = new JSONObject();
-                    o.put("phase", instPhase);
-                    o.put("pct", instPct);
-                    o.put("bytes", instBytes);
-                    o.put("total", instTotal);
-                    return o.toString();
-                } catch (Exception e) {
-                    return "{\"phase\":\"idle\",\"pct\":0}";
+        try {
+            JSONObject o = new JSONObject();
+            o.put("phase", instPhase);
+            o.put("pct", instPct);
+            o.put("bytes", instBytes);
+            o.put("total", instTotal);
+            final String payload = JSONObject.quote(o.toString());
+            main.post(new Runnable() {
+                @Override
+                public void run() {
+                    web.evaluateJavascript(
+                            "window.__bridgeResult(" + id + "," + payload + ")", null);
                 }
-            }
-        });
+            });
+        } catch (Throwable ignored) { }
     }
 
     /**
