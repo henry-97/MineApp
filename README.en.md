@@ -9,7 +9,7 @@
 <h1 align="center">Mine App · App Manager</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-3.0.9-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-3.1-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-553%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -96,8 +96,8 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, launcher icon greys out |
 | **Restrict** | `appops RUN_IN_BACKGROUND` — restricts background activity; milder than freezing, the app can still be launched |
-| **Allowlist (exempt)** | Adds an app to the system's **Battery → No restrictions** list (`MILLET_NO_RESTRICT_APP`), so the system stops throttling it in the background. **It is the same list you would edit in Settings** — this is just a shortcut. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
-| **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling |
+| **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
+| **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling. **State is auto-detected**: after a reinstall or data wipe it reads back which apps are already AOT-compiled from `dumpsys package dexopt`, so the UI shows the truth instead of starting from zero |
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
 | **Memory sort** | Sort by PSS to see exactly what is eating RAM; the footer shows live system-wide memory usage |
 | **Activity monitor** | A **pulsing green dot** on the memory line marks apps that are actually running (based on the system's oom adj — plain cached processes and "recently used, now in background" do not count) |
@@ -119,7 +119,11 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 >
 > Verified on device: all 22 allowlisted apps report `standby bucket = 5 (EXEMPTED)` and appear in
 > `dumpsys deviceidle whitelist`; sampled apps outside the list do not. In other words, the in-app
-> "Millet allowlist" and the system's *Battery → No restrictions* edit **the very same list**.
+>
+> ⚠️ They are not the same thing: the Millet allowlist governs the **framework-level standby bucket /
+> doze exemption**, while the *Battery saver* toggle in MIUI's UI is separate state kept by
+> `com.miui.powerkeeper` and cannot be written through `settings`. To make the system UI show
+> "No restrictions", pick it once on the app-info page.
 
 > **On "Performance" mode: it is not actually a battery hog**
 >
@@ -154,7 +158,7 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 <p align="center">
   <sub>Customisable icons: six built-in sets (square / clover × green / gold / black), switchable
-  together with the app name from Settings.<br>
+  together with the app name from Settings — the first three show by default, "More" reveals the rest.<br>
   More will be added over time — pull requests with licence-compliant icons are welcome.</sub>
 </p>
 
@@ -175,7 +179,36 @@ The app talks to the adbd listening on **port 5555 of the same device**, so adbd
 listen on TCP. Do this **once, at install time** — after that it is all taps inside the app, with no
 PC involved, for as long as the phone stays booted.
 
-#### Path A — you have a USB cable (simplest)
+#### Path A — let an AI agent do it (zero-friction, best for beginners)
+
+You don't need to know adb, and you don't type any commands — do the phone-side prep, then hand the
+rest to any AI agent (ChatGPT / Claude / Gemini / Cursor — whatever you use).
+
+**Step 1 — enable Developer options and USB debugging on the phone**
+
+1. Settings → About phone → tap **"OS version" seven times** until it says developer mode is enabled
+2. Back out → Additional settings → **Developer options** → turn on **USB debugging**
+3. Plug into the computer; when the phone asks "Allow USB debugging?", tick
+   **"Always allow from this computer"** → OK
+
+**Step 2 — paste this into your AI agent**
+
+> Install and set up Mine App (an Android app manager) on this computer for me.
+> Project: <https://github.com/henry-97/MineApp>
+>
+> Read the "First-time setup" section of the README first, then do the following in order:
+> ① confirm `adb devices` lists my phone (install platform-tools first if adb is missing);
+> ② run `adb tcpip 5555`;
+> ③ download the latest APK from Releases and `adb install -r` it;
+> ④ open the app on my phone and prompt me to tap "Allow" if an ADB authorisation dialog appears;
+> ⑤ confirm the app can list my installed apps.
+>
+> Explain what you're about to do before each step; if something fails, diagnose it rather than asking
+> me to type commands.
+
+The agent downloads platform-tools, runs adb and installs the APK. All you tap is "Allow", twice.
+
+#### Path B — you have a USB cable (type one command yourself)
 
 ```bash
 # 1. Plug the phone into a PC
@@ -186,7 +219,7 @@ adb tcpip 5555
 
 Done.
 
-#### Path B — no cable (borrow the PC's Wireless debugging to run that one command)
+#### Path C — no cable (borrow the PC's Wireless debugging to run that one command)
 
 Phone and PC on the **same Wi-Fi**:
 
@@ -313,9 +346,9 @@ Issues and pull requests are just as welcome — they help a lot too.
 
 [GPL-3.0](LICENSE).
 
-In short: use it, modify it, redistribute it — but **derivatives must stay open source**. You may not
-repackage it with ads and ship it closed-source. If you need it inside a proprietary product, open an
-issue to discuss a licence.
+Use it, modify it, redistribute it — but **derivatives must stay open source; you may not repackage it
+with ads and ship it closed-source**. If you need it inside a proprietary product, open an issue to
+discuss a licence.
 
 ## Usage notes
 
