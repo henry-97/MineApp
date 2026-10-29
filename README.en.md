@@ -197,7 +197,7 @@ rest to any AI agent (ChatGPT / Claude / Gemini / Cursor — whatever you use).
 > Project: <https://github.com/henry-97/MineApp>
 >
 > Read the "First-time setup" section of the README first, then do the following in order:
-> ① confirm `adb devices` lists my phone (install platform-tools first if adb is missing);
+> ① confirm `adb devices` lists my phone (install platform-tools first if adb is missing; if the command is still not found afterwards, use the full path or add it to PATH as described under "Make sure `adb` works");
 > ② run `adb tcpip 5555`;
 > ③ download the latest APK from Releases and `adb install -r` it;
 > ④ open the app on my phone and prompt me to tap "Allow" if an ADB authorisation dialog appears;
@@ -207,6 +207,56 @@ rest to any AI agent (ChatGPT / Claude / Gemini / Cursor — whatever you use).
 > me to type commands.
 
 The agent downloads platform-tools, runs adb and installs the APK. All you tap is "Allow", twice.
+
+#### Make sure `adb` works (both Path B and C need this)
+
+**Case 1: `adb devices` lists your device** → run this one command and you're done:
+
+```bash
+adb tcpip 5555
+```
+
+Unplug → open the app → tick "Always allow" → Allow.
+
+**Case 2: `'adb' is not recognized` / `command not found`** → not installed, or not on PATH.
+Fix it with the steps below, then come back and run the command above.
+
+**Not installed**: download [platform-tools](https://developer.android.com/tools/releases/platform-tools)
+and extract it to a fixed folder — `C:\platform-tools` on Windows, `~/platform-tools` on macOS / Linux.
+
+**Installed but still not found**, add it to PATH:
+
+```powershell
+# Windows PowerShell — current window only, gone once you close it
+$env:Path += ";C:\platform-tools"
+adb devices
+```
+
+```bash
+# macOS / Linux
+export PATH="$HOME/platform-tools:$PATH"
+adb devices
+```
+
+To make it permanent (Windows, current user only — does not touch the system PATH):
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path",
+  [Environment]::GetEnvironmentVariable("Path","User") + ";C:\platform-tools", "User")
+```
+
+> You must **close and reopen the terminal** afterwards — already-open windows keep the old PATH.
+> On macOS / Linux, add the `export` line to `~/.zshrc` or `~/.bashrc`.
+
+**Don't want to touch PATH?** Call it by full path instead (the leading `&` is required on Windows):
+
+```powershell
+& "C:\platform-tools\adb.exe" tcpip 5555
+```
+
+```bash
+~/platform-tools/adb tcpip 5555
+```
 
 #### Path B — you have a USB cable (type one command yourself)
 

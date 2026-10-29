@@ -185,7 +185,7 @@ App 连的是**本机 5555 端口的 adbd**，所以要先让 adbd 监听 TCP。
 > 项目地址：<https://github.com/henry-97/MineApp>
 >
 > 请先读 README 的「首次配置」一节，然后依次完成：
-> ① 确认 `adb devices` 能看到我的手机（没有 adb 就先装 platform-tools）；
+> ① 确认 `adb devices` 能看到我的手机（没有 adb 就先装 platform-tools；装完命令还找不到就用全路径，或者按 README 里「先确认 adb 能用」加进 PATH）；
 > ② 执行 `adb tcpip 5555`；
 > ③ 从 Releases 下载最新的 APK，`adb install -r` 装上；
 > ④ 在手机上打开 App，如果弹出 ADB 授权框，提醒我点「允许」；
@@ -194,6 +194,56 @@ App 连的是**本机 5555 端口的 adbd**，所以要先让 adbd 监听 TCP。
 > 每一步执行前先说明你要做什么；遇到报错先诊断原因，不要让我手动敲命令。
 
 Agent 会自己下载 platform-tools、跑 adb、装 APK。你只需要在手机上点两次「允许」。
+
+#### 先确认 adb 能用（路径 B / C 都要这一步）
+
+**情况一：`adb devices` 能列出设备** → 直接跑这一条就完事：
+
+```bash
+adb tcpip 5555
+```
+
+拔线 → 打开 App → 手机上勾「一律允许」→ 允许。
+
+**情况二：报「不是内部或外部命令」/ `command not found`** → 没装，或者装了但没加进 PATH。
+按下面的说明弄好，再回来跑上面那条命令。
+
+**没装的话**：下载 Google 官方的 [platform-tools](https://developer.android.com/tools/releases/platform-tools)，
+解压到一个固定目录 —— Windows 建议 `C:\platform-tools`，macOS / Linux 建议 `~/platform-tools`。
+
+**装了但命令还是找不到**，把它加进 PATH：
+
+```powershell
+# Windows PowerShell —— 只对当前窗口有效，关掉就没了
+$env:Path += ";C:\platform-tools"
+adb devices
+```
+
+```bash
+# macOS / Linux
+export PATH="$HOME/platform-tools:$PATH"
+adb devices
+```
+
+想永久生效（Windows，只改当前用户，不动系统级 PATH）：
+
+```powershell
+[Environment]::SetEnvironmentVariable("Path",
+  [Environment]::GetEnvironmentVariable("Path","User") + ";C:\platform-tools", "User")
+```
+
+> 执行完必须**关掉终端重新打开**，已经开着的窗口不会生效。
+> macOS / Linux 把那行 `export` 写进 `~/.zshrc` 或 `~/.bashrc` 即可。
+
+**懒得改环境变量**也行，直接用全路径调用（Windows 下前面的 `&` 不能省）：
+
+```powershell
+& "C:\platform-tools\adb.exe" tcpip 5555
+```
+
+```bash
+~/platform-tools/adb tcpip 5555
+```
 
 #### 路径 B：有数据线（自己敲一条命令）
 
