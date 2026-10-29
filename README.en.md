@@ -327,6 +327,11 @@ the APK therefore share identical UI logic — no second implementation to keep 
 
 If this project helped you, you can buy me a coffee. **Entirely optional — no feature is gated.**
 
+**Preferred: [GitHub Sponsors](https://github.com/sponsors/henry-97)** — monthly or one-off,
+publicly recorded, and easy for me to thank you properly.
+
+Or scan directly:
+
 <div align="center">
   <table>
     <tr>

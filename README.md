@@ -306,6 +306,11 @@ MineApp/
 
 如果这个项目帮到了你，可以请我喝杯咖啡。**完全自愿，不影响任何功能。**
 
+**推荐渠道：[GitHub Sponsors](https://github.com/sponsors/henry-97)** —— 按月或一次性都行，
+支持记录公开、也方便我致谢。
+
+也可以直接扫码：
+
 <div align="center">
   <table>
     <tr>

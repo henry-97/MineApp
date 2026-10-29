@@ -1,10 +1,10 @@
 # 赞助入口配置。各条目填好后取消注释，仓库右上角就会出现 Sponsor 按钮。
 #
-# 目前用的是 README「赞助」一节里的收款码，所以这里全部保持注释状态。
+# 主渠道是 GitHub Sponsors，README 里的收款码作为备选。
 
-# GitHub Sponsors —— 已提交申请（澳门地区，在官方支持地区列表内）。
-# 审核通过、profile 上线后，取消下面这行的注释即可：
-# github: henry-97
+# GitHub Sponsors —— 已通过审核，profile 已上线（2026-10-29）。
+# https://github.com/sponsors/henry-97
+github: henry-97
 
 # 第三方平台（任选其一）：
 # ko_fi: your_username

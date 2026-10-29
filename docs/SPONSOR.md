@@ -8,6 +8,18 @@
 
 If this project helped you, you can buy me a coffee. **Entirely optional — no feature is gated.**
 
+## GitHub Sponsors
+
+推荐用这个渠道 —— 按月或一次性都行，支持记录公开，也方便致谢。
+
+The preferred channel — monthly or one-off, publicly recorded, easy to thank you properly.
+
+**[→ github.com/sponsors/henry-97](https://github.com/sponsors/henry-97)**
+
+---
+
+## 扫码 · Scan
+
 <div align="center">
   <table>
     <tr>
