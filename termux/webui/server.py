@@ -581,9 +581,14 @@ button:disabled{opacity:.45}
 .primary{background:#0f6e56;color:#fff}
 .ghost{background:var(--bg);color:var(--ink);border:0.5px solid var(--line)}
 #toast{position:fixed;left:50%;bottom:116px;transform:translateX(-50%) translateY(10px);
-background:#2c2c2a;color:#fff;padding:12px 18px;border-radius:16px;font-size:14px;opacity:0;
+/* 跟随主题：浅色主题用浅底深字，深色主题用深底浅字。
+   以前写死 #2c2c2a 黑底，浅色主题下很突兀，也和系统 Toast 不一致 */
+background:var(--card);color:var(--ink);border:0.5px solid var(--line);
+box-shadow:0 6px 24px rgba(0,0,0,.14);
+padding:12px 18px;border-radius:16px;font-size:14px;opacity:0;
 transition:opacity .2s,transform .2s;pointer-events:none;z-index:40;
 width:70vw;max-width:70vw;box-sizing:border-box;text-align:center}
+html.dark #toast{box-shadow:0 6px 24px rgba(0,0,0,.5)}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* 长文案（失败原因这类）：单行居中读不动，而且窄框会把它顶成一条竖长条 */
 #toast.long{width:88vw;max-width:88vw;text-align:left;
@@ -1331,6 +1336,9 @@ function applyTheme(){
   var dark = themeMode === 'dark'
     || (themeMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.classList.toggle('dark', dark);
+  // 把当前主题告诉 Java 层：应用外的原生 Toast 也要用同一套配色，
+  // 否则会出现「应用内深色、应用外白色」的割裂（浏览器里没有 Bridge，跳过）
+  try { if (window.Bridge && Bridge.theme) Bridge.theme(0, dark ? '1' : '0'); } catch (e) {}
 }
 
 function renderSettings(){

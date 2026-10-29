@@ -595,6 +595,18 @@ public class Bridge {
      * 优先点页码圆点（稳、快）；但**有的桌面/主题没有小圆点**，
      * 那就退回滑动：先把页滑到最左，再向右滑 page-1 次。
      */
+    /**
+     * 用户是否已经要求中断（定位/索引通用）。
+     *
+     * 🔴 以前 jumpToPage 里的检查写成 `locDeadline > 0 && (...)`，
+     *    而 locDeadline 只有**定位**会设；建索引时它是 0 → 检查形同虚设，
+     *    用户碰了屏幕（已提示「已暂停」）后它还会继续滑两下
+     *    （实测被问到「显示已暂停但滚动了两次屏幕」）。
+     */
+    private boolean interrupted() {
+        return touchHit || locStop || idxStop;
+    }
+
     private boolean jumpToPage(int[] pager, int page) {
         int maxPage = pager[1] > 0 ? pager[1] : 3;   // 读不到页码时按 3 页算（不是 8：空页会让它一直滑）
         if (page < 1 || page > maxPage) return false;
@@ -633,7 +645,7 @@ public class Bridge {
             // 用户一碰屏幕就立刻收手：以前这里连滑 8 次 + 逐页修正，
             // 全程没有检查，用户自己也在滑，两边抢着滑，要滑到目标页才停
             // （实测被投诉「滑动很多次才停下」）。
-            if (locDeadline > 0 && (locStop || touchHit)) {
+            if (interrupted()) {
                 dbg("跳页被打断（用户操作），停止滑动");
                 return false;
             }
@@ -643,7 +655,7 @@ public class Bridge {
         // 🔴 滑完必须验证真的到了目标页：没到就**逐页修正**，不要放弃也不要继续瞎滑。
         //    没有圆点的机型只能靠滑，一次滑动跨的页数受惯性/屏幕尺寸影响，不总等于 1，
         //    所以「按差值滑 N 次」经常过冲或不足（实测目标第 2 页停在第 3 页）。
-        if (locDeadline > 0 && (locStop || touchHit)) return false;
+        if (interrupted()) return false;
         int[] after = parsePager(dumpHome(true));
         if (after[0] > 0 && after[0] != page) {
             dbg("跳页偏差：目标第 " + page + " 页，实际第 " + after[0] + " 页，开始逐页修正");
@@ -653,14 +665,14 @@ public class Bridge {
                 int ftx = fix > 0 ? 200 : 950;
                 int n = Math.min(Math.abs(fix), 8);
                 for (int i = 0; i < n; i++) {
-                    if (locDeadline > 0 && (locStop || touchHit)) {
+                    if (interrupted()) {
                         dbg("逐页修正被打断（用户操作）");
                         return false;
                     }
                     service.shellLong("input swipe " + ffx + " 1200 " + ftx + " 1200 260");
                     try { Thread.sleep(320); } catch (InterruptedException ignored) { }
                 }
-                if (locDeadline > 0 && (locStop || touchHit)) return false;
+                if (interrupted()) return false;
                 after = parsePager(dumpHome(true));
             }
             if (after[0] > 0 && after[0] != page) {
@@ -1475,8 +1487,7 @@ public class Bridge {
         main.post(new Runnable() {
             @Override public void run() {
                 try {
-                    android.widget.Toast.makeText(web.getContext().getApplicationContext(), msg,
-                            android.widget.Toast.LENGTH_LONG).show();
+                    makeUiToast(msg, android.widget.Toast.LENGTH_LONG).show();
                 } catch (Throwable ignored) { }
             }
         });
@@ -1487,8 +1498,7 @@ public class Bridge {
         main.post(new Runnable() {
             @Override public void run() {
                 try {
-                    android.widget.Toast.makeText(web.getContext().getApplicationContext(), msg,
-                            android.widget.Toast.LENGTH_SHORT).show();
+                    makeUiToast(msg, android.widget.Toast.LENGTH_SHORT).show();
                 } catch (Throwable ignored) { }
             }
         });
@@ -1501,8 +1511,59 @@ public class Bridge {
      * 而不是排一串新的，所以能做出「一直显示 + 秒数在跳」的效果。
      * 通知栏那条继续留着当兜底（万一 MIUI 把后台 Toast 拦了）。
      */
-    private android.widget.Toast tickToast;
+    private UiToast tickToast;
     private Runnable tickTask;
+
+    /**
+     * 原生 Toast 统一走这里：**跟随应用主题**（浅色=白底深字，深色=深底浅字）。
+     *
+     * 为什么不用系统默认样式：系统 Toast 只跟随**系统**的深浅色，App 里切了主题就两边不一致
+     * （应用内黑、应用外白，实测被投诉）。
+     *
+     * 限制：Android 11+ 对后台应用的自定义 Toast 视图有限制。所以先 makeText 把文本建好
+     * （保证一定能显示），再尝试 setView 换成我们的样式；失败就退回系统样式，不会空白。
+     */
+    private static class UiToast {
+        final android.widget.Toast toast;
+        final android.widget.TextView tv;      // null = 用的是系统样式
+        UiToast(android.widget.Toast t, android.widget.TextView v) { toast = t; tv = v; }
+        void setText(String s) {
+            try {
+                if (tv != null) tv.setText(s); else toast.setText(s);
+            } catch (Throwable ignored) { }
+        }
+        void show() { try { toast.show(); } catch (Throwable ignored) { } }
+        void cancel() { try { toast.cancel(); } catch (Throwable ignored) { } }
+    }
+
+    /** 前端 applyTheme() 上报当前主题，供原生 Toast 用同一套配色。 */
+    @JavascriptInterface
+    public void theme(int id, String arg) {
+        darkUi = "1".equals(arg);
+    }
+
+    private static volatile Boolean darkUi;   // null = 前端还没上报过
+
+    private boolean isDarkUi() {
+        Boolean v = darkUi;
+        if (v != null) return v;
+        try {
+            int m = web.getContext().getResources().getConfiguration().uiMode
+                    & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            return m == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private UiToast makeUiToast(String text, int duration) {
+        android.content.Context c = web.getContext().getApplicationContext();
+        android.widget.Toast t = android.widget.Toast.makeText(c, text, duration);
+        // 🔴 不要 setView 自定义视图：Android 11+ 会**丢掉后台应用的自定义 Toast**，
+        //    实测改成自定义视图后，「正在寻找应用」整条提示直接不显示了（比样式不一致严重得多）。
+        //    应用外的 Toast 只能跟**系统**深浅色；应用内那条 HTML Toast 才是跟 App 主题走的。
+        return new UiToast(t, null);
+    }
 
     private void startTickToast(final String base) {
         stopTickToast();
@@ -1511,8 +1572,7 @@ public class Bridge {
             @Override public void run() {
                 try {
                     if (tickToast == null) {
-                        tickToast = android.widget.Toast.makeText(web.getContext().getApplicationContext(), base,
-                                android.widget.Toast.LENGTH_LONG);
+                        tickToast = makeUiToast(base, android.widget.Toast.LENGTH_LONG);
                     }
                     long sec = (System.currentTimeMillis() - t0) / 1000;
                     tickToast.setText(sec >= 1 ? base + "  " + sec + "s" : base);
@@ -1588,8 +1648,7 @@ public class Bridge {
                 @Override public void run() {
                     try {
                         if (tickToast == null) {
-                            tickToast = android.widget.Toast.makeText(web.getContext().getApplicationContext(), result,
-                                    android.widget.Toast.LENGTH_LONG);
+                            tickToast = makeUiToast(result, android.widget.Toast.LENGTH_LONG);
                         }
                         tickToast.setText(result);
                         tickToast.show();
@@ -1634,7 +1693,7 @@ public class Bridge {
     private static final String LOC_CH = "app_manager_locate_v2";
     private static final int LOC_ID = 1002;
     private long locStartAt;
-    private android.widget.Toast locToast;
+    private UiToast locToast;
 
     /** 屏幕底部的 Toast：比通知栏可靠得多（HyperOS 会把通知折叠进「更多通知」）。 */
     private void toastLoc(final String text) {
@@ -1645,8 +1704,7 @@ public class Bridge {
                     try {
                         // 先取消上一条，否则连续调用会排队，进度提示永远慢好几拍
                         if (locToast != null) locToast.cancel();
-                        locToast = android.widget.Toast.makeText(
-                                ctx.getApplicationContext(), text, android.widget.Toast.LENGTH_SHORT);
+                        locToast = makeUiToast(text, android.widget.Toast.LENGTH_SHORT);
                         locToast.show();
                     } catch (Throwable ignored) { }
                 }
