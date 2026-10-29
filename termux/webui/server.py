@@ -333,8 +333,9 @@ def do_batch(items, action):
                 good = True
             else:
                 # MIUI/HyperOS 拒绝禁用系统应用（Cannot disable system packages），
-                # 退回卸载当前用户：APK 在系统分区不受影响、可由「释放」恢复，
-                # 但用户数据可能丢失 —— UI 已就此提示。
+                # 退回卸载当前用户：系统分区里的 APK 副本不受影响，可由「释放」恢复，
+                # 但卸载会清掉该用户的数据 —— 恢复相当于重新安装，数据回不来。
+                # UI 已按这个口径提示（「系统分区副本保留，恢复后相当于重新安装」）。
                 r2 = adb(["shell", "pm", "uninstall", "--user", "0", p])
                 good = "success" in r2.lower()
         elif action == "unfreeze":
@@ -884,6 +885,16 @@ function aotKey(a){ return a.pkg + '@' + (a.ver || 0); }
 var aotTimeout = new Set(JSON.parse(localStorage.getItem('aotTimeout') || '[]'));
 function saveAotTimeout(){ localStorage.setItem('aotTimeout', JSON.stringify(Array.from(aotTimeout))); }
 var busy = false;
+/* 列表刷新中：这期间点定位按钮会落空（列表正在重建 DOM），
+   所以先把请求排起来，刷新结束立刻补执行，并给用户一句明确提示。 */
+var refreshing = false;
+var pendingLoc = null;
+function flushPendingLoc(){
+  if (!pendingLoc) return;
+  var p = pendingLoc;
+  pendingLoc = null;
+  doLocate(p.pkg, p.label, p.force, p.c, p.now);
+}
 var sortMode = (function(){
   var s = localStorage.getItem('sortMode');
   return (s === 'mem' || s === 'idle' || s === 'name') ? s : 'default';
@@ -1004,12 +1015,16 @@ var I18N = {
     riskFoot: '继续使用本软件，即表示自行承担因使用不当造成的风险。',
     riskAgree: '同意并使用', riskQuit: '退出',
     secIcon: '应用图标', iconExpand: '展开', iconCollapse: '折叠', loading: '读取中…',
-    secAgo: ' 秒前', minAgo: ' 分钟前', locating: '正在寻找应用',
+    secAgo: ' 秒前', minAgo: ' 分钟前', locating: '正在寻找应用（碰屏幕可停止）',
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
     locAskTitle: '还没初始化查找索引',
     locAskBody: '直接查找要一页一页翻桌面、逐个开文件夹，可能需要几十秒；初始化会把所有应用的位置记下来，之后查找几乎秒出。\n初始化约需几分钟，期间可以随时操作手机打断，下次接着来。建议先初始化。',
     locAskInit: '先初始化（推荐）', locAskDirect: '直接查找',
+    locStaleTitle: '查找索引已过期',
+    locStaleBody: '桌面变动之后，之前建的位置索引可能已经不准，定位会退化成逐页翻找，可能要几十秒。\n建议重建一次（几分钟），之后查找几秒内就能出结果。',
+    locSlowTip: '没有可用索引，正在逐页查找，可能要几十秒。建议先到设置页「初始化应用查找功能」',
+    locWaitRefresh: '正在刷新列表，完成后自动定位',
     idxNote: '遍历桌面所有页和文件夹，建立应用位置索引。过程中可以随时操作手机打断，下次点「开始」会接着来。应用较多时约需数分钟，完成后查找会快很多。 <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
     idxAgeMin: '上次完成：{n} 分钟前', idxAgeHour: '上次完成：{n} 小时前', idxAgeDay: '上次完成：{n} 天前',
     idxDone: '索引完成，共 {n} 个应用', idxPaused: '已暂停，下次点「开始」接着来', idxFail: '初始化失败',
@@ -1025,7 +1040,7 @@ var I18N = {
     tNoArchived: '所选应用中没有已归档的',
     tPickRestrict: '请先勾选要限制的应用',
     tPickUnrestrict: '请先勾选要解除限制的应用',
-    cfmArchive: '归档所选的 {n} 个应用？\n\n普通应用只做禁用，数据完整保留；\n系统应用无法禁用，会改为卸载当前用户，其数据可能丢失。',
+    cfmArchive: '归档所选的 {n} 个应用？\n\n普通应用只做禁用，数据完整保留；\n系统应用无法禁用，会卸载当前用户的安装。系统分区里的副本仍在，恢复后相当于重新安装 —— 应用能回来，但数据会丢。',
     cfmRestrict: '将限制 {n} 个应用的后台运行。\n\n效果：切到后台后系统会限制其 CPU、网络与唤醒，但这些应用可能因此收不到消息通知。',
     cfmUnrestrict: '恢复 {n} 个应用的后台运行权限？',
     cfmRelease: '还原 {n} 个应用？',
@@ -1144,12 +1159,16 @@ var I18N = {
     riskFoot: 'Continued use means accepting responsibility for any risk caused by misuse.',
     riskAgree: 'Agree and continue', riskQuit: 'Quit',
     secIcon: 'App icon', iconExpand: 'More', iconCollapse: 'Less', loading: 'Loading…',
-    secAgo: 's ago', minAgo: 'm ago', locating: 'Looking for app',
+    secAgo: 's ago', minAgo: 'm ago', locating: 'Looking for app (tap to stop)',
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
     locAskTitle: 'No location index yet',
     locAskBody: 'A direct lookup walks every page and opens every folder — it can take tens of seconds. Building the index first records where every app lives, so later lookups are near-instant.\nIndexing takes a few minutes; you can interrupt it any time and resume later. Building it first is recommended.',
     locAskInit: 'Build index first', locAskDirect: 'Look up directly',
+    locStaleTitle: 'Location index is stale',
+    locStaleBody: 'The desktop changed since the index was built, so a lookup may fall back to walking every page — that can take tens of seconds.\nRebuilding takes a few minutes and makes later lookups near-instant.',
+    locSlowTip: 'No usable index — walking every page, this may take tens of seconds. Build the index in Settings for faster lookups.',
+    locWaitRefresh: 'Refreshing the list — locating right after',
     idxNote: 'Walks every home-screen page and folder to index where each app lives. You can interrupt it any time by using the phone — tapping Start again resumes. Takes a few minutes on a full phone, and makes later lookups much faster. <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
     idxAgeMin: 'Last built {n} min ago', idxAgeHour: 'Last built {n} h ago', idxAgeDay: 'Last built {n} days ago',
     idxDone: 'Index complete — {n} apps', idxPaused: 'Paused — tap Start to resume', idxFail: 'Indexing failed',
@@ -1166,7 +1185,7 @@ var I18N = {
     tNoArchived: 'None of the selected apps is archived',
     tPickRestrict: 'Select apps to restrict first',
     tPickUnrestrict: 'Select apps to unrestrict first',
-    cfmArchive: 'Archive {n} selected apps?\n\nNormal apps are only disabled; their data is kept.\nSystem apps cannot be disabled, so the current user is uninstalled and their data may be lost.',
+    cfmArchive: 'Archive {n} selected apps?\n\nNormal apps are only disabled; their data is kept.\nSystem apps cannot be disabled, so the current user\'s install is uninstalled. The copy on the system partition remains, so restoring reinstalls it — the app comes back, but its data is gone.',
     cfmRestrict: 'Restrict background activity for {n} apps?\n\nThe system will limit their CPU, network and wakeups in the background, so they may stop receiving notifications.',
     cfmUnrestrict: 'Restore background permission for {n} apps?',
     cfmRelease: 'Restore {n} apps?',
@@ -1515,8 +1534,12 @@ function rowHtml(a){
   var cls = 'li' + (a.frozen ? ' frozen' : (a.restricted ? ' restricted' : ''))
           + (on ? ' on' : '');
   var aotOn = aotDone.has(aotKey(a));
-  // 只有桌面能放图标的应用才给「定位」按钮；纯服务类应用没有启动入口
-  var locBtn = a.launcher
+  // 只有桌面能放图标的应用才给「定位」按钮；纯服务类应用没有启动入口。
+  // 索引建好之后再加一条：索引里没有这个应用名 = 桌面上没有它的图标
+  // （装了但没拖到桌面的，比如 阿里巴巴/1688），定位必然失败 —— 直接不显示按钮，
+  // 比让用户点一个注定找不到的按钮好。索引没建时仍然显示，点了会引导去建索引。
+  var canLocate = a.launcher && (a.idx_ready ? !!a.in_index : true);
+  var locBtn = canLocate
       ? '<span class="loc-btn" data-loc="' + a.pkg + '" role="button" aria-label="locate">'
       +   '<svg viewBox="0 0 24 24" aria-hidden="true">'
       +     '<path d="M12 21.5c0 0-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/>'
@@ -1779,6 +1802,19 @@ function applyData(d){
   idxAt = (d && d.idx_at) || 0;
   try { localStorage.setItem('idxAt', String(idxAt)); } catch (e) {}
   updateIdxAt();
+  // 索引刚跑完 → 自动回到设置页，让用户直接看到「上次完成：刚刚」。
+  // 🔴 不能只靠 Java 注入 __idxDone：索引要跑 1 分钟，这期间 App 常被系统
+  //    回收，WebView 重建后 window.__idxDone 根本不存在，注入静默失败，
+  //    结果就是「只回到了 App，停在列表页」。这里按「服务器端 idx_at」
+  //    判断，页面重载也能补上（idxAck 记住已提示过的那个时间点）。
+  if (idxAt > 0 && Date.now() - idxAt < 5 * 60 * 1000){
+    var ack = 0;
+    try { ack = parseInt(localStorage.getItem('idxAck') || '0', 10) || 0; } catch (e) {}
+    if (ack !== idxAt){
+      try { localStorage.setItem('idxAck', String(idxAt)); } catch (e) {}
+      openSettings();
+    }
+  }
   if (!aotSynced){ aotSynced = true; syncAot(); }
   // 系统反复取消性能模式 → 后台已暂停维持，这里说明一次（同一个时间点只弹一次）
   if (d.perf_paused){
@@ -1876,6 +1912,7 @@ function load(force){
   // 1 分钟内的缓存直接用它，不必再拉；过期的缓存也已经画出来了，继续后台刷新
   if (state === 1) return;
 
+  refreshing = true;
   var btn = document.getElementById('btnRefresh');
   if (btn) btn.disabled = true;
   spinStart();
@@ -1895,11 +1932,15 @@ function load(force){
     applyData(d);
     if (btn) btn.disabled = false;
     spinFinish();
+    refreshing = false;
+    flushPendingLoc();
   }).catch(function(e){
     clearTimeout(authTimer);
     if (state === 0 && el) el.textContent = T('connFail');
     if (btn) btn.disabled = false;
     spinFinish();
+    refreshing = false;
+    flushPendingLoc();
     toast(T2('tConnFail', {m: e}));
   });
 }
@@ -2060,6 +2101,9 @@ var idxReady = false;
 var idxAt = parseInt(localStorage.getItem('idxAt') || '0', 10) || 0;
 var LOC_TTL = 2 * 60 * 1000;
 var LOC_FORCE = 15000;
+/* 索引多久算过期。桌面经常变（装应用、拖图标、开关文件夹），
+   超过这个时长就提示重建 —— 否则会一直用失效索引，定位慢得像没反应。 */
+var IDX_STALE_MS = 24 * 3600 * 1000;
 
 document.getElementById('list').addEventListener('click', function(e){
   var btn = e.target.closest('[data-loc]');
@@ -2073,10 +2117,27 @@ document.getElementById('list').addEventListener('click', function(e){
   var c = locCache[pkg];
   locLastPkg = pkg; locLastAt = now;
 
-  // 还没建过索引：首次点击先问一次要不要初始化（问过就不再打扰）
-  if (!idxReady && localStorage.getItem('locIdxAsked') !== '1'){
-    localStorage.setItem('locIdxAsked', '1');
-    showChoice(T('locAskTitle'), T('locAskBody'), [
+  // 🔴 刷新中列表正在重建，这会儿点定位大概率落空（实测「点了没反应」）。
+  //    记下意图，刷新一结束立刻执行，同时告诉用户已经收到点击。
+  if (refreshing){
+    pendingLoc = {pkg: pkg, label: label, force: force, c: c, now: now};
+    toast(T('locWaitRefresh'));
+    return;
+  }
+
+  // 没索引、或索引已过期：问一次要不要初始化。
+  //
+  // 🔴 以前用 localStorage['locIdxAsked'] === '1' 做永久标记，结果是
+  //    用户第一次点了「直接查找」之后**永远不会再被提示**，索引一直没建，
+  //    每次定位都退化成遍历整个桌面（实测 47 秒），看起来就像「点了没反应」。
+  //    改成记时间戳：24 小时内不重复打扰，过期后重新提示。
+  var askedAt = parseInt(localStorage.getItem('locIdxAskedAt') || '0', 10) || 0;
+  var askedRecently = askedAt > 0 && (Date.now() - askedAt < IDX_STALE_MS);
+  var idxStale = idxAt > 0 && (Date.now() - idxAt > IDX_STALE_MS);
+  if ((!idxReady || idxStale) && !askedRecently){
+    localStorage.setItem('locIdxAskedAt', String(Date.now()));
+    showChoice(T(idxStale ? 'locStaleTitle' : 'locAskTitle'),
+               T(idxStale ? 'locStaleBody' : 'locAskBody'), [
       {label: T('locAskInit'), cb: function(){ goInitIndex(); }},
       {label: T('locAskDirect'), cb: function(){ doLocate(pkg, label, force, c, now); }},
       {label: T('cancel'), cb: function(){}}
@@ -2095,6 +2156,9 @@ function markIdxDone(){
   idxReady = true;
   updateIdxAt();
   load(true);
+  // 回到设置页：让用户直接看到「上次完成：刚刚」和新的索引状态
+  openSettings();
+  setTimeout(updateIdxAt, 300);
 }
 window.__idxDone = markIdxDone;
 
@@ -2131,12 +2195,22 @@ function doLocate(pkg, label, force, c, now){
   //    桌面一改（拖图标、装新应用、开关文件夹），旧坐标就落到空白处，
   //    表现是「定位偏了，长按变成了长按桌面」。坐标必须每次 dump 现取。
   //    缓存里的 page 只当页号提示传给后端，省一次索引读取。
+  // 🔴 没有索引时定位要遍历整个桌面（实测 47 秒）。这期间界面上只有底部一个
+  //    很小的「正在寻找应用 Ns」计时，用户很容易以为「点了没反应」。
+  //    5 秒还没结果就补一句明确的说明，告诉他为什么慢、怎么变快。
+  var slowTip = null;
+  if (!idxReady){
+    slowTip = setTimeout(function(){
+      toast(T('locSlowTip'), 4200);
+    }, 5000);
+  }
   fetch('/api/locate', {method:'POST', headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({label: label, hint: T('locating'),
                                               page: (c && c.page) || -1,
                                               found: T('locFound'), nf: T('locNotFound')})})
     .then(function(r){ return r.json(); })
     .then(function(d){
+      if (slowTip) clearTimeout(slowTip);
       if (d && d.found){
         locCache[pkg] = {page: d.page, t: Date.now()};
         try { localStorage.setItem('locCache', JSON.stringify(locCache)); } catch (e) {}
@@ -2145,7 +2219,7 @@ function doLocate(pkg, label, force, c, now){
         try { localStorage.setItem('locCache', JSON.stringify(locCache)); } catch (e) {}
       }
     })
-    .catch(function(){});
+    .catch(function(){ if (slowTip) clearTimeout(slowTip); });
 }
 
 document.getElementById('q').addEventListener('input', render);

@@ -9,7 +9,7 @@
 <h1 align="center">Mine App · 应用管理器</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-3.6-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-3.7.2-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-553%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -86,7 +86,7 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 
 | 功能 | 说明 |
 |---|---|
-| **归档（冻结）** | `pm disable-user`，应用彻底不跑、不出现在最近任务，桌面图标变灰 |
+| **归档（冻结）** | `pm disable-user`，应用彻底不跑、不出现在最近任务，**桌面图标直接消失**（MIUI / HyperOS 不显示变灰态） |
 | **限制** | `appops RUN_IN_BACKGROUND`，限制后台活动，比冻结温和，应用还能被拉起 |
 | **白名单（免限制）** | 把应用加进系统的 doze / standby 白名单（`MILLET_NO_RESTRICT_APP`），系统不再按「长时间未使用」压制它的后台活动。**注意：这不等同于 MIUI 界面上的「省电策略 → 无限制」** —— 那个开关由 `com.miui.powerkeeper` 自己维护，写 settings 改不动，需要到应用信息页单独设置。名单内的应用会显示「白名单」胶囊并置顶；页底实时汇总已选应用的 PSS 合计 |
 | **AOT 编译** | `cmd package compile -m speed`，把 dex 提前编译成本地码，冷启动更快；**可单应用针对性编译，也可批量**，编译时轨道内显示已用时。**状态自动识别**：重装或清数据后，会从系统 `dumpsys package dexopt` 批量读回哪些应用已经 AOT，界面照实显示，不用重新编译一遍 |
@@ -347,7 +347,8 @@ MineApp/
   `persist.adb.tcp.port` 在非 root 下写不了（SELinux 拦 shell），所以没有免重启的办法。
 - **AOT 全量编译很吃内存**：dex2oat 峰值可占到 2GB 以上，可用内存不足 2.5GB 时 App 会直接拦下并说明原因；
   极少数超大应用（插件 dex 极多，如抖音极速版）即使内存充足也可能被 dex2oat 放弃，状态会停在 `speed-profile`。
-- 归档应用后，桌面图标会变灰但不消失；想彻底隐藏需要 launcher 配合。
+- 归档应用后，**桌面图标会直接消失**（实测 MIUI / HyperOS 不显示「变灰」的禁用态）。
+  这是系统行为，不是被卸载 —— 在 App 里点「还原」就会回到桌面原来的位置。
 
 - **公共网络下别乱点「允许 USB 调试」**：`adb tcpip 5555` 会让 adbd 监听所有网卡，
   同网段的人能触发你的授权弹窗；误点「允许」等于把手机控制权交出去，可能导致资料泄露。

@@ -136,6 +136,18 @@ public class AdbService {
         }
     }
 
+    /**
+     * 旁路命令：走**普通连接**（lock），和定位/索引用的长连接（longLock）互不阻塞。
+     * 给「触摸监听」这类后台探活用 —— 它会阻塞几秒，绝不能占长连接。
+     */
+    public String shellQuick(String cmd, int timeoutMs) {
+        try {
+            return sh(cmd, timeoutMs);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private String sh(String cmd) throws Exception {
         return sh(cmd, 30000, false);
     }
@@ -1133,6 +1145,14 @@ public class AdbService {
     private boolean locIndexReady = false;
     /** 上次索引完成的时间戳，0 表示从没建过 */
     private long locIndexAt = 0;
+    /**
+     * 索引里出现的应用名集合。
+     *
+     * 用来判断「这个应用在桌面上到底有没有图标」——装了很多应用但没往桌面拖的
+     * （比如 阿里巴巴/1688），定位永远找不到，这种就不该显示定位按钮，
+     * 让用户点一个必然失败的按钮比不显示更糟。
+     */
+    private java.util.Set<String> locIndexKeys = new java.util.HashSet<String>();
 
     /** 有启动入口（桌面能放图标）的包；labelMap 里本来就在查，这里留存下来给前端判断 */
     private static Set<String> launchableSet = null;
@@ -1201,6 +1221,23 @@ public class AdbService {
 
     private String buildList(boolean withPss) throws Exception {
 
+        // 🔴 索引信息必须在组装 apps 之前读好：下面每个应用要按 in_index 决定
+        //    显不显示定位按钮。放到函数末尾去读的话，这一轮用的永远是上一轮的旧值
+        //    （表现就是「明明桌面上没这个应用，定位按钮还在」）。
+        try {
+            locIndexAt = appCtx == null ? 0
+                    : appCtx.getSharedPreferences("app", 0).getLong("locIndexAt", 0);
+            locIndexReady = locIndexAt > 0;
+            java.util.Set<String> keys = new java.util.HashSet<String>();
+            if (locIndexReady && appCtx != null) {
+                org.json.JSONObject idx = new org.json.JSONObject(
+                        appCtx.getSharedPreferences("app", 0).getString("locIndex", "{}"));
+                java.util.Iterator<String> it = idx.keys();
+                while (it.hasNext()) keys.add(it.next());
+            }
+            locIndexKeys = keys;
+        } catch (Throwable ignored) { }
+
         Set<String> active = pkgs("--user", "0");
         Set<String> all = pkgs("-u", "--user", "0");
         if (all.isEmpty()) all = active;
@@ -1254,6 +1291,8 @@ public class AdbService {
                 a.put("restricted", restricted.contains(pkg));
                 // 只有桌面能放图标的才显示「定位」按钮；纯服务类应用没有启动入口
                 a.put("launcher", launchableSet != null && launchableSet.contains(pkg));
+                // 桌面索引里没有这个名字 = 桌面上没有它的图标，定位必然失败 → 不显示按钮
+                a.put("in_index", locIndexKeys != null && locIndexKeys.contains(label));
                 a.put("idx_ready", locIndexReady);
             } catch (Exception ignored) { }
             apps.add(a);
@@ -1296,11 +1335,6 @@ public class AdbService {
             out.put("adb_ok", true);
             out.put("adb_state", "ok");
             out.put("adb_msg", "");
-            try {
-                locIndexAt = appCtx == null ? 0
-                        : appCtx.getSharedPreferences("app", 0).getLong("locIndexAt", 0);
-                locIndexReady = locIndexAt > 0;
-            } catch (Throwable ignored) { }
             out.put("idx_at", locIndexAt);
             out.put("perf", getPerfMode());
             // 「系统频繁取消性能模式」的暂停状态：前端据此弹一次说明

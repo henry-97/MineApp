@@ -9,7 +9,7 @@
 <h1 align="center">Mine App · App Manager</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-3.6-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-3.7.2-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-553%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -94,7 +94,7 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 | Feature | What it does |
 |---|---|
-| **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, launcher icon greys out |
+| **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, and its **launcher icon disappears entirely** (MIUI / HyperOS doesn't render a greyed-out state) |
 | **Restrict** | `appops RUN_IN_BACKGROUND` — restricts background activity; milder than freezing, the app can still be launched |
 | **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling. **State is auto-detected**: after a reinstall or data wipe it reads back which apps are already AOT-compiled from `dumpsys package dexopt`, so the UI shows the truth instead of starting from zero |
@@ -367,8 +367,9 @@ the APK therefore share identical UI logic — no second implementation to keep 
 - **Full AOT compilation is memory-hungry.** dex2oat can peak above 2 GB, so the app refuses to start
   below ~2.5 GB of free memory and tells you why. A few very large apps (many plugin dex files, e.g.
   TikTok Lite) may be abandoned by dex2oat even with plenty of RAM, leaving the status at `speed-profile`.
-- A frozen app's launcher icon greys out rather than disappearing; hiding it completely needs
-  launcher support.
+- After archiving, the **launcher icon disappears entirely** (MIUI / HyperOS doesn't show a
+  greyed-out disabled state). That's system behaviour, not an uninstall — tap "Restore" in the
+  app and it returns to its original spot.
 
 - **Never approve an unexpected "Allow USB debugging?" dialog on a public network.**
   `adb tcpip 5555` makes adbd listen on all interfaces, so anyone on the same network can trigger

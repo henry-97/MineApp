@@ -43,7 +43,45 @@ public class Bridge {
     public Bridge(AdbService service, WebView web) {
         this.service = service;
         this.web = web;
+        // 通知栏那个「停止」按钮按下来时，走广播把两个停止标志立起来。
+        // 光靠「前台不是桌面就停」不够：用户只是想滑动桌面看看、或者把图标拖一下，
+        // 前台一直是桌面，检测不到，所以必须给一个能按的开关。
+        try {
+            android.content.IntentFilter f =
+                    new android.content.IntentFilter(ACTION_STOP);
+            android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
+                @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+                    locStop = true;
+                    idxStop = true;
+                }
+            };
+            // 用 ApplicationContext 注册：Activity 被回收重建后，这个接收器依然有效，
+            // 「停止」按钮才不会因为 Activity 重建而失灵。
+            android.content.Context ac = web.getContext().getApplicationContext();
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                ac.registerReceiver(r, f, android.content.Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                ac.registerReceiver(r, f);
+            }
+        } catch (Throwable ignored) { }
     }
+
+    private static final String ACTION_STOP = "com.henry.appmanager.STOP_LOCATE";
+    /**
+     * 定位的停止标志（通知栏「停止」按钮 / 用户切走都会置起）。
+     *
+     * 🔴 必须是 **static**：定位/建索引跑在后台线程上，线程属于**旧的** Bridge 实例。
+     *    索引一跑 1 分钟，这期间 Activity 常被系统回收重建，新建的 Bridge 注册的
+     *    广播接收器只会去改**新实例**的标志，旧线程永远看不到 → 点了「停止」也没用。
+     *    实测被投诉「无论点哪里都无法打断查找」。
+     */
+    private static volatile boolean locStop;
+    private static volatile boolean idxStop;
+    /** 本轮定位的起始时间，用来兜底超时（防止无限扫）。 */
+    private volatile long locDeadline;
+    /** 「碰屏幕就停」：后台线程轮询真触摸屏，命中置 true。 */
+    private volatile boolean touchHit;
+    private volatile boolean touchWatching;
 
     private void dispatch(final int id, final Task task) {
         worker.execute(new Runnable() {
@@ -468,6 +506,36 @@ public class Bridge {
         return out;
     }
 
+    /**
+     * 带名字的文件夹列表：{x, y, 文件夹名}。
+     *
+     * 定位时要靠它「直接打开目标文件夹」，而不是逐个点开试 ——
+     * 每个文件夹一次 dump 约 2.3 秒，桌面有 6 个文件夹就是十几秒，
+     * 用户看到的就是「明明建过索引还要从头翻」。
+     */
+    private static java.util.List<Object[]> findFoldersNamed(String xml) {
+        java.util.List<Object[]> out = new java.util.ArrayList<Object[]>();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("<node\\b[^>]*>").matcher(xml);
+        while (m.find()) {
+            String tag = m.group();
+            String desc = nodeAttr(tag, "content-desc");
+            if (desc == null || desc.isEmpty()) continue;
+            String cls = nodeAttr(tag, "class");
+            if (cls == null || !cls.endsWith("RelativeLayout")) continue;
+            if (!"true".equals(nodeAttr(tag, "clickable"))) continue;
+            String bounds = nodeAttr(tag, "bounds");
+            if (bounds == null) continue;
+            java.util.regex.Matcher b = java.util.regex.Pattern
+                    .compile("\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]").matcher(bounds);
+            if (!b.find()) continue;
+            int x1 = Integer.parseInt(b.group(1)), y1 = Integer.parseInt(b.group(2));
+            int x2 = Integer.parseInt(b.group(3)), y2 = Integer.parseInt(b.group(4));
+            out.add(new Object[]{(x1 + x2) / 2, (y1 + y2) / 2, desc});
+        }
+        return out;
+    }
+
     /** 长按坐标：必须带 2~4px 位移，零距离会被当成点击直接打开应用 */
     private void longPress(int x, int y) {
         service.shellLong("input swipe " + x + " " + y + " " + (x + 4) + " " + y + " 1500");
@@ -526,7 +594,7 @@ public class Bridge {
      * 那就退回滑动：先把页滑到最左，再向右滑 page-1 次。
      */
     private boolean jumpToPage(int[] pager, int page) {
-        int maxPage = pager[1] > 0 ? pager[1] : 8;   // 读不到页码时按最多 8 页算
+        int maxPage = pager[1] > 0 ? pager[1] : 3;   // 读不到页码时按 3 页算（不是 8：空页会让它一直滑）
         if (page < 1 || page > maxPage) return false;
         int idx = 2 + (page - 1) * 2;
         if (idx + 1 < pager.length) {
@@ -541,22 +609,115 @@ public class Bridge {
         //    jumpToPage，8 页 × 8 次就变成几十次无效滑动，
         //    用户看到屏幕一个劲乱滑（实测被投诉）。
         //    按差值滑，整轮扫描总共只滑 N-1 次，方向和次数都符合预期。
-        int cur = pager[0] > 0 ? pager[0] : 1;
+        int cur;
+        if (pager[0] > 0) {
+            cur = pager[0];
+        } else {
+            // 🔴 解析不到当前页时**不能直接当第 1 页**：实际可能已经在最后一页，
+            //    那样 diff 会一次比一次大，滑动次数累加，表现是「在最后一页疯狂右滑、
+            //    反复遍历同一页」（2026-10-29 实测被投诉）。先 HOME 回默认页再算。
+            dbg("页号解析失败，先回默认页再跳");
+            service.shellLong("input keyevent 3");
+            try { Thread.sleep(400); } catch (InterruptedException ignored) { }
+            cur = 1;
+        }
         int diff = page - cur;
         if (diff == 0) return true;
         int fx = diff > 0 ? 950 : 200;      // 下一页：手指从右往左
         int tx = diff > 0 ? 200 : 950;
-        for (int i = 0; i < Math.abs(diff); i++) {
+        // 🔴 硬上限：差值算错也不许无限滑
+        int steps = Math.min(Math.abs(diff), 8);
+        for (int i = 0; i < steps; i++) {
+            // 用户一碰屏幕就立刻收手：以前这里连滑 8 次 + 逐页修正，
+            // 全程没有检查，用户自己也在滑，两边抢着滑，要滑到目标页才停
+            // （实测被投诉「滑动很多次才停下」）。
+            if (locDeadline > 0 && (locStop || touchHit)) {
+                dbg("跳页被打断（用户操作），停止滑动");
+                return false;
+            }
             service.shellLong("input swipe " + fx + " 1200 " + tx + " 1200 260");
             try { Thread.sleep(320); } catch (InterruptedException ignored) { }
+        }
+        // 🔴 滑完必须验证真的到了目标页：没到就**逐页修正**，不要放弃也不要继续瞎滑。
+        //    没有圆点的机型只能靠滑，一次滑动跨的页数受惯性/屏幕尺寸影响，不总等于 1，
+        //    所以「按差值滑 N 次」经常过冲或不足（实测目标第 2 页停在第 3 页）。
+        if (locDeadline > 0 && (locStop || touchHit)) return false;
+        int[] after = parsePager(dumpHome(true));
+        if (after[0] > 0 && after[0] != page) {
+            dbg("跳页偏差：目标第 " + page + " 页，实际第 " + after[0] + " 页，开始逐页修正");
+            for (int round = 0; round < 2 && after[0] > 0 && after[0] != page; round++) {
+                int fix = page - after[0];
+                int ffx = fix > 0 ? 950 : 200;
+                int ftx = fix > 0 ? 200 : 950;
+                int n = Math.min(Math.abs(fix), 8);
+                for (int i = 0; i < n; i++) {
+                    if (locDeadline > 0 && (locStop || touchHit)) {
+                        dbg("逐页修正被打断（用户操作）");
+                        return false;
+                    }
+                    service.shellLong("input swipe " + ffx + " 1200 " + ftx + " 1200 260");
+                    try { Thread.sleep(320); } catch (InterruptedException ignored) { }
+                }
+                if (locDeadline > 0 && (locStop || touchHit)) return false;
+                after = parsePager(dumpHome(true));
+            }
+            if (after[0] > 0 && after[0] != page) {
+                dbg("跳页最终失败：目标第 " + page + " 页，停在第 " + after[0] + " 页");
+                return false;
+            }
         }
         return true;
     }
 
-    private String dumpHome() {
-        service.shellLong("uiautomator dump /sdcard/mineapp_loc.xml");
-        String xml = service.shellLong("cat /sdcard/mineapp_loc.xml");
-        return xml == null ? "" : xml;
+    private String dumpHome(boolean needPager) {
+        // 🔴 必须用 --compressed。
+        //
+        // 桌面只要有一个动态组件（快递卡片、天气动画、音乐播放条），
+        // uiautomator 就永远等不到 idle 状态，普通 dump 直接报：
+        //     ERROR: could not get idle state
+        // 于是页号解析全废（parsePager 返回 -1）→ 圆点坐标存不下来 →
+        // 跳页只能盲滑 → 滑过头再修正 → 用户看到的就是「反复右滑」。
+        //
+        // --compressed 会跳过 idle 等待（实测同一时刻普通 dump 失败、compressed 成功），
+        // 代价是 XML 里少了页码小圆点节点（所以 jumpToPageSaved 用不上，只能滑动跳页）。
+        for (int i = 0; i < 3; i++) {
+            // 重试期间用户可能已经切走了 —— 立刻停，别对着「设置」界面白 dump 三次
+            if (i > 0 && needPager && userLeft()) return "";
+            // 用户碰了屏幕就别再等了：一次 dump 2~4 秒，等它跑完用户早就以为没反应
+            if (i > 0 && touchHit) return "";
+            service.shellLong("uiautomator dump --compressed /sdcard/mineapp_loc.xml");
+            String xml = service.shellLong("cat /sdcard/mineapp_loc.xml");
+            int len = xml == null ? -1 : xml.length();
+            boolean hasPage = xml != null && xml.contains("页共");
+            dbg("dumpHome 第" + (i + 1) + "次: 长度=" + len + " 有页共=" + hasPage + " needPager=" + needPager);
+            // 🔴 光有 <hierarchy> 不算成功：桌面刚 HOME 回来时常常只 dump 到
+            //    3KB 左右的半成品（没有页号、没有图标），parsePager 直接返回 -1，
+            //    后面就退化成盲滑。真实桌面 dump 都在 15KB 以上。
+            // 🔴 长度门槛不可靠：实测 3070 / 6026 字节都可能「有 hierarchy 但没页号」，
+            //    那是桌面还没渲染完的半成品。需要页号时必须确认「页共」节点真的在。
+            //    不需要页号时（文件夹内 dump）门槛要低：小文件夹只有 2KB 出头，
+            //    门槛设 3000 会逼它重试 3 次，整个索引被拖慢一倍。
+            boolean ok = xml != null && xml.contains("<hierarchy")
+                    && (needPager ? xml.contains("页共") : len > 1000);
+            if (ok) return xml;
+            // 🔴 需要页号却连续拿不到 = 人还在文件夹里（或文件夹编辑态）。
+            //    这时前台仍然是桌面，userLeft() 判断不出来，就会白 dump 三次然后
+            //    静默失败（实测：上一次定位停在文件夹里，下一次点定位直接没反应）。
+            //    按一次 HOME 退回桌面根，再给一次机会。
+            if (i == 2 && needPager && isLauncherFront()) {
+                dbg("需要页号但拿不到，可能还在文件夹里 → 按 HOME 退回桌面再试");
+                service.shellLong("input keyevent 3");
+                try { Thread.sleep(600); } catch (InterruptedException ignored) { }
+                service.shellLong("uiautomator dump --compressed /sdcard/mineapp_loc.xml");
+                String x2 = service.shellLong("cat /sdcard/mineapp_loc.xml");
+                if (x2 != null && x2.contains("页共")) {
+                    dbg("HOME 后 dump 成功: 长度=" + x2.length());
+                    return x2;
+                }
+            }
+            try { Thread.sleep(700); } catch (InterruptedException ignored) { }
+        }
+        return "";
     }
 
     /**
@@ -588,6 +749,10 @@ public class Bridge {
                         ? parts[4].trim() : "✗ {n}";
                 try {
                     o.put("found", false);
+                    locStop = false;
+                    // 硬性超时：索引没命中时要全量扫，桌面页多 + 文件夹多能扫两分钟。
+                    // 用户会觉得「停不下来」，所以给一个上限，到点就收尾并提示。
+                    locDeadline = System.currentTimeMillis() + 40000L;
                     if (label.isEmpty()) return o.toString();
                     // 有缓存页号 = 已知位置，很快就完；没有 = 首次查找，要遍历桌面各页
                     boolean firstScan = wantPage < 1;
@@ -595,13 +760,22 @@ public class Bridge {
                     startLocateNotice(firstScan ? baseHint + "（首次较慢）" : baseHint);
                     startTickToast(baseHint);
 
-                    service.shellLong("input keyevent 3");
-                    try { Thread.sleep(400); } catch (InterruptedException ignored) { }
+                    // 开始监听真人触摸（碰屏幕就停）。延后 700ms 再开：
+                    // 点「定位」那一下手指抬起会在触摸屏上留事件，立刻监听会误判成
+                    // 用户要打断，一启动就停。
+                    main.postDelayed(new Runnable() {
+                        @Override public void run() { startTouchWatch(); }
+                    }, 700);
 
-                    String xml = dumpHome();
-                    int[] pager = parsePager(xml);
-                    // 读不到页码（有的桌面没有小圆点）→ 按最多 8 页扫，靠滑动翻页
-                    int total = pager[1] > 0 ? pager[1] : 8;
+                    // 已经在桌面就不用按 HOME：HOME 会把页面拉回默认页（第 1 页），
+                    // 紧接着再跳到索引页，视觉上就是「建了索引还从头翻」。
+                    if (!isLauncherFront()){
+                        service.shellLong("input keyevent 3");
+                        // 🔴 等桌面真正渲染完再 dump：0.4 秒时 dump 常常拿不到
+                        //    「第 N 页共 M 页」节点，parsePager 返回 -1，
+                        //    跳页就会退化成盲滑（实测跳到第 3 页而不是第 2 页）。
+                        try { Thread.sleep(900); } catch (InterruptedException ignored) { }
+                    }
 
                     int[] hit = null;
                     int hitPage = -1;
@@ -613,37 +787,113 @@ public class Bridge {
                     //  2. 文件夹内的图标，当时记的是「文件夹里的坐标」，页号却是外层页号 ——
                     //     跳到外层页再用文件夹内坐标长按，必然落在空白处，
                     //     表现就是「定位偏了，长按变成了长按桌面」。
-                    if (wantPage < 1) {
+                    // 🔴 始终先查索引，不能因为「前端有缓存页号」就跳过。
+                    //
+                    //    前端 locCache 里存的 page 是**上一次定位成功的页号**，桌面一挪就过期。
+                    //    以前的条件是 if (wantPage < 1) 才查索引 —— 只要缓存里有值就永远
+                    //    不查索引，直接去那个过期的页号找，表现就是「明明有索引还是找不到」。
+                    //    索引（建索引那一刻的全量快照）比单条缓存可靠得多。
+                    if (true) {
                         int ipg = -1;
+                        String idxFolder = "";
+                        boolean indexHasData = false;
                         try {
                             android.content.SharedPreferences sp =
                                     web.getContext().getSharedPreferences("app", 0);
-                            org.json.JSONArray v = new org.json.JSONObject(
-                                    sp.getString("locIndex", "{}")).optJSONArray(label);
-                            if (v != null && v.length() >= 1) ipg = v.getInt(0);
+                            org.json.JSONObject idxObj = new org.json.JSONObject(
+                                    sp.getString("locIndex", "{}"));
+                            indexHasData = idxObj.length() > 0;
+                            org.json.JSONArray v = idxObj.optJSONArray(label);
+                            if (v != null && v.length() >= 1) {
+                                ipg = v.getInt(0);
+                                if (v.length() >= 2) idxFolder = v.optString(1, "");
+                            }
                         } catch (Throwable ignored) { }
 
+                        // 🔴 索引有内容、但里面没有这个应用 → 桌面上根本没有它的图标
+                        //    （应用只装在系统里、从没拖到桌面，或者被拖进了抽屉）。
+                        //    这种情况再怎么翻也找不到，直接说清楚，别让用户等 30 秒。
+                        if (ipg < 1 && indexHasData) {
+                            dbg("索引里没有: " + label + " → 桌面无图标");
+                            service.shellLong("rm -f /sdcard/mineapp_loc.xml");
+                            stopLocateNotice("桌面上没有「" + label + "」的图标");
+                            endTickToast("桌面上没有「" + label + "」的图标");
+                            o.put("noicon", true);
+                            return o.toString();
+                        }
+
                         if (ipg >= 1) {
+                            dbg("索引命中: " + label + " → 第 " + ipg + " 页, 文件夹=[" + idxFolder + "]");
+                            if (userLeft()) return o.toString();
                             boolean jumped = jumpToPageSaved(ipg);
-                            if (!jumped) jumped = jumpToPage(parsePager(dumpHome()), ipg);
+                            if (!jumped) {
+                                // 跳页失败要么是没存圆点、要么是刚被用户打断 —— 先确认一次
+                                if (userLeft()) return o.toString();
+                                // dumpHome 返回空串 = 用户切走了（或界面读不到），直接收尾，
+                                // 否则 parsePager 拿到 -1 会继续 HOME + 盲滑
+                                String px0 = dumpHome(true);
+                                if (px0.isEmpty()) return o.toString();
+                                jumped = jumpToPage(parsePager(px0), ipg);
+                            }
                             if (jumped) {
-                                String px = dumpHome();
+                                if (userLeft()) return o.toString();
+                                String px = dumpHome(false);
                                 int[] real = findNode(px, label, false);
                                 if (real == null) real = findNodeLoose(px, label);
+                                // 🔴 索引记了文件夹名就直接开它 —— 以前是逐个点开试，
+                                //    桌面 6 个文件夹就是十几秒，用户以为「建了索引还从头翻」。
+                                if (real == null && idxFolder != null && !idxFolder.isEmpty()) {
+                                    // 🔴 同名文件夹可能有多个（用户那页就有两个「旅行交通」）。
+                                    //    以前找到第一个同名文件夹就 break，应用在第二个里就必然失败，
+                                    //    失败后还会把索引删掉 —— 实测「迪士尼乐园」就是这么丢的。
+                                    //    现在：所有同名文件夹都试一遍。
+                                    java.util.List<Object[]> fs = findFoldersNamed(px);
+                                    for (Object[] f : fs) {
+                                        if (userLeft()) return o.toString();
+                                        if (!idxFolder.equals(f[2])) continue;
+                                        service.shellLong("input tap " + f[0] + " " + f[1]);
+                                        try { Thread.sleep(450); } catch (InterruptedException ignored) { }
+                                        String fx = dumpHome(false);
+                                        real = findNode(fx, label, false);
+                                        if (real == null) real = findNodeLoose(fx, label);
+                                        if (real != null) break;
+                                        // 用 BACK 关文件夹：保留当前页，下一页同名文件夹的坐标才还有效。
+                                        // （HOME 会跳回默认页，后面再点就点到别的图标上了）
+                                        // 关之前先看用户有没有自己点了东西，别把他的应用一起关掉
+                                        if (userLeft()) return o.toString();
+                                        service.shellLong("input keyevent 4");
+                                        try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+                                        String bx = dumpHome(false);
+                                        if (bx.isEmpty()) return o.toString();   // 用户切走了
+                                        if (parsePager(bx)[0] <= 0) {           // 还在文件夹里（编辑态）
+                                            service.shellLong("input keyevent 4");
+                                            try { Thread.sleep(250); } catch (InterruptedException ignored) { }
+                                        }
+                                    }
+                                }
                                 if (real == null) {
-                                    // 可能在这个页的文件夹里：逐个点开找
+                                    // 兜底（旧索引没有文件夹字段，或同名文件夹都没命中）：
+                                    // 这一页的文件夹逐个点开找。每步都能被打断。
                                     java.util.List<int[]> fs = findFolders(px);
-                                    for (int i = 0; i < fs.size() && i < 8; i++) {
+                                    for (int i = 0; i < fs.size() && i < 12; i++) {
+                                        if (userLeft()) return o.toString();
                                         int[] f = fs.get(i);
                                         service.shellLong("input tap " + f[0] + " " + f[1]);
                                         try { Thread.sleep(450); } catch (InterruptedException ignored) { }
-                                        real = findNode(dumpHome(), label, false);
+                                        real = findNode(dumpHome(false), label, false);
                                         if (real != null) break;
+                                        // 🔴 先看用户有没有自己点了东西：他打开的应用不要被我们按 HOME 顶掉，
+                                        //    否则「点哪里都打断不了」（实测投诉）。
+                                        if (userLeft()) return o.toString();
                                         service.shellLong("input keyevent 3");
                                         try { Thread.sleep(250); } catch (InterruptedException ignored) { }
                                     }
                                 }
                                 if (real != null) {
+                                    // 找到的那一瞬间也要确认用户没打断：否则会出现
+                                    // 「提示已停止，但屏幕还在跳页、还长按了图标」
+                                    if (userLeft()) return o.toString();
+                                    clearIndexMiss(label);
                                     o.put("found", true);
                                     o.put("x", real[0]);
                                     o.put("y", real[1]);
@@ -654,39 +904,76 @@ public class Bridge {
                                     endTickToast(foundTpl.replace("{n}", label));
                                     return o.toString();
                                 }
-                                // 索引过期（应用挪走了 / 卸载了）：删掉这条，往下走全量扫描
-                                dropIndex(label);
+                                // 🔴 不能一次没找到就删索引：同名文件夹、桌面刚好在动画、
+                                //    dump 拿到半成品，都会让「明明在桌面上」的应用这次找不到。
+                                //    以前直接 dropIndex → 索引条目永久消失，按钮也跟着消失
+                                //    （实测「迪士尼乐园」就是这么被误删的）。改成计次，连续 3 次才删。
+                                bumpIndexMiss(label);
                             }
                         }
                     }
 
+                    // 🔴 索引命中了却没找到（跳页失败 / 同名文件夹都没有）→ 落到全量扫描。
+                    //    这条路以前**没有任何打断检查**：用户碰了屏幕、提示也弹了，
+                    //    它照样再扫 20 秒最后还长按图标（实测被投诉「滑动三次都没停」）。
+                    if (userLeft()) return o.toString();
+
+                    // 🔴 索引没命中才 dump 拿页号。
+                    //    以前是开头无条件 dump 一次（2.3 秒），索引命中时这次 dump 纯属浪费，
+                    //    叠加 HOME 回默认页，观感就是「建了索引还从头翻」。
+                    String xml = dumpHome(true);
+                    if (xml.isEmpty()) return o.toString();      // 用户切走了
+                    int[] pager = parsePager(xml);
+                    // 🔴 读不到页数时**不能默认 8 页**：桌面只有 3 页的话后面 5 页全是空的，
+                    //    表现就是「在最后一页疯狂右滑」。默认 3 页，够覆盖绝大多数桌面。
+                    int total = pager[1] > 0 ? pager[1] : 3;
+
                     // ① 有缓存页号：直接点页码跳过去，一次 dump 就够
-                    if (wantPage >= 1 && wantPage <= total && jumpToPage(pager, wantPage)) {
-                        hit = findNode(dumpHome(), label, false);
-                        if (hit != null) hitPage = wantPage;
+                    if (wantPage >= 1 && wantPage <= total) {
+                        if (userLeft()) return o.toString();
+                        if (jumpToPage(pager, wantPage)) {
+                            String px1 = dumpHome(false);
+                            if (px1.isEmpty()) return o.toString();     // 用户切走了
+                            hit = findNode(px1, label, false);
+                            if (hit != null) hitPage = wantPage;
+                        }
                     }
 
                     // ② 没有缓存 / 缓存失效：逐页点页码找（不滑动，点圆点更快更稳）
                     if (hit == null) {
                         for (int pg = 1; pg <= total && pg <= 8; pg++) {
+                            // 用户随时可以打断：切到别的应用、按了通知栏「停止」、或者超时
+                            if (userLeft()) return o.toString();
                             if (pg != (pager[0] > 0 ? pager[0] : -1)) {
                                 if (!jumpToPage(pager, pg)) continue;
                             }
-                            String px = dumpHome();
+                            String px = dumpHome(false);
+                            if (px.isEmpty()) return o.toString();     // 用户切走了
                             hit = findNode(px, label, false);
                             if (hit != null) { hitPage = pg; break; }
                             hit = findNodeLoose(px, label);        // 带角标后缀的再试一次
                             if (hit != null) { hitPage = pg; break; }
                             // 该页的文件夹：逐个点开找
                             java.util.List<int[]> folders = findFolders(px);
-                            for (int i = 0; i < folders.size() && i < 6; i++) {
+                            for (int i = 0; i < folders.size() && i < 12; i++) {
+                                if (userLeft()) return o.toString();
                                 int[] f = folders.get(i);
                                 service.shellLong("input tap " + f[0] + " " + f[1]);
                                 try { Thread.sleep(450); } catch (InterruptedException ignored) { }
-                                hit = findNode(dumpHome(), label, false);
+                                String fx = dumpHome(false);
+                                if (fx.isEmpty()) return o.toString();
+                                hit = findNode(fx, label, false);
                                 if (hit != null) { hitPage = pg; break; }
-                                service.shellLong("input keyevent 3");
-                                try { Thread.sleep(250); } catch (InterruptedException ignored) { }
+                                // 用 BACK 关文件夹：保留当前页，否则后面的页号判断全错
+                                if (userLeft()) return o.toString();
+                                service.shellLong("input keyevent 4");
+                                try { Thread.sleep(280); } catch (InterruptedException ignored) { }
+                                String bx = dumpHome(false);
+                                if (bx.isEmpty()) return o.toString();
+                                if (parsePager(bx)[0] <= 0) {          // 还在文件夹里（编辑态）
+                                    service.shellLong("input keyevent 4");
+                                    try { Thread.sleep(250); } catch (InterruptedException ignored) { }
+                                }
                             }
                             if (hit != null) break;
                         }
@@ -698,6 +985,8 @@ public class Bridge {
                         endTickToast(nfTpl.replace("{n}", label));
                         return o.toString();
                     }
+                    // 长按之前最后确认一次：用户已经打断就别再动手了
+                    if (userLeft()) return o.toString();
                     o.put("found", true);
                     o.put("x", hit[0]);
                     o.put("y", hit[1]);
@@ -709,6 +998,8 @@ public class Bridge {
                 } catch (Throwable e) {
                     android.util.Log.w("Bridge", "locate 失败: " + e);
                 } finally {
+                    locDeadline = 0;      // 超时判据只对定位有效，别影响后面的建索引
+                    stopTouchWatch();     // 撤掉触摸监听
                     dbg("finally: locResultShowing=" + locResultShowing
                             + " tickToast=" + (tickToast != null));
                     if (!locResultShowing) stopTickToast();
@@ -738,8 +1029,6 @@ public class Bridge {
      *
      * 中断判定：每步之前看一眼前台是不是桌面 —— 用户切去别的应用就立刻停。
      */
-    private volatile boolean idxStop;
-
     @JavascriptInterface
     public void stopindex(int id, String arg) {
         idxStop = true;
@@ -752,17 +1041,44 @@ public class Bridge {
             public String run() {
                 JSONObject o = new JSONObject();
                 idxStop = false;
+                locStop = false;          // 静态标志：上次定位按过「停止」不能把索引一起带停
+                locDeadline = 0;          // 建索引不看定位的超时判据
                 try {
                     android.content.SharedPreferences sp =
                             web.getContext().getSharedPreferences("app", 0);
                     JSONObject index = new JSONObject(sp.getString("locIndex", "{}"));
                     int resumePage = sp.getInt("locIndexPage", 1);
                     if (resumePage < 1) resumePage = 1;
+                    // 🔴 上次完成已超过 24 小时 = 索引过期，桌面多半变了。
+                    //    这时候不能接着半成品续传（会得到一份新旧混杂的索引），
+                    //    直接从第 1 页重来。
+                    long lastDoneAt = sp.getLong("locIndexAt", 0L);
+                    boolean staleIdx = lastDoneAt > 0L
+                            && System.currentTimeMillis() - lastDoneAt > 24L * 3600L * 1000L;
+                    // 🔴 只要上次完整跑完过（locIndexAt > 0），这次点「开始」就是**重建**：
+                    //    必须清空旧索引。否则 index.has(name) 会跳过所有旧条目，
+                    //    新数据永远写不进去 —— 表现是「重建了好几次，文件夹名还是旧的」。
+                    //    只有「上次被打断、从没跑完」（resumePage > 1）才续传。
+                    boolean rebuild = lastDoneAt > 0L && resumePage <= 1;
+                    if (rebuild || staleIdx){
+                        resumePage = 1;
+                        index = new JSONObject();
+                        sp.edit().putInt("locIndexPage", 1).apply();
+                        dbg(rebuild ? "重建索引：清空旧数据" : "索引已过期，从头重建");
+                    }
 
                     service.shellLong("input keyevent 3");
-                    try { Thread.sleep(400); } catch (InterruptedException ignored) { }
-                    int[] pager = parsePager(dumpHome());
-                    int total = pager[1] > 0 ? pager[1] : 8;
+                    try { Thread.sleep(900); } catch (InterruptedException ignored) { }
+                    // 用户已经切走了就别再 dump 三次（每次 2.3 秒，白等 7 秒）
+                    if (userLeft()) return o.toString();
+                    int[] pager = parsePager(dumpHome(true));
+                    // 🔴 读不到页数时**不能默认 8 页**：桌面只有 3 页的话，
+                    //    后面 5 页全是空的，表现就是「在最后一页疯狂右滑」。
+                    int total = pager[1] > 0 ? pager[1] : 0;
+                    if (total <= 0) {
+                        total = 3;      // 多数桌面 2~4 页，按 3 页试比按 8 页安全得多
+                        dbg("读不到页数，按 3 页试");
+                    }
                     // 把圆点坐标存下来，之后跳页连 dump 都不用
                     StringBuilder dots = new StringBuilder();
                     for (int i = 2; i + 1 < pager.length; i += 2) {
@@ -780,20 +1096,28 @@ public class Bridge {
                     for (; page <= total && page <= 8; page++) {
                         if (idxStop || !isLauncherFront()) break;
                         jumpToPage(pager, page);
-                        String xml = dumpHome();
-                        added += indexPage(index, xml, page);
-                        // 该页的文件夹
-                        java.util.List<int[]> folders = findFolders(xml);
+                        String xml = dumpHome(false);
+                        added += indexPage(index, xml, page, "");
+                        // 该页的文件夹（带名字：定位时能直接打开目标文件夹，不用逐个试）
+                        java.util.List<Object[]> folders = findFoldersNamed(xml);
                         for (int i = 0; i < folders.size(); i++) {
                             if (idxStop || !isLauncherFront()) break;
-                            int[] f = folders.get(i);
-                            service.shellLong("input tap " + f[0] + " " + f[1]);
+                            Object[] f = folders.get(i);
+                            String fname = (String) f[2];
+                            service.shellLong("input tap " + ((Integer) f[0]) + " " + ((Integer) f[1]));
                             try { Thread.sleep(450); } catch (InterruptedException ignored) { }
-                            added += indexPage(index, dumpHome(), page);
+                            added += indexPage(index, dumpHome(false), page, fname);
                             // 用 home 而不是 back：back 在文件夹编辑态下只退出编辑，
                             // 文件夹还开着，下一轮点坐标就会点到里面的应用
                             service.shellLong("input keyevent 3");
-                            try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+                            try { Thread.sleep(280); } catch (InterruptedException ignored) { }
+                            // 🔴 处理完一个文件夹必须**回到本页**：HOME 会把桌面拉回第 1 页
+                            //    （实测「第 1 页共 3 页」），不跳回来的话，后面几个文件夹的
+                            //    坐标就落在第 1 页上 —— 点开的是别的应用，索引记的是错的东西，
+                            //    目标应用永远进不了索引。
+                            //    实测：「迪士尼乐园」在第 2 页第 9 个文件夹里，一直索引不到。
+                            //    pager 里的圆点是绝对坐标，HOME 之后照样能点。
+                            if (i + 1 < folders.size()) jumpToPage(pager, page);
                         }
                         // 每页存一次盘，随时中断都不丢
                         sp.edit().putString("locIndex", index.toString())
@@ -838,7 +1162,7 @@ public class Bridge {
      *
      * 已存在的条目**不覆盖**：桌面层级的记录先写入，比文件夹内的更可信。
      */
-    private int indexPage(JSONObject index, String xml, int page) {
+    private int indexPage(JSONObject index, String xml, int page, String folder) {
         int n = 0;
         java.util.regex.Matcher m = java.util.regex.Pattern
                 .compile("<node\\b[^>]*>").matcher(xml);
@@ -860,6 +1184,7 @@ public class Bridge {
             try {
                 org.json.JSONArray v = new org.json.JSONArray();
                 v.put(page);
+                v.put(folder == null ? "" : folder);   // 第二项：所在文件夹名，空 = 直接在桌面
                 index.put(name, v);
                 n++;
             } catch (Throwable ignored) { }
@@ -886,6 +1211,37 @@ public class Bridge {
     }
 
     /** 从索引里删掉一条（索引过期时用，避免下次还踩同一个坑） */
+    /**
+     * 索引命中但这次没找到 → 记一次失败。
+     *
+     * 🔴 连续 3 次才认定索引真的过期（应用被卸载/挪走）并删除条目。
+     *    一次失败就删太激进：同名文件夹只试了第一个、桌面在动画导致 dump 半成品、
+     *    用户刚好滑动了一下，都会失败，但应用其实好好地在桌面上。
+     */
+    private void bumpIndexMiss(String label) {
+        try {
+            android.content.SharedPreferences sp =
+                    web.getContext().getSharedPreferences("app", 0);
+            String k = "locMiss_" + label;
+            int n = sp.getInt(k, 0) + 1;
+            if (n >= 3) {
+                sp.edit().remove(k).apply();
+                dropIndex(label);
+                dbg("索引连续 3 次未命中，删除条目: " + label);
+            } else {
+                sp.edit().putInt(k, n).apply();
+                dbg("索引未命中第 " + n + " 次（不删）: " + label);
+            }
+        } catch (Throwable ignored) { }
+    }
+
+    private void clearIndexMiss(String label) {
+        try {
+            web.getContext().getSharedPreferences("app", 0)
+                    .edit().remove("locMiss_" + label).apply();
+        } catch (Throwable ignored) { }
+    }
+
     private void dropIndex(String label) {
         try {
             android.content.SharedPreferences sp =
@@ -922,16 +1278,30 @@ public class Bridge {
                         | android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                 ctx.startActivity(i);
             }
-            // 等界面切回来再触发前端刷新
-            main.postDelayed(new Runnable() {
-                @Override public void run() {
-                    try {
-                        web.evaluateJavascript("window.__idxDone && window.__idxDone()", null);
-                    } catch (Throwable e) {
-                        dbg("__idxDone 调用失败: " + e);
+            // 等界面切回来再触发前端刷新。
+            // 🔴 注入可能落空：索引跑 1 分钟的期间 App 常被系统回收，WebView
+            //    重建后 window.__idxDone 还不存在，evaluateJavascript 返回 "null"
+            //    且不抛异常 —— 以前只注入一次，失败就停在列表页了。
+            //    这里按 0.8s / 2s / 3.5s / 5s 重试，直到拿到非 null 结果。
+            final int[] delays = {800, 2000, 3500, 5000};
+            for (int k = 0; k < delays.length; k++) {
+                final long dl = delays[k];
+                main.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        try {
+                            web.evaluateJavascript(
+                                    "window.__idxDone && window.__idxDone()",
+                                    new android.webkit.ValueCallback<String>() {
+                                        @Override public void onReceiveValue(String v) {
+                                            dbg("__idxDone 返回: " + v);
+                                        }
+                                    });
+                        } catch (Throwable e) {
+                            dbg("__idxDone 调用失败: " + e);
+                        }
                     }
-                }
-            }, 800);
+                }, dl);
+            }
         } catch (Throwable e) {
             dbg("backToApp 失败: " + e);
         }
@@ -946,6 +1316,112 @@ public class Bridge {
         } catch (Throwable e) {
             return true;      // 读不到就当还在桌面，别误停
         }
+    }
+
+    /**
+     * 用户切到别的应用了就停手，返回 true 表示调用方应当直接收尾返回。
+     *
+     * 🔴 定位的「索引命中」分支以前完全没做这个检查 —— 用户点完定位去用别的
+     *    App，它还在后台翻桌面、长按图标。实测被投诉「查找应用时无法打断」。
+     */
+    /**
+     * 开始监听「真人触摸」。
+     *
+     * 🔴 为什么要走 evdev：定位时前台一直是桌面，用户点哪里都检测不到
+     *    （「切应用就停」只覆盖他打开别的 App 的情况）。而 `input tap` 是
+     *    InputManager 注入的，**不会出现在触摸屏设备节点**（实测 event7 = goodix_ts
+     *    在注入 tap 后 0 字节），所以 evdev 里出现的事件必然是真人手指。
+     *    实测被反复投诉「无论点哪里都无法打断查找」。
+     *
+     * 用 setsid 丢到后台（实测进程能存活），定位循环只查文件大小，不阻塞命令通道。
+     */
+    private void startTouchWatch() {
+        if (touchWatching) return;
+        touchWatching = true;
+        touchHit = false;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                while (touchWatching) {
+                    long dl = locDeadline;
+                    if (dl <= 0 || System.currentTimeMillis() > dl) break;
+                    try {
+                        // 走普通连接，不占长连接；timeout 保证最多阻塞 5 秒
+                        String out = service.shellQuick(
+                                "timeout 5 getevent -c 1 /dev/input/event7", 7000);
+                        if (out == null) continue;
+                        for (String ln : out.split("\n")) {
+                            String t = ln.trim();
+                            if (t.isEmpty() || t.startsWith("add device")
+                                    || t.startsWith("name:")) continue;
+                            // 真实事件行形如：0003 0039 00000c1a
+                            if (t.matches("^[0-9a-fA-F]{4}\\s+[0-9a-fA-F]{4}\\s+[0-9a-fA-F]+$")) {
+                                if (locDeadline <= 0) return;   // 已经收尾了，别再多弹一条
+                                touchHit = true;
+                                // 🔴 立刻给反馈：定位线程可能正卡在一次 2~5 秒的
+                                //    dumpHome 里，等它跑到下一个检查点再提示，
+                                //    用户早就以为「没反应」了（实测被这么反馈）。
+                                main.post(new Runnable() {
+                                    @Override public void run() {
+                                        dbg("检测到真人触摸 → 立即提示并收尾");
+                                        stopLocateNotice("已停止（你碰了屏幕）");
+                                        endTickToast("已停止");
+                                    }
+                                });
+                                return;
+                            }
+                        }
+                    } catch (Throwable ignored) { }
+                }
+            }
+        }).start();
+    }
+
+    private void stopTouchWatch() {
+        touchWatching = false;
+        touchHit = false;
+    }
+
+    /** 用户碰过屏幕没有（只看真触摸屏，注入事件不会进来）。 */
+    private boolean touchDetected() {
+        return touchHit;
+    }
+
+    private boolean userLeft() {
+        if (locStop) {
+            dbg("用户按了「停止」");
+            try {
+                service.shellLong("rm -f /sdcard/mineapp_loc.xml");
+                stopLocateNotice("已停止");
+                endTickToast("已停止");
+            } catch (Throwable ignored) { }
+            return true;
+        }
+        // 兜底超时：全量扫描最多 40 秒，到点收尾，别让用户觉得「停不下来」
+        if (locDeadline > 0 && System.currentTimeMillis() > locDeadline) {
+            dbg("定位超时，收尾");
+            try {
+                service.shellLong("rm -f /sdcard/mineapp_loc.xml");
+                stopLocateNotice("已停止（超时，建议重建索引）");
+                endTickToast("已停止（超时）");
+            } catch (Throwable ignored) { }
+            return true;
+        }
+        // 用户碰了屏幕（真触摸屏事件）→ 立刻让位。这是「点哪里都能打断」的关键：
+        // 定位时前台一直是桌面，光靠「切应用」判断不出来。
+        // 提示已经由监听线程立即发过（见 startTouchWatch），这里只负责收尾。
+        if (locDeadline > 0 && touchDetected()) {
+            dbg("检测到真人触摸，停止定位");
+            try { service.shellLong("rm -f /sdcard/mineapp_loc.xml"); } catch (Throwable ignored) { }
+            return true;
+        }
+        if (isLauncherFront()) return false;
+        dbg("用户切走了，停止定位/索引");
+        try {
+            service.shellLong("rm -f /sdcard/mineapp_loc.xml");
+            stopLocateNotice("已停止（你切换了应用）");
+            endTickToast("已停止");
+        } catch (Throwable ignored) { }
+        return true;
     }
 
     /** 排查用日志：MIUI 下 logcat 看不到应用日志，写文件 */
@@ -966,7 +1442,7 @@ public class Bridge {
         main.post(new Runnable() {
             @Override public void run() {
                 try {
-                    android.widget.Toast.makeText(web.getContext(), msg,
+                    android.widget.Toast.makeText(web.getContext().getApplicationContext(), msg,
                             android.widget.Toast.LENGTH_LONG).show();
                 } catch (Throwable ignored) { }
             }
@@ -978,7 +1454,7 @@ public class Bridge {
         main.post(new Runnable() {
             @Override public void run() {
                 try {
-                    android.widget.Toast.makeText(web.getContext(), msg,
+                    android.widget.Toast.makeText(web.getContext().getApplicationContext(), msg,
                             android.widget.Toast.LENGTH_SHORT).show();
                 } catch (Throwable ignored) { }
             }
@@ -1002,7 +1478,7 @@ public class Bridge {
             @Override public void run() {
                 try {
                     if (tickToast == null) {
-                        tickToast = android.widget.Toast.makeText(web.getContext(), base,
+                        tickToast = android.widget.Toast.makeText(web.getContext().getApplicationContext(), base,
                                 android.widget.Toast.LENGTH_LONG);
                     }
                     long sec = (System.currentTimeMillis() - t0) / 1000;
@@ -1079,7 +1555,7 @@ public class Bridge {
                 @Override public void run() {
                     try {
                         if (tickToast == null) {
-                            tickToast = android.widget.Toast.makeText(web.getContext(), result,
+                            tickToast = android.widget.Toast.makeText(web.getContext().getApplicationContext(), result,
                                     android.widget.Toast.LENGTH_LONG);
                         }
                         tickToast.setText(result);
@@ -1119,11 +1595,34 @@ public class Bridge {
      * toastOn 就再也不显示了（实测确认）。改用通知，并用 setUsesChronometer(true)
      * 让系统自己走秒，比手动刷文字更稳、更省电。
      */
-    private static final String LOC_CH = "app_manager_locate";
+    // 🔴 渠道 id 带 v2：通知渠道的重要性创建后**不能修改**，
+    //    旧渠道是 IMPORTANCE_DEFAULT，被 HyperOS 的 ranker_group 折叠进「更多通知」，
+    //    用户完全看不到进度。要提权只能换新 id。
+    private static final String LOC_CH = "app_manager_locate_v2";
     private static final int LOC_ID = 1002;
     private long locStartAt;
+    private android.widget.Toast locToast;
+
+    /** 屏幕底部的 Toast：比通知栏可靠得多（HyperOS 会把通知折叠进「更多通知」）。 */
+    private void toastLoc(final String text) {
+        try {
+            final android.content.Context ctx = web.getContext();
+            main.post(new Runnable() {
+                @Override public void run() {
+                    try {
+                        // 先取消上一条，否则连续调用会排队，进度提示永远慢好几拍
+                        if (locToast != null) locToast.cancel();
+                        locToast = android.widget.Toast.makeText(
+                                ctx.getApplicationContext(), text, android.widget.Toast.LENGTH_SHORT);
+                        locToast.show();
+                    } catch (Throwable ignored) { }
+                }
+            });
+        } catch (Throwable ignored) { }
+    }
 
     private void notifyLocate(String text, boolean chronometer) {
+        toastLoc(text);
         try {
             android.content.Context ctx = web.getContext();
             android.app.NotificationManager nm =
@@ -1131,8 +1630,11 @@ public class Bridge {
                             android.content.Context.NOTIFICATION_SERVICE);
             if (android.os.Build.VERSION.SDK_INT >= 26) {
                 android.app.NotificationChannel ch = new android.app.NotificationChannel(
-                        LOC_CH, "定位提示", android.app.NotificationManager.IMPORTANCE_DEFAULT);
+                        LOC_CH, "定位提示", android.app.NotificationManager.IMPORTANCE_HIGH);
                 ch.setShowBadge(false);
+                // 提权到 HIGH 是为了不被折叠，但遍历时每页都会更新，不能真的响
+                ch.setSound(null, null);
+                ch.enableVibration(false);
                 nm.createNotificationChannel(ch);
             }
             android.app.Notification.Builder b = (android.os.Build.VERSION.SDK_INT >= 26)
@@ -1142,9 +1644,22 @@ public class Bridge {
                     .setContentTitle(text)
                     .setOngoing(true)
                     .setOnlyAlertOnce(true)
+                    .setGroup(null)          // 明确不参与系统自动分组（否则会被折叠成「更多通知」）
                     .setShowWhen(chronometer)
                     .setWhen(locStartAt)
                     .setUsesChronometer(chronometer);
+            // 通知栏直接给一个「停止」按钮：滑动桌面这种操作前台还是桌面，检测不到，
+            // 用户必须有个能按的开关
+            try {
+                android.content.Intent stop = new android.content.Intent(ACTION_STOP);
+                stop.setPackage(ctx.getPackageName());
+                int piFlags = android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+                if (android.os.Build.VERSION.SDK_INT >= 23) {
+                    piFlags |= android.app.PendingIntent.FLAG_IMMUTABLE;
+                }
+                b.addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止",
+                        android.app.PendingIntent.getBroadcast(ctx, 1, stop, piFlags));
+            } catch (Throwable ignored) { }
             nm.notify(LOC_ID, b.build());
         } catch (Throwable e) {
             try {
@@ -1203,7 +1718,7 @@ public class Bridge {
                     try { Thread.sleep(300); } catch (InterruptedException ignored) { }
                     int pg = parseIntSafe(pageStr, -1);
                     if (pg >= 1 && !jumpToPageSaved(pg)) {
-                        String xml = dumpHome();
+                        String xml = dumpHome(false);
                         jumpToPage(parsePager(xml), pg);
                     }
                     longPress(x, y);
