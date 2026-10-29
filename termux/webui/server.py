@@ -593,6 +593,12 @@ html.dark #toast{box-shadow:0 6px 24px rgba(0,0,0,.5)}
 /* 长文案（失败原因这类）：单行居中读不动，而且窄框会把它顶成一条竖长条 */
 #toast.long{width:88vw;max-width:88vw;text-align:left;
 line-height:1.55;font-size:13.5px}
+/* 索引引导条：没有索引 / 索引没建完时挂在列表上方，点一下进设置页去构建 */
+.idxhint{flex:none;margin:8px 16px 2px;padding:10px 12px;border-radius:11px;
+background:var(--bluebg);color:var(--ink);border:0.5px solid var(--line);
+font-size:13px;line-height:1.5;cursor:pointer}
+.idxhint:active{opacity:.7}
+.idxhint b{font-weight:600;color:var(--blue)}
 .empty{padding:60px 20px;text-align:center;color:var(--ink3);font-size:16px}
 .sortbar{display:flex;gap:8px;margin-top:8px}
 .sec{font-size:13px;color:var(--ink2);font-weight:500;margin:16px 0 5px}
@@ -691,6 +697,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <button class="seg" data-sort="name" data-t="sortName">名称</button>
   </div>
 </header>
+<div class="idxhint" id="idxHint" style="display:none"></div>
 <ul id="list"></ul>
 <div class="empty" id="empty" data-t="empty" style="display:none">没有匹配的应用</div>
 <footer>
@@ -1023,6 +1030,8 @@ var I18N = {
     secAgo: ' 秒前', minAgo: ' 分钟前', locating: '正在寻找应用（碰屏幕可停止）',
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
+    idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
+    idxHintPartial: '索引还没建完 —— 部分应用没有定位按钮。<b>点此继续</b>',
     locAskTitle: '还没初始化查找索引',
     locAskBody: '直接查找要一页一页翻桌面、逐个开文件夹，可能需要几十秒；初始化会把所有应用的位置记下来，之后查找几乎秒出。\n初始化约需几分钟，期间可以随时操作手机打断，下次接着来。建议先初始化。',
     locAskInit: '先初始化（推荐）', locAskDirect: '直接查找',
@@ -1167,6 +1176,8 @@ var I18N = {
     secAgo: 's ago', minAgo: 'm ago', locating: 'Looking for app (tap to stop)',
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
+    idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
+    idxHintPartial: 'Index is incomplete — some apps have no locate button. <b>Tap to resume</b>',
     locAskTitle: 'No location index yet',
     locAskBody: 'A direct lookup walks every page and opens every folder — it can take tens of seconds. Building the index first records where every app lives, so later lookups are near-instant.\nIndexing takes a few minutes; you can interrupt it any time and resume later. Building it first is recommended.',
     locAskInit: 'Build index first', locAskDirect: 'Look up directly',
@@ -1807,9 +1818,11 @@ function applyData(d){
   document.getElementById('perfChk').checked = (d.perf === true) || perfWanted;
   apps = d.apps || [];
   if (apps.length) idxReady = !!apps[0].idx_ready;
+  idxPartial = !!(d && d.idx_partial);
   idxAt = (d && d.idx_at) || 0;
   try { localStorage.setItem('idxAt', String(idxAt)); } catch (e) {}
   updateIdxAt();
+  updateIdxHint();
   // 索引刚跑完 → 自动回到设置页，让用户直接看到「上次完成：刚刚」。
   // 🔴 不能只靠 Java 注入 __idxDone：索引要跑 1 分钟，这期间 App 常被系统
   //    回收，WebView 重建后 window.__idxDone 根本不存在，注入静默失败，
@@ -1864,7 +1877,10 @@ function saveCache(d){
       t: Date.now(), apps: d.apps || [], with_pss: !!d.with_pss,
       mem_total: d.mem_total, mem_pct: d.mem_pct, mem_avail: d.mem_avail,
       battery: d.battery || null, frozen: d.frozen || 0,
-      restricted_count: d.restricted_count || 0, perf: d.perf
+      restricted_count: d.restricted_count || 0, perf: d.perf,
+      // 🔴 索引状态必须一起缓存：漏了这两个字段，走缓存渲染时
+      //    「上次完成」和索引引导条都会消失（实测「打断索引后看不到引导条」）
+      idx_at: d.idx_at || 0, idx_partial: !!d.idx_partial
     }));
   } catch (e) { /* 配额超了就算了，不影响主流程 */ }
 }
@@ -1914,7 +1930,19 @@ function spinStart(){
 }
 function spinFinish(){ if (spinOn) spinStop = true; }
 
+/* 🔴 回到前台要刷新一次：索引是在后台跑的，用户碰屏幕打断后回到 App，
+   页面还停留在离开前的旧列表 —— 引导条不会出现、定位按钮也不会更新
+   （实测「打断了索引但没看到引导条」，其实是没刷新，手动下拉刷新就出来了）。
+   15 秒内不重复拉，避免来回切应用时空转。 */
+var lastLoadAt = 0;
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) return;
+  if (Date.now() - lastLoadAt < 15000) return;
+  load(true);
+});
+
 function load(force){
+  lastLoadAt = Date.now();
   // force=true 表示手动刷新或刚做过操作，必须拿新数据
   var state = force ? 0 : restoreCache(true);
   // 1 分钟内的缓存直接用它，不必再拉；过期的缓存也已经画出来了，继续后台刷新
@@ -2106,6 +2134,8 @@ var locCache = {};
 try { locCache = JSON.parse(localStorage.getItem('locCache') || '{}') || {}; } catch (e) { locCache = {}; }
 var locLastPkg = '', locLastAt = 0;
 var idxReady = false;
+/* 索引没建完（上次遍历中途被打断）：部分应用没有定位按钮，要提示去补齐 */
+var idxPartial = false;
 var idxAt = parseInt(localStorage.getItem('idxAt') || '0', 10) || 0;
 var LOC_TTL = 2 * 60 * 1000;
 var LOC_FORCE = 15000;
@@ -2162,7 +2192,9 @@ function markIdxDone(){
   idxAt = Date.now();
   try { localStorage.setItem('idxAt', String(idxAt)); } catch (e) {}
   idxReady = true;
+  idxPartial = false;
   updateIdxAt();
+  updateIdxHint();
   load(true);
   // 回到设置页：让用户直接看到「上次完成：刚刚」和新的索引状态
   openSettings();
@@ -2181,6 +2213,26 @@ function updateIdxAt(){
   else if (sec < 86400) txt = T2('idxAgeHour', {n: Math.round(sec / 3600)});
   else txt = T2('idxAgeDay', {n: Math.floor(sec / 86400)});
   el.textContent = txt;
+}
+
+/* 索引引导条：没索引 / 索引没建完时挂在列表上方，点一下直接进设置页。
+   🔴 以前这两种情况是「静默」的：应用没有定位按钮、或者点了定位要翻两分钟，
+      用户完全不知道为什么（实测被问到「为什么有些应用没有定位按钮」）。 */
+function updateIdxHint(){
+  var el = document.getElementById('idxHint');
+  if (!el) return;
+  if (!idxReady){
+    el.innerHTML = T('idxHintNone');
+    el.style.display = '';
+    el.onclick = function(){ openSettings(); };
+  } else if (idxPartial){
+    el.innerHTML = T('idxHintPartial');
+    el.style.display = '';
+    el.onclick = function(){ openSettings(); };
+  } else {
+    el.style.display = 'none';
+    el.onclick = null;
+  }
 }
 
 /* 跳到设置页并把「开始」按钮脉冲几下，引导点击 */

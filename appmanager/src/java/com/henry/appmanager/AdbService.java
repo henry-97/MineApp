@@ -1145,6 +1145,8 @@ public class AdbService {
     private boolean locIndexReady = false;
     /** 上次索引完成的时间戳，0 表示从没建过 */
     private long locIndexAt = 0;
+    /** 上次遍历停在第几页（>1 = 没建完，下次点「开始」会续传） */
+    private int locIndexPage = 1;
     /**
      * 索引里出现的应用名集合。
      *
@@ -1228,6 +1230,12 @@ public class AdbService {
             locIndexAt = appCtx == null ? 0
                     : appCtx.getSharedPreferences("app", 0).getLong("locIndexAt", 0);
             locIndexReady = locIndexAt > 0;
+            // 索引是否**没建完**：locIndexPage > 1 说明上次遍历中途被打断，
+            // 下次点「开始」会从这一页续传。前端据此提示用户去补齐索引。
+            // 🔴 重建时索引会被清空，但 locIndexAt 还是旧的 → 光看 idx_ready 会误判成「有索引」，
+            //    结果一堆应用没有定位按钮又没有任何解释（实测被问到）。
+            locIndexPage = appCtx == null ? 1
+                    : appCtx.getSharedPreferences("app", 0).getInt("locIndexPage", 1);
             java.util.Set<String> keys = new java.util.HashSet<String>();
             if (locIndexReady && appCtx != null) {
                 org.json.JSONObject idx = new org.json.JSONObject(
@@ -1336,6 +1344,7 @@ public class AdbService {
             out.put("adb_state", "ok");
             out.put("adb_msg", "");
             out.put("idx_at", locIndexAt);
+            out.put("idx_partial", locIndexPage > 1);
             out.put("perf", getPerfMode());
             // 「系统频繁取消性能模式」的暂停状态：前端据此弹一次说明
             try {
