@@ -82,6 +82,8 @@ public class Bridge {
     /** 「碰屏幕就停」：后台线程轮询真触摸屏，命中置 true。 */
     private volatile boolean touchHit;
     private volatile boolean touchWatching;
+    /** 当前跑的是建索引（提示文案用「已暂停」，定位用「已停止」）。 */
+    private volatile boolean idxRunning;
 
     private void dispatch(final int id, final Task task) {
         worker.execute(new Runnable() {
@@ -1043,6 +1045,7 @@ public class Bridge {
                 idxStop = false;
                 locStop = false;          // 静态标志：上次定位按过「停止」不能把索引一起带停
                 locDeadline = 0;          // 建索引不看定位的超时判据
+                idxRunning = true;
                 try {
                     android.content.SharedPreferences sp =
                             web.getContext().getSharedPreferences("app", 0);
@@ -1071,6 +1074,12 @@ public class Bridge {
                     try { Thread.sleep(900); } catch (InterruptedException ignored) { }
                     // 用户已经切走了就别再 dump 三次（每次 2.3 秒，白等 7 秒）
                     if (userLeft()) return o.toString();
+                    // 开触摸监听：建索引全程「碰屏幕就停」（以前只有定位有，索引只能靠切应用，
+                    // 实测被投诉「滑动屏幕无法打断，也没有提示」）。延后 800ms，
+                    // 免得把点「开始」那一下的手指抬起当成用户操作。
+                    main.postDelayed(new Runnable() {
+                        @Override public void run() { startTouchWatch(); }
+                    }, 800);
                     int[] pager = parsePager(dumpHome(true));
                     // 🔴 读不到页数时**不能默认 8 页**：桌面只有 3 页的话，
                     //    后面 5 页全是空的，表现就是「在最后一页疯狂右滑」。
@@ -1094,14 +1103,14 @@ public class Bridge {
                             ? "从第 " + resumePage + "/" + total + " 页继续索引"
                             : "开始遍历桌面 · 共 " + total + " 页 · 可随时打断", false);
                     for (; page <= total && page <= 8; page++) {
-                        if (idxStop || !isLauncherFront()) break;
+                        if (idxStop || touchHit || !isLauncherFront()) break;
                         jumpToPage(pager, page);
                         String xml = dumpHome(false);
                         added += indexPage(index, xml, page, "");
                         // 该页的文件夹（带名字：定位时能直接打开目标文件夹，不用逐个试）
                         java.util.List<Object[]> folders = findFoldersNamed(xml);
                         for (int i = 0; i < folders.size(); i++) {
-                            if (idxStop || !isLauncherFront()) break;
+                            if (idxStop || touchHit || !isLauncherFront()) break;
                             Object[] f = folders.get(i);
                             String fname = (String) f[2];
                             service.shellLong("input tap " + ((Integer) f[0]) + " " + ((Integer) f[1]));
@@ -1148,11 +1157,19 @@ public class Bridge {
                         backToApp();
                     } else {
                         // 被用户打断的，别硬拉回来
+                        dbg("索引被中断（停在第 " + page + " 页），已暂停");
                         stopLocateNotice("已暂停，下次点「开始」会接着来");
                     }
+                    idxRunning = false;
+                    stopTouchWatch();
                 } catch (Throwable e) {
                     android.util.Log.w("Bridge", "buildindex 失败: " + e);
                     try { o.put("ok", false); } catch (Throwable ignored) { }
+                } finally {
+                    // 提前 return 的分支（比如刚开始就发现用户切走了）也要清干净，
+                    // 否则监听线程和 idxRunning 会一直挂着
+                    idxRunning = false;
+                    stopTouchWatch();
                 }
                 return o.toString();
             }
@@ -1347,11 +1364,13 @@ public class Bridge {
         if (touchWatching) return;
         touchWatching = true;
         touchHit = false;
+        dbg("触摸监听已启动 idxMode=" + idxRunning);
         new Thread(new Runnable() {
             @Override public void run() {
                 while (touchWatching) {
                     long dl = locDeadline;
-                    if (dl <= 0 || System.currentTimeMillis() > dl) break;
+                    // locDeadline = 0 表示不限时（建索引要跑几分钟，不能用定位的 40 秒）
+                    if (dl > 0 && System.currentTimeMillis() > dl) break;
                     try {
                         // 走普通连接，不占长连接；timeout 保证最多阻塞 5 秒
                         String out = service.shellQuick(
@@ -1363,16 +1382,22 @@ public class Bridge {
                                     || t.startsWith("name:")) continue;
                             // 真实事件行形如：0003 0039 00000c1a
                             if (t.matches("^[0-9a-fA-F]{4}\\s+[0-9a-fA-F]{4}\\s+[0-9a-fA-F]+$")) {
-                                if (locDeadline <= 0) return;   // 已经收尾了，别再多弹一条
+                                if (!touchWatching) return;     // 已经收尾了，别再多弹一条
                                 touchHit = true;
-                                // 🔴 立刻给反馈：定位线程可能正卡在一次 2~5 秒的
+                                final boolean idxMode = idxRunning;
+                                // 🔴 立刻给反馈：定位/索引线程可能正卡在一次 2~5 秒的
                                 //    dumpHome 里，等它跑到下一个检查点再提示，
                                 //    用户早就以为「没反应」了（实测被这么反馈）。
                                 main.post(new Runnable() {
                                     @Override public void run() {
-                                        dbg("检测到真人触摸 → 立即提示并收尾");
-                                        stopLocateNotice("已停止（你碰了屏幕）");
-                                        endTickToast("已停止");
+                                        dbg("检测到真人触摸 → 立即提示并收尾 idxMode=" + idxMode);
+                                        if (idxMode) {
+                                            stopLocateNotice("已暂停（你碰了屏幕）");
+                                            endTickToast("已暂停");
+                                        } else {
+                                            stopLocateNotice("已停止（你碰了屏幕）");
+                                            endTickToast("已停止");
+                                        }
                                     }
                                 });
                                 return;
@@ -1415,10 +1440,10 @@ public class Bridge {
             return true;
         }
         // 用户碰了屏幕（真触摸屏事件）→ 立刻让位。这是「点哪里都能打断」的关键：
-        // 定位时前台一直是桌面，光靠「切应用」判断不出来。
+        // 定位/索引时前台一直是桌面，光靠「切应用」判断不出来。
         // 提示已经由监听线程立即发过（见 startTouchWatch），这里只负责收尾。
-        if (locDeadline > 0 && touchDetected()) {
-            dbg("检测到真人触摸，停止定位");
+        if (touchWatching && touchDetected()) {
+            dbg("检测到真人触摸，停止定位/索引");
             try { service.shellLong("rm -f /sdcard/mineapp_loc.xml"); } catch (Throwable ignored) { }
             return true;
         }
