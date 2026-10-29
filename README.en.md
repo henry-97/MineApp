@@ -218,6 +218,10 @@ adb tcpip 5555
 
 Unplug → open the app → tick "Always allow" → Allow.
 
+> Want to walk through it yourself, or have no cable? See **Path B** (USB) and **Path C**
+> (wireless debugging) below for the full flow. You can also hand the whole thing to an
+> AI agent (**Path A**).
+
 **Case 2: `'adb' is not recognized` / `command not found`** → not installed, or not on PATH.
 Fix it with the steps below, then come back and run the command above.
 
