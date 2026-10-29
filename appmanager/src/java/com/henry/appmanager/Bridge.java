@@ -1107,17 +1107,25 @@ public class Bridge {
                             service.shellLong("input tap " + ((Integer) f[0]) + " " + ((Integer) f[1]));
                             try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                             added += indexPage(index, dumpHome(false), page, fname);
-                            // 用 home 而不是 back：back 在文件夹编辑态下只退出编辑，
-                            // 文件夹还开着，下一轮点坐标就会点到里面的应用
-                            service.shellLong("input keyevent 3");
-                            try { Thread.sleep(280); } catch (InterruptedException ignored) { }
-                            // 🔴 处理完一个文件夹必须**回到本页**：HOME 会把桌面拉回第 1 页
-                            //    （实测「第 1 页共 3 页」），不跳回来的话，后面几个文件夹的
-                            //    坐标就落在第 1 页上 —— 点开的是别的应用，索引记的是错的东西，
-                            //    目标应用永远进不了索引。
-                            //    实测：「迪士尼乐园」在第 2 页第 9 个文件夹里，一直索引不到。
-                            //    pager 里的圆点是绝对坐标，HOME 之后照样能点。
-                            if (i + 1 < folders.size()) jumpToPage(pager, page);
+                            // 🔴 用 BACK 关文件夹，不要用 HOME。
+                            //    HOME 一定会跳回桌面**第 1 页**（实测「第 1 页共 3 页」），
+                            //    之后为了接着索引当前页的文件夹，又得从第 1 页滑回来 ——
+                            //    用户看到的就是「打开文件夹 → 滑回去 → 左滑两下 → 再打开」
+                            //    每处理一个文件夹折腾一遍（实测被投诉）。
+                            //    BACK 只是关掉文件夹，页面停在原处，一下都不用滑。
+                            service.shellLong("input keyevent 4");
+                            try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+                        }
+                        // 每页文件夹处理完，确认还停在本页（BACK 万一没关掉文件夹、或用户手动滑过）。
+                        // 顺便把 pager 换成实测值：下一轮 jumpToPage 靠 pager[0] 算差值，
+                        // 用开局那份旧的会导致「多滑一页再修正」。
+                        int[] nowP = parsePager(dumpHome(true));
+                        if (nowP[0] > 0) {
+                            pager = nowP;
+                            if (nowP[0] != page) {
+                                dbg("索引：页号偏了(" + nowP[0] + "→" + page + ")，纠正");
+                                jumpToPage(pager, page);
+                            }
                         }
                         // 每页存一次盘，随时中断都不丢
                         sp.edit().putString("locIndex", index.toString())
