@@ -607,6 +607,16 @@ line-height:1.55;font-size:13.5px}
 #appTitle{cursor:pointer;display:flex;align-items:center;gap:5px;min-width:0}
 #appNameTx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 三处 ⓘ 提示统一用同一个字符字形，保证视觉大小完全一致（11.5px = 电池行/性能模式行字号） */
+.idx-note{font-size:11.5px;color:var(--ink3);line-height:1.55;margin-top:5px}
+.choice-btns{display:flex;flex-direction:column;gap:8px;padding:0 4px 4px}
+.choice-btn{width:100%;padding:11px 12px;border-radius:10px;border:0.5px solid var(--line);background:var(--card);color:var(--ink);font-size:14px;cursor:pointer}
+.choice-btn.primary{background:#0f6e56;border-color:#0f6e56;color:#fff}
+.choice-btn:active{opacity:.85}
+@keyframes pulseBtn{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(15,110,86,.45)}50%{transform:scale(1.14);box-shadow:0 0 0 9px rgba(15,110,86,0)}}
+.pulse{animation:pulseBtn 1s ease-in-out 4}
+.loc-btn{flex:none;margin-left:6px;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border-radius:50%;background:var(--card);border:0.5px solid var(--line);color:var(--ink2);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.loc-btn:active{background:var(--bg)}
+.loc-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .i-dot{flex:none;font-style:normal;font-size:11.5px;line-height:1;color:var(--ink3);
 transition:color .12s}
 #appTitle:active .i-dot{color:var(--ink2)}
@@ -776,6 +786,12 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:4px;margin-bottom:12px">
       <span data-t="keepNote" data-html="1">显示后台卡片易导致被误杀，默认不显示，可按需开启。后台只做少量 shell 查询，能耗极低，可放心常驻。建议手动允许本 App 的&nbsp;&nbsp;<a href="#" id="lnkNotif">通知</a>&nbsp;&nbsp;和&nbsp;&nbsp;<a href="#" id="lnkAuto">自启动</a>&nbsp;&nbsp;，及&nbsp;&nbsp;<a href="#" id="lnkPower">电源管理设置无限制</a>&nbsp;&nbsp;，可进一步防止被误杀。</span>
     </div>
+
+    <div class="setrow" style="gap:12px;margin:12px 0 0;align-items:center">
+      <div class="setrow-lb" data-t="idxTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">初始化应用查找功能</div>
+      <button class="edit" id="idxBtn" data-t="idxStart" style="padding:0 14px;flex:none">开始</button>
+    </div>
+    <div class="idx-note" data-t="idxNote" data-html="1" style="margin:4px 0 0">遍历桌面所有页和文件夹，建立应用位置索引。过程中可以随时操作手机打断，下次点「开始」会接着来。应用较多时约需数分钟，完成后查找会快很多。</div>
 
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
       <span class="setrow-lb" id="updLabel" data-ver="__APP_VERSION__">v —</span>
@@ -988,7 +1004,15 @@ var I18N = {
     riskFoot: '继续使用本软件，即表示自行承担因使用不当造成的风险。',
     riskAgree: '同意并使用', riskQuit: '退出',
     secIcon: '应用图标', iconExpand: '展开', iconCollapse: '折叠', loading: '读取中…',
-    secAgo: ' 秒前', minAgo: ' 分钟前',
+    secAgo: ' 秒前', minAgo: ' 分钟前', locating: '正在寻找应用',
+    locFound: '已找到 {n}', locNotFound: '没找到 {n}',
+    idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
+    locAskTitle: '还没初始化查找索引',
+    locAskBody: '直接查找要一页一页翻桌面、逐个开文件夹，可能需要几十秒；初始化会把所有应用的位置记下来，之后查找几乎秒出。\n初始化约需几分钟，期间可以随时操作手机打断，下次接着来。建议先初始化。',
+    locAskInit: '先初始化（推荐）', locAskDirect: '直接查找',
+    idxNote: '遍历桌面所有页和文件夹，建立应用位置索引。过程中可以随时操作手机打断，下次点「开始」会接着来。应用较多时约需数分钟，完成后查找会快很多。 <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
+    idxAgeMin: '上次完成：{n} 分钟前', idxAgeHour: '上次完成：{n} 小时前', idxAgeDay: '上次完成：{n} 天前',
+    idxDone: '索引完成，共 {n} 个应用', idxPaused: '已暂停，下次点「开始」接着来', idxFail: '初始化失败',
     perfPausedTitle: '系统频繁关闭性能模式',
     perfPausedBody: '最近 1 分钟内被系统关闭了 {n} 次（{when}）。\n'
       + '为避免和系统反复拉锯，已暂停自动维持性能模式。\n'
@@ -1120,7 +1144,15 @@ var I18N = {
     riskFoot: 'Continued use means accepting responsibility for any risk caused by misuse.',
     riskAgree: 'Agree and continue', riskQuit: 'Quit',
     secIcon: 'App icon', iconExpand: 'More', iconCollapse: 'Less', loading: 'Loading…',
-    secAgo: 's ago', minAgo: 'm ago',
+    secAgo: 's ago', minAgo: 'm ago', locating: 'Looking for app',
+    locFound: 'Found {n}', locNotFound: 'Not found: {n}',
+    idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
+    locAskTitle: 'No location index yet',
+    locAskBody: 'A direct lookup walks every page and opens every folder — it can take tens of seconds. Building the index first records where every app lives, so later lookups are near-instant.\nIndexing takes a few minutes; you can interrupt it any time and resume later. Building it first is recommended.',
+    locAskInit: 'Build index first', locAskDirect: 'Look up directly',
+    idxNote: 'Walks every home-screen page and folder to index where each app lives. You can interrupt it any time by using the phone — tapping Start again resumes. Takes a few minutes on a full phone, and makes later lookups much faster. <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
+    idxAgeMin: 'Last built {n} min ago', idxAgeHour: 'Last built {n} h ago', idxAgeDay: 'Last built {n} days ago',
+    idxDone: 'Index complete — {n} apps', idxPaused: 'Paused — tap Start to resume', idxFail: 'Indexing failed',
     perfPausedTitle: 'The system keeps turning performance mode off',
     perfPausedBody: 'It was switched off {n} times in the last minute ({when}).\n'
       + 'Auto-maintenance is paused so the app stops fighting the system.\n'
@@ -1185,6 +1217,8 @@ function applyLang(){
   if (bt) bt.innerHTML = T('perfTip') + ' <i class="tip-i">ⓘ</i>';
   var ph = document.querySelectorAll('[data-tp]');
   for (var j = 0; j < ph.length; j++) ph[j].setAttribute('placeholder', T(ph[j].getAttribute('data-tp')));
+  // 说明文字是 innerHTML 重写的，里面的「上次完成」占位会被清空 —— 补回去
+  if (typeof updateIdxAt === 'function') updateIdxAt();
   applyExtLinks();
   // 「当前版本 / 已是最新 / 发现新版本」是动态文案，data-t 覆盖不到，需要单独重绘
   if (typeof renderUpdState === 'function') renderUpdState();
@@ -1316,6 +1350,7 @@ function relang(){
 }
 
 function openSettings(){
+  updateIdxAt();                // 先用缓存值填上，别等列表刷新
   renderSettings();
   document.getElementById('settings').classList.add('show');
 }
@@ -1480,15 +1515,26 @@ function rowHtml(a){
   var cls = 'li' + (a.frozen ? ' frozen' : (a.restricted ? ' restricted' : ''))
           + (on ? ' on' : '');
   var aotOn = aotDone.has(aotKey(a));
+  // 只有桌面能放图标的应用才给「定位」按钮；纯服务类应用没有启动入口
+  var locBtn = a.launcher
+      ? '<span class="loc-btn" data-loc="' + a.pkg + '" role="button" aria-label="locate">'
+      +   '<svg viewBox="0 0 24 24" aria-hidden="true">'
+      +     '<path d="M12 21.5c0 0-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/>'
+      +   '</svg>'
+      + '</span>'
+      : '';
   return '<li class="' + cls + '" data-pkg="' + a.pkg + '">'
        +  '<span class="chk">' + (on ? '✓' : '') + '</span>'
        +  '<div class="meta"><div class="name"><span class="nm">' + a.label + '</span>'
-       +    sysTag(a) + '</div>'
+       +    locBtn
+       +    sysTag(a)
+       +  '</div>'
        +  '<div class="pkg">' + a.pkg + '</div>' + subline(a) + '</div>'
        +  '<div class="rt"><div class="rt-top">'
        +    (a.pss > 0 ? '<span class="kill-x" data-kill="' + a.pkg + '">×</span>' : '')
        +    '<span class="aot-lb">AOT</span>'
-       +    '<span class="aot-sw' + (aotOn ? ' on' : '') + '" data-pkg="' + a.pkg
+       +    '<span class="aot-sw' + (aotOn ? ' on' : '')
+       +      ((aotBusy && aotPkg === a.pkg) ? ' busy' : '') + '" data-pkg="' + a.pkg
        +      '" data-aot="' + (aotOn ? '1' : '0') + '"><i class="fill"></i><b class="pct"></b></span>'
        +  '</div>' + stateTag(a) + '</div></li>';
 }
@@ -1536,6 +1582,7 @@ function render(){
   document.getElementById('empty').style.display = (shownList.length || !adbOk) ? 'none' : 'block';
   updateInfo();
   updateActions();
+  if (aotBusy) aotTick();     // 重绘后把编译进度补回去
 }
 
 /* 快滚到底部时补下一批（留 800px 提前量，避免看到空白） */
@@ -1687,6 +1734,30 @@ function updateBanner(d){
    不再自动重拉一次列表；手动点刷新永远重新拉。 */
 var CACHE_KEY = 'listCache', CACHE_TTL = 60 * 1000;
 
+/* 多选一弹窗：buttons = [{label, cb}, ...]，第一个高亮 */
+function showChoice(title, body, buttons){
+  document.getElementById('alertTitle').textContent = title;
+  var h = '<div class="panel-loading" style="padding:6px 4px 16px;text-align:left">'
+        + body.replace(/\n/g, '<br>') + '</div><div class="choice-btns">';
+  for (var i = 0; i < buttons.length; i++){
+    h += '<button data-ci="' + i + '" class="choice-btn'
+       + (i === 0 ? ' primary' : '') + '">' + buttons[i].label + '</button>';
+  }
+  h += '</div>';
+  var be = document.getElementById('alertBody');
+  be.innerHTML = h;
+  var bs = be.querySelectorAll('[data-ci]');
+  for (var k = 0; k < bs.length; k++){
+    bs[k].onclick = (function(idx){
+      return function(){
+        document.getElementById('alert').classList.remove('show');
+        if (buttons[idx].cb) buttons[idx].cb();
+      };
+    })(k);
+  }
+  document.getElementById('alert').classList.add('show');
+}
+
 /* 通用说明面板 */
 function showAlert(title, body){
   document.getElementById('alertTitle').textContent = title;
@@ -1704,6 +1775,10 @@ function applyData(d){
   }
   document.getElementById('perfChk').checked = (d.perf === true) || perfWanted;
   apps = d.apps || [];
+  if (apps.length) idxReady = !!apps[0].idx_ready;
+  idxAt = (d && d.idx_at) || 0;
+  try { localStorage.setItem('idxAt', String(idxAt)); } catch (e) {}
+  updateIdxAt();
   if (!aotSynced){ aotSynced = true; syncAot(); }
   // 系统反复取消性能模式 → 后台已暂停维持，这里说明一次（同一个时间点只弹一次）
   if (d.perf_paused){
@@ -1832,6 +1907,7 @@ function load(force){
 document.getElementById('list').addEventListener('click', function(e){
   if (e.target.closest('.aot-sw')) return;   // AOT 开关走单独的处理
   if (e.target.closest('.kill-x')) return;   // 清理按钮也走单独的处理
+  if (e.target.closest('.loc-btn')) return;  // 定位按钮：只定位，不勾选这个应用
   var li = e.target.closest('li');
   if (!li || busy) return;
   var pkg = li.getAttribute('data-pkg');
@@ -1875,8 +1951,30 @@ document.getElementById('list').addEventListener('click', function(e){
 
 /* AOT 预编译：点开关 → 轨道变成进度条（秒数同步显示在标签上），完成后就地刷新 */
 var aotBusy = false;
+/* 编译进度必须是全局状态：列表刷新会重绘整行，闭包里抓着的旧节点一旦脱离文档，
+   进度条就"消失"了，而 aotBusy 还是 true —— 再点只会提示「编译中」。
+   现在每帧都按 data-pkg 重新找节点，重绘多少次都不丢。 */
+var aotPkg = null, aotT0 = 0, aotWantOn = false, aotTimer = null;
 /* 已经确认过「就算超时也要再试一次」的包，避免确认框点确定后又弹一次 */
 var aotForcePkg = null;
+
+/* 画一帧编译进度；节点可能被 render() 换掉，所以每次重新查 */
+function aotTick(){
+  if (!aotBusy || !aotPkg) return;
+  var el = document.querySelector('#list .aot-sw[data-pkg="' + aotPkg + '"]');
+  if (!el) return;                       // 被搜索/排序筛出视图了
+  el.classList.remove('on');
+  el.classList.add('busy');
+  var fill = el.querySelector('.fill'), pctEl = el.querySelector('.pct');
+  var t = (Date.now() - aotT0) / 1000;
+  var pct = Math.min(99, 99 * (1 - Math.pow(0.5, (t + 3) / 20)));
+  if (fill) fill.style.width = pct.toFixed(1) + '%';
+  if (pctEl){
+    var sec = Math.floor(t);
+    pctEl.textContent = sec < 60 ? (sec + 's')
+                      : (Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2));
+  }
+}
 document.getElementById('list').addEventListener('click', function(e){
   var sw = e.target.closest('.aot-sw');
   if (!sw) return;
@@ -1903,40 +2001,27 @@ document.getElementById('list').addEventListener('click', function(e){
   }
 
   aotBusy = true;
-
-  // 进度条：轨道清空、滑块隐藏，绿色从左侧推进，百分比实时显示在左侧标签上。
-  // 真实耗时不可知（微信 speed 编译要 6 分钟+），用渐近曲线：起步快、后段缓慢逼近 99%
-  sw.classList.remove('on');
-  sw.classList.add('busy');
-  var fill = sw.querySelector('.fill');
-  var pctEl = sw.querySelector('.pct');
+  aotPkg = pkg;
+  aotWantOn = wantOn;
   var t0 = Date.now();
-  // 显示已用时而不是假百分比：大应用 speed 编译实测要 10 分钟，
-  // 伪进度条会在 99% 停七八分钟，看起来像卡死。真实耗时不可知，报时间最诚实。
-  function tick(){
-    var t = (Date.now() - t0) / 1000;
-    var pct = Math.min(99, 99 * (1 - Math.pow(0.5, (t + 3) / 20)));
-    if (fill) fill.style.width = pct.toFixed(1) + '%';
-    if (pctEl){
-      var sec = Math.floor(t);
-      pctEl.textContent = sec < 60 ? (sec + 's')
-                        : (Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2));
-    }
-  }
-  tick();
-  var timer = setInterval(tick, 200);
-
+  aotT0 = t0;
+  // 真实耗时不可知（微信 speed 编译要 6 分钟+），用渐近曲线：起步快、后段缓慢逼近 99%，
+  // 左侧标签显示真实已用时
+  aotTick();
+  if (aotTimer) clearInterval(aotTimer);
+  aotTimer = setInterval(aotTick, 200);
   function settle(ok){
-    // 就地复位，不整表重绘 —— 否则列表会跳回顶部
-    clearInterval(timer);
-    aotBusy = false;
-    sw.classList.remove('busy');
-    if (fill) fill.style.width = '0%';
-    if (pctEl) pctEl.textContent = '';
-    if (ok){
-      if (wantOn) sw.classList.add('on');
-      sw.setAttribute('data-aot', wantOn ? '1' : '0');
+    if (aotTimer){ clearInterval(aotTimer); aotTimer = null; }
+    var el = document.querySelector('#list .aot-sw[data-pkg="' + pkg + '"]');
+    if (el){
+      el.classList.remove('busy');
+      var f = el.querySelector('.fill'); if (f) f.style.width = '0%';
+      var pe = el.querySelector('.pct'); if (pe) pe.textContent = '';
+      el.classList.toggle('on', !!ok && wantOn);
+      if (ok) el.setAttribute('data-aot', wantOn ? '1' : '0');
     }
+    aotBusy = false;
+    aotPkg = null;
   }
 
   fetch('/api/aot', {method:'POST', headers:{'Content-Type':'application/json'},
@@ -1965,6 +2050,103 @@ document.getElementById('list').addEventListener('click', function(e){
     })
     .catch(function(){ settle(false); });
 });
+
+/* 桌面定位：首次 dump 找坐标（约 2.3 秒），之后 2 分钟内走缓存；
+   15 秒内重复点同一个应用 = 用户觉得位置不对，强制重查。 */
+var locCache = {};
+try { locCache = JSON.parse(localStorage.getItem('locCache') || '{}') || {}; } catch (e) { locCache = {}; }
+var locLastPkg = '', locLastAt = 0;
+var idxReady = false;
+var idxAt = parseInt(localStorage.getItem('idxAt') || '0', 10) || 0;
+var LOC_TTL = 2 * 60 * 1000;
+var LOC_FORCE = 15000;
+
+document.getElementById('list').addEventListener('click', function(e){
+  var btn = e.target.closest('[data-loc]');
+  if (!btn) return;
+  var pkg = btn.getAttribute('data-loc');
+  var one = null;
+  for (var i = 0; i < apps.length; i++) if (apps[i].pkg === pkg) { one = apps[i]; break; }
+  var label = one ? one.label : '';
+  var now = Date.now();
+  var force = (locLastPkg === pkg && now - locLastAt < LOC_FORCE);
+  var c = locCache[pkg];
+  locLastPkg = pkg; locLastAt = now;
+
+  // 还没建过索引：首次点击先问一次要不要初始化（问过就不再打扰）
+  if (!idxReady && localStorage.getItem('locIdxAsked') !== '1'){
+    localStorage.setItem('locIdxAsked', '1');
+    showChoice(T('locAskTitle'), T('locAskBody'), [
+      {label: T('locAskInit'), cb: function(){ goInitIndex(); }},
+      {label: T('locAskDirect'), cb: function(){ doLocate(pkg, label, force, c, now); }},
+      {label: T('cancel'), cb: function(){}}
+    ]);
+    return;
+  }
+  doLocate(pkg, label, force, c, now);
+});
+
+/* 索引刚跑完：立刻把「上次完成」更新成现在，并刷新列表拿到新的 idx_ready。
+   遍历是在后台跑的，App 回来时前端并不知道已经完成 —— 所以 Java 那边跑完会
+   回到 App 并调用 window.__idxDone()，这里就是那个入口。 */
+function markIdxDone(){
+  idxAt = Date.now();
+  try { localStorage.setItem('idxAt', String(idxAt)); } catch (e) {}
+  idxReady = true;
+  updateIdxAt();
+  load(true);
+}
+window.__idxDone = markIdxDone;
+
+/* 显示索引的年龄：「上次完成：3 天前」 */
+function updateIdxAt(){
+  var el = document.getElementById('idxAt');
+  if (!el) return;
+  if (!idxAt){ el.textContent = ''; return; }
+  var sec = Math.max(0, (Date.now() - idxAt) / 1000);
+  var txt;
+  if (sec < 3600) txt = T2('idxAgeMin', {n: Math.max(1, Math.round(sec / 60))});
+  else if (sec < 86400) txt = T2('idxAgeHour', {n: Math.round(sec / 3600)});
+  else txt = T2('idxAgeDay', {n: Math.floor(sec / 86400)});
+  el.textContent = txt;
+}
+
+/* 跳到设置页并把「开始」按钮脉冲几下，引导点击 */
+function goInitIndex(){
+  openSettings();
+  setTimeout(function(){
+    var b = document.getElementById('idxBtn');
+    if (!b) return;
+    try { b.scrollIntoView({block: 'center', behavior: 'smooth'}); } catch (e) {}
+    b.classList.remove('pulse');
+    void b.offsetWidth;              // 强制重排，让动画能重放
+    b.classList.add('pulse');
+    setTimeout(function(){ b.classList.remove('pulse'); }, 4500);
+  }, 350);
+}
+
+function doLocate(pkg, label, force, c, now){
+
+  // 🔴 不再用「缓存坐标直接长按」抄近路。
+  //    桌面一改（拖图标、装新应用、开关文件夹），旧坐标就落到空白处，
+  //    表现是「定位偏了，长按变成了长按桌面」。坐标必须每次 dump 现取。
+  //    缓存里的 page 只当页号提示传给后端，省一次索引读取。
+  fetch('/api/locate', {method:'POST', headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify({label: label, hint: T('locating'),
+                                              page: (c && c.page) || -1,
+                                              found: T('locFound'), nf: T('locNotFound')})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.found){
+        locCache[pkg] = {page: d.page, t: Date.now()};
+        try { localStorage.setItem('locCache', JSON.stringify(locCache)); } catch (e) {}
+      } else {
+        delete locCache[pkg];
+        try { localStorage.setItem('locCache', JSON.stringify(locCache)); } catch (e) {}
+      }
+    })
+    .catch(function(){});
+}
 
 document.getElementById('q').addEventListener('input', render);
 
@@ -2152,6 +2334,32 @@ document.addEventListener('click', function(e){
   if (e.target && e.target.closest && e.target.closest('#btnTune')) openTune();
 });
 console.log('tune-ready');
+/* 初始化应用查找功能：全量遍历桌面建索引，可中断可续传 */
+var idxRunning = false;
+document.getElementById('idxBtn').onclick = function(){
+  if (idxRunning) return;
+  idxRunning = true;
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = T('idxRunning');
+  toast(T('idxRunning'));
+  fetch('/api/buildindex', {method:'POST'}).then(function(r){ return r.json(); })
+    .then(function(d){
+      idxRunning = false;
+      btn.disabled = false;
+      btn.textContent = T('idxStart');
+      if (!d || !d.ok){ toast(T('idxFail')); return; }
+      if (d.done) markIdxDone();
+      toast(d.done ? T2('idxDone', {n: d.count}) : T('idxPaused'));
+    })
+    .catch(function(){
+      idxRunning = false;
+      btn.disabled = false;
+      btn.textContent = T('idxStart');
+      toast(T('idxFail'));
+    });
+};
+
 document.getElementById('alertClose').onclick = function(){
   document.getElementById('alert').classList.remove('show');
 };

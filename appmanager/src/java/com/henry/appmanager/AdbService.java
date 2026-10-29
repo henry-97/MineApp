@@ -1129,6 +1129,14 @@ public class AdbService {
     private int labelCacheCount = -1;
     private static final long LABEL_TTL = 5 * 60 * 1000L;
 
+    /** 桌面索引是否已建好（buildindex 完成时写 locIndexAt） */
+    private boolean locIndexReady = false;
+    /** 上次索引完成的时间戳，0 表示从没建过 */
+    private long locIndexAt = 0;
+
+    /** 有启动入口（桌面能放图标）的包；labelMap 里本来就在查，这里留存下来给前端判断 */
+    private static Set<String> launchableSet = null;
+
     private Map<String, String> labelMap(int pkgCount) {
         long now = System.currentTimeMillis();
         if (labelCache != null && labelCacheCount == pkgCount
@@ -1141,6 +1149,7 @@ public class AdbService {
             android.content.pm.PackageManager pm = appCtx.getPackageManager();
 
             // 第 1 轮：所有带启动入口的应用（一次批量查询，不按包循环）
+            Set<String> launchable = new HashSet<String>();
             try {
                 android.content.Intent launcher = new android.content.Intent(
                         android.content.Intent.ACTION_MAIN);
@@ -1153,12 +1162,14 @@ public class AdbService {
                     CharSequence cs = ri.loadLabel(pm);
                     if (cs == null) continue;
                     String nm = cs.toString().trim();
+                    launchable.add(pkg);
                     if (nm.isEmpty() || nm.equals(pkg)) continue;
                     if (!m.containsKey(pkg)) m.put(pkg, nm);
                 }
             } catch (Throwable e) {
                 Log.w(TAG, "取启动项名称失败: " + e);
             }
+            launchableSet = launchable;
 
             // 第 2 轮：没有启动入口的包（系统组件、服务类应用）
             // 用 getInstalledPackages 而不是 getInstalledApplications：顺带拿到 versionCode，
@@ -1241,6 +1252,9 @@ public class AdbService {
                 a.put("pss", v == null ? 0 : v);
                 a.put("active", pssInfo.active.contains(pkg));
                 a.put("restricted", restricted.contains(pkg));
+                // 只有桌面能放图标的才显示「定位」按钮；纯服务类应用没有启动入口
+                a.put("launcher", launchableSet != null && launchableSet.contains(pkg));
+                a.put("idx_ready", locIndexReady);
             } catch (Exception ignored) { }
             apps.add(a);
         }
@@ -1282,6 +1296,12 @@ public class AdbService {
             out.put("adb_ok", true);
             out.put("adb_state", "ok");
             out.put("adb_msg", "");
+            try {
+                locIndexAt = appCtx == null ? 0
+                        : appCtx.getSharedPreferences("app", 0).getLong("locIndexAt", 0);
+                locIndexReady = locIndexAt > 0;
+            } catch (Throwable ignored) { }
+            out.put("idx_at", locIndexAt);
             out.put("perf", getPerfMode());
             // 「系统频繁取消性能模式」的暂停状态：前端据此弹一次说明
             try {
