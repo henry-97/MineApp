@@ -54,6 +54,13 @@ SHIM = r"""
     else if (url.indexOf('/api/name') === 0) p = call('name', body.name || '');
     else if (url.indexOf('/api/icon') === 0) p = call('icon', body.key || '');
     else if (url.indexOf('/api/kill') === 0) p = call('kill', (body.pkg || '') + '|' + (body.pss || 0));
+    // 🔴 查找应用相关：这两个接口漏了会让「点定位没反应」—— shim 匹配不到就走
+    //    else 分支返回空对象，前端拿 d.found === undefined 后什么都不做，完全静默
+    else if (url.indexOf('/api/locate') === 0) p = call('locate',
+        (body.label || '') + '|' + (body.hint || '') + '|' +
+        (body.page == null ? -1 : body.page) + '|' +
+        (body.found || '') + '|' + (body.nf || ''));
+    else if (url.indexOf('/api/buildindex') === 0) p = call('buildindex', '');
     // 🔴 aotsync 必须排在 aot 前面：'/api/aotsync'.indexOf('/api/aot') === 0，
     // 顺序反了会被当成 aot 接口（编译），拿到的是 ok/aot/skipped/status/msg
     else if (url.indexOf('/api/aotsync') === 0) p = call('aotsync', '');
