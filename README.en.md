@@ -179,7 +179,11 @@ that single `adb tcpip` keeps working; after a reboot, just run it once more.
 
 The app talks to the adbd listening on **port 5555 of the same device**, so adbd has to be told to
 listen on TCP. Do this **once, at install time** — after that it is all taps inside the app, with no
-PC involved, for as long as the phone stays booted.
+PC involved.
+
+**Configure once, permanent effect**: every archive and restriction you set in the app is written into
+system state and **survives a reboot**. A reboot only means the list can't be read for now and no new
+restrictions can be applied — apps you already restricted or archived keep their state.
 
 #### Path A — let an AI agent do it (zero-friction, best for beginners)
 
@@ -311,6 +315,10 @@ Then open the app and tick "Always allow" on the phone.
 Port 5555 closes (`adb tcpip` does not survive a reboot, and `persist.adb.tcp.port` cannot be written
 without root). **Repeat either path above.** The app shows "ADB channel not connected" and reminds you
 of the command.
+
+**But the restrictions and archives you already set are permanent**: they live in system state, so one
+reboot or ten makes no difference. Only the "read the list" channel is down — no rush to redo it, do it
+whenever convenient.
 
 ## Build from source
 
