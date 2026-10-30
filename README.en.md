@@ -382,6 +382,9 @@ exactly that UI — no second implementation to keep in sync.
 - **Port 5555 closes on reboot.** Run `adb tcpip 5555` once more.
   `persist.adb.tcp.port` cannot be written without root (SELinux blocks the shell user), so there is
   no way to make it survive a reboot.
+  **This does not affect core functionality**: even if you never re-authorise, every restriction and
+  archive you already set **stays in effect**. Without authorisation you simply cannot read an
+  up-to-date app list or add new restrictions — run the command again whenever it's convenient.
 - **Full AOT compilation is memory-hungry.** dex2oat can peak above 2 GB, so the app refuses to start
   below ~2.5 GB of free memory and tells you why. A few very large apps (many plugin dex files, e.g.
   TikTok Lite) may be abandoned by dex2oat even with plenty of RAM, leaving the status at `speed-profile`.
