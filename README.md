@@ -326,23 +326,28 @@ MineApp/
 │   ├── build.sh                  aapt2 → javac → d8 → zipalign → apksigner
 │   ├── src/java/.../
 │   │   ├── AdbClient.java        ADB 协议实现（CNXN/AUTH/OPEN/WRTE/OKAY/CLSE）
-│   │   ├── AdbService.java       业务层：列表、归档、限制、AOT、电池、内存
+│   │   ├── AdbService.java       业务层：列表、归档、限制、AOT、电池、内存、桌面索引
 │   │   ├── Bridge.java           JS ↔ Java 桥，双线程池（普通 / 长任务分开）
 │   │   ├── MainActivity.java     WebView 宿主
 │   │   └── KeepAliveService.java 常驻通知
 │   ├── res/                      资源（图标由 tools/gen_icon.py 生成）
-│   ├── assets/                   打包进 APK 的前端
+│   ├── assets/                   打包进 APK 的前端（生成物，不要手改）
 │   └── tools/
-│       ├── gen_assets.py         从 server.py 提取前端 + 包名映射
+│       ├── gen_assets.py         从前端源文件抽取 HTML/CSS/JS + 包名映射
 │       ├── gen_icon.py           生成 6 套自适应图标
 │       └── gen_manifest.py       生成 12 个 activity-alias
-└── termux/
-    └── webui/server.py           前端唯一真源（同时也是 Termux 版服务端）
+├── termux/webui/
+│   └── server.py                 前端唯一真源（内嵌整个 HTML/CSS/JS）
+├── docs/                         各版本发布说明、图标与截图
+└── dist/                         构建产物（APK）
 ```
 
 **前端只有一份。** `server.py` 里内嵌了整个 HTML/CSS/JS，`gen_assets.py` 把它原样抽出来，
-再注入一层 `fetch → Java 桥` 的 shim，所以 Termux 版和 APK 版的界面逻辑完全一致，
-不存在两份实现需要同步。
+再注入一层 `fetch → Java 桥` 的 shim，APK 里跑的就是这份界面 —— 不存在两份实现需要同步。
+
+> `termux/` 这个目录名是历史遗留：早期提供过「Termux + Python 脚本免 root」的分发形态，
+> 现在只作为前端源码的存放位置，不再随项目分发，也不需要装 Termux。
+> 文件末尾那段独立的本地 HTTP 服务端同样是那时的产物，App 不会用到。
 
 ## 已知限制
 
