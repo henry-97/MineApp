@@ -345,8 +345,8 @@ MineApp/
 **前端只有一份。** `server.py` 里内嵌了整个 HTML/CSS/JS，`gen_assets.py` 把它原样抽出来，
 再注入一层 `fetch → Java 桥` 的 shim，APK 里跑的就是这份界面 —— 不存在两份实现需要同步。
 
-> `termux/` 这个目录名是历史遗留：早期提供过「Termux + Python 脚本免 root」的分发形态，
-> 现在只作为前端源码的存放位置，不再随项目分发，也不需要装 Termux。
+> 本项目不需要提前装 Termux。`termux/` 这个目录名是历史遗留：早期提供过「Termux + Python 脚本免 root」的分发形态，
+> 现在只作为前端源码的存放位置，不再随项目分发。
 > 文件末尾那段独立的本地 HTTP 服务端同样是那时的产物，App 不会用到。
 
 ## 已知限制
