@@ -366,8 +366,7 @@ exactly that UI — no second implementation to keep in sync.
 
 > This project does not require Termux. The `termux/` folder name is historical: an early
 > distribution ran the app as a Termux + Python script without root. It now only holds the
-> front-end source and is no longer shipped. The standalone HTTP server at the end of that file
-> is a leftover from the same era and is never used by the app.
+> front-end source and is no longer shipped.
 
 ## Known limitations
 
