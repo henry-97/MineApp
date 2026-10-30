@@ -209,6 +209,8 @@ rest to any AI agent (ChatGPT / Claude / Gemini / Cursor — whatever you use).
 
 The agent downloads platform-tools, runs adb and installs the APK. All you tap is "Allow", twice.
 
+**Path B / C: manual install is easy too — once `adb` is set up it comes down to a single command, `adb tcpip 5555`.**
+
 #### Make sure `adb` works (both Path B and C need this)
 
 **Case 1: `adb devices` lists your device** → run this one command and you're done:
