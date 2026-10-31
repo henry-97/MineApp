@@ -42,6 +42,12 @@ The app ships a minimal ADB client, authenticates with a key kept in its private
 talks to `pm` / `am` / `cmd` directly. That key survives a covering install untouched —
 **so updates inherit the authorization automatically, with no need to run `adb` again**.
 
+**After that the PC is out of the picture** — freezing, restricting, AOT compilation and performance
+profiles are all a few taps on the phone, with no adb tooling involved. As long as you do not reboot,
+that single `adb tcpip` keeps working. After a reboot, every restriction stays in effect even before
+you re-authorise — you just cannot refresh the app list until you run it once more at your convenience,
+**so rebooting often is nothing to worry about**.
+
 **One app, and that is the whole setup.** A single 553 KB APK with zero third-party dependencies:
 no Shizuku, no Ice Box, no Hail, no resident daemon, no extra permissions.
 
@@ -64,12 +70,6 @@ for the next tick.
 
 In short: **poll the lightest metric often, do the heavy work rarely** — minimal load on the device,
 with information that never goes stale.
-
-**After that the PC is out of the picture** — freezing, restricting, AOT compilation and performance
-profiles are all a few taps on the phone, with no adb tooling involved. As long as you do not reboot,
-that single `adb tcpip` keeps working. After a reboot, every restriction stays in effect even before
-you re-authorise — you just cannot refresh the app list until you run it once more at your convenience,
-**so rebooting often is nothing to worry about**.
 
 ### Compared to the usual options
 
@@ -99,7 +99,7 @@ you re-authorise — you just cannot refresh the app list until you run it once 
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, and its **launcher icon disappears entirely** (MIUI / HyperOS doesn't render a greyed-out state) |
 | **Restrict** | `appops RUN_IN_BACKGROUND` — restricts background activity; milder than freezing, the app can still be launched |
-| **App finder** (new in 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
+| **App finder** (new and refined in 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
 | **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling. **State is auto-detected**: after a reinstall or data wipe it reads back which apps are already AOT-compiled from `dumpsys package dexopt`, so the UI shows the truth instead of starting from zero |
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
