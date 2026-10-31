@@ -174,9 +174,9 @@ you re-authorise — you just cannot refresh the app list until you run it once 
 
 ### First-time setup (once only)
 
-The app talks to the adbd listening on **port 5555 of the same device**, so adbd has to be told to
-listen on TCP. Do this **once, at install time** — after that it is all taps inside the app, with no
-PC involved.
+The app talks to the adbd listening on **port 5555 of the same device** (a custom port is also
+supported), so adbd has to be told to listen on TCP. Do this **once, at install time** — after that
+it is all taps inside the app, with no PC involved.
 
 **Configure once, permanent effect**: every archive and restriction you set in the app is written into
 system state and **survives a reboot**. A reboot only means the list can't be read for now and no new
