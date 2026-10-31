@@ -763,7 +763,7 @@ var I18N = {
     locWaitRefresh: '正在刷新列表，完成后自动定位',
     idxNote: '遍历桌面所有页和文件夹，建立应用位置索引。过程中可以随时操作手机打断，下次点「开始」会接着来。应用较多时约需数分钟，完成后查找会快很多。 <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
     idxAgeMin: '上次完成：{n} 分钟前', idxAgeHour: '上次完成：{n} 小时前', idxAgeDay: '上次完成：{n} 天前',
-    idxDone: '索引完成，共 {n} 个应用', idxPaused: '已暂停，下次点「开始」接着来', idxFail: '初始化失败',
+    idxDone: '索引完成，共 {n} 个应用', idxPaused: '已暂停，下次点「开始」接着来', idxFail: '索引构建失败，建议反馈 issue（附机型与桌面信息），以便持续更新',
     perfPausedTitle: '系统频繁关闭性能模式',
     perfPausedBody: '最近 1 分钟内被系统关闭了 {n} 次（{when}）。\n'
       + '为避免和系统反复拉锯，已暂停自动维持性能模式。\n'
@@ -910,7 +910,7 @@ var I18N = {
     locWaitRefresh: 'Refreshing the list — locating right after',
     idxNote: 'Walks every home-screen page and folder to index where each app lives. You can interrupt it any time by using the phone — tapping Start again resumes. Takes a few minutes on a full phone, and makes later lookups much faster. <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
     idxAgeMin: 'Last built {n} min ago', idxAgeHour: 'Last built {n} h ago', idxAgeDay: 'Last built {n} days ago',
-    idxDone: 'Index complete — {n} apps', idxPaused: 'Paused — tap Start to resume', idxFail: 'Indexing failed',
+    idxDone: 'Index complete — {n} apps', idxPaused: 'Paused — tap Start to resume', idxFail: 'Failed to build the index — please open an issue with your device and launcher',
     perfPausedTitle: 'The system keeps turning performance mode off',
     perfPausedBody: 'It was switched off {n} times in the last minute ({when}).\n'
       + 'Auto-maintenance is paused so the app stops fighting the system.\n'
@@ -2264,6 +2264,10 @@ document.getElementById('idxBtn').onclick = function(){
       btn.disabled = false;
       btn.textContent = T('idxStart');
       if (d && d.unsupported){
+        // 这台设备的桌面不支持 → 引导条再挂着也没意义，直接自动隐藏
+        // （不等用户点「不再提示」，否则每次打开都提醒一次「点此构建」，点完还是失败）
+        localStorage.setItem('idxHintOff', '1');
+        updateIdxHint();
         // 用模态而不是 toast：Java 侧的 backToApp 是异步的，toast 在后台渲染，
         // 用户回到前台时早已过期（实测两轮都抓不到）。模态会一直挂着，不怕错过。
         setTimeout(function(){

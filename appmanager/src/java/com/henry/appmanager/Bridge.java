@@ -755,6 +755,174 @@ public class Bridge {
         return true;
     }
 
+    /**
+     * 桌面读不到任何页码信息时的兜底：**靠滑动数页数**（L2）。
+     *
+     * 思路：页码 = 滑动次数。先把页面滑到最左（再往右滑内容不再变化 = 到边界），
+     * 再从最左一路左滑，每滑一次取一份「页面指纹」，指纹重复 = 绕回或到头。
+     *
+     * 成功返回总页数，并且**结束时停在页面最左那一页**；失败返回 0。
+     * 负一屏（Google Discover / 智能助理）和循环滚动桌面都在这里被挡住：
+     *   - 负一屏里几乎没有可点的应用图标 → 指纹里条目太少，识别后退回来
+     *   - 循环桌面 → 指纹会重复，seen 集合直接终止
+     */
+    private int probeSweep() {
+        final int MAX = 10;             // 超过 10 页就不再往下数，够用了
+        service.shellLong("input keyevent 3");
+        try { Thread.sleep(700); } catch (InterruptedException ignored) { }
+        String prev = pageSignature(dumpHome(false));
+        if (prev.isEmpty()) {
+            dbg("滑动探测：桌面 dump 为空，放弃");
+            return 0;
+        }
+        // 🔴 判断「这一屏还是不是桌面」的通用依据：**Dock 图标**。
+        //    桌面每一页底部都有同一组 Dock（电话/信息/相机…），负一屏
+        //    （Google Discover / 各家智能助理）没有 —— 实测单页桌面被数成 2 页，
+        //    就是因为把 Discover 当成了一页。
+        java.util.Set<String> base = new java.util.HashSet<String>();
+        for (String d : prev.split("\\|")) base.add(d);
+
+        // ① 一路右滑，直到内容不再变化（= 已经在最左一页）
+        for (int i = 0; i < MAX; i++) {
+            if (interrupted()) return 0;
+            swipePage(false);
+            String cur = pageSignature(dumpHome(false));
+            if (cur.isEmpty()) return 0;
+            if (cur.equals(prev)) break;              // 滑不动了
+            if (!sharesDock(cur, base)) {             // 进了负一屏 → 退回来收工
+                dbg("滑动探测：右侧遇到非桌面页面，退回");
+                swipePage(true);
+                try { Thread.sleep(400); } catch (InterruptedException ignored) { }
+                break;
+            }
+            prev = cur;
+        }
+        // ② 从最左一页开始往左数，指纹重复或离开桌面即到头
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        seen.add(prev);
+        int total = 1;
+        for (int i = 0; i < MAX; i++) {
+            if (interrupted()) return 0;
+            swipePage(true);
+            String cur = pageSignature(dumpHome(false));
+            if (cur.isEmpty()) break;
+            if (!seen.add(cur)) break;                // 绕回已见过的页 = 到头
+            if (!sharesDock(cur, base)) {             // 负一屏 / 别家界面
+                dbg("滑动探测：左侧遇到非桌面页面，停止");
+                swipePage(false);                     // 退回最后一页真实桌面
+                try { Thread.sleep(400); } catch (InterruptedException ignored) { }
+                break;
+            }
+            total++;
+        }
+        // ③ 滑回最左页，让调用方从第 1 页开始索引
+        for (int i = 1; i < total; i++) {
+            if (interrupted()) return 0;
+            swipePage(false);
+        }
+        dbg("滑动探测：共 " + total + " 页");
+        return total;
+    }
+
+    /**
+     * 一页的「指纹」：所有**图标尺寸**的可点击节点，content-desc 排序后拼接。
+     *
+     * 🔴 必须按尺寸过滤：负一屏（Google Discover）的新闻卡片也是 clickable + 有 content-desc，
+     *    不过滤会把负一屏当成一个正常页面，实测「单页桌面被数成 2 页」。
+     *    应用图标和文件夹都在 400px 见方以内，新闻卡片是通栏宽。
+     */
+    private static String pageSignature(String xml) {
+        if (xml == null || xml.isEmpty()) return "";
+        java.util.TreeSet<String> set = new java.util.TreeSet<String>();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("<node\\b[^>]*>").matcher(xml);
+        while (m.find()) {
+            String tag = m.group();
+            if (!"true".equals(nodeAttr(tag, "clickable"))) continue;
+            String d = nodeAttr(tag, "content-desc");
+            if (d == null || d.isEmpty()) continue;
+            String bounds = nodeAttr(tag, "bounds");
+            if (bounds == null) continue;
+            java.util.regex.Matcher b = java.util.regex.Pattern
+                    .compile("\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]").matcher(bounds);
+            if (!b.find()) continue;
+            int w = Integer.parseInt(b.group(3)) - Integer.parseInt(b.group(1));
+            int h = Integer.parseInt(b.group(4)) - Integer.parseInt(b.group(2));
+            if (w > 400 || h > 400) continue;      // 通栏卡片/横幅，不是桌面图标
+            set.add(d);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String s : set) {
+            if (sb.length() > 0) sb.append('|');
+            sb.append(s);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 无页码桌面的**全量扫描**（索引没命中时的兜底）。
+     *
+     * 从最左页开始逐页 dump，页内找不到就逐个点开文件夹找，然后左滑去下一页，
+     * 直到「页面指纹重复」（到头或绕回）。页号用滑动次数自洽，不依赖任何页码文本。
+     *
+     * 找到返回节点坐标（并通过 pageOut[0] 带回页号），找不到返回 null。
+     */
+    private int[] sweepScan(String label, int[] pageOut) {
+        final int MAX = 10;
+        service.shellLong("input keyevent 3");
+        try { Thread.sleep(500); } catch (InterruptedException ignored) { }
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        for (int pg = 1; pg <= MAX; pg++) {
+            if (userLeft()) return null;
+            String px = dumpHome(false);
+            if (px.isEmpty()) return null;
+            if (!seen.add(pageSignature(px))) break;      // 到头 / 绕回
+            int[] hit = findNode(px, label, false);
+            if (hit == null) hit = findNodeLoose(px, label);
+            if (hit != null) {
+                if (pageOut != null) pageOut[0] = pg;
+                dbg("滑动扫描命中: " + label + " → 第 " + pg + " 页");
+                return hit;
+            }
+            // 该页的文件夹：文件夹不展开时里面的图标进不了无障碍树
+            java.util.List<int[]> folders = findFolders(px);
+            for (int i = 0; i < folders.size() && i < 12; i++) {
+                if (userLeft()) return null;
+                service.shellLong("input tap " + folders.get(i)[0] + " " + folders.get(i)[1]);
+                try { Thread.sleep(450); } catch (InterruptedException ignored) { }
+                String fx = dumpHome(false);
+                if (fx.isEmpty()) return null;
+                hit = findNode(fx, label, false);
+                if (hit == null) hit = findNodeLoose(fx, label);
+                if (hit != null) {
+                    if (pageOut != null) pageOut[0] = pg;
+                    dbg("滑动扫描命中: " + label + " → 第 " + pg + " 页（文件夹内）");
+                    return hit;
+                }
+                service.shellLong("input keyevent 4");
+                try { Thread.sleep(280); } catch (InterruptedException ignored) { }
+            }
+            if (pg < MAX) swipePage(true);
+        }
+        return null;
+    }
+
+    /** 这一屏是否还带桌面 Dock（与首页有共同的应用图标）。 */
+    private static boolean sharesDock(String sig, java.util.Set<String> base) {        if (sig.isEmpty() || base.isEmpty()) return false;
+        for (String d : sig.split("\\|")) {
+            if (base.contains(d)) return true;
+        }
+        return false;
+    }
+
+    /** 翻页：toNext=true 左滑去下一页，false 右滑回上一页。 */
+    private void swipePage(boolean toNext) {
+        int fx = toNext ? 950 : 200;
+        int tx = toNext ? 200 : 950;
+        service.shellLong("input swipe " + fx + " 1200 " + tx + " 1200 260");
+        try { Thread.sleep(320); } catch (InterruptedException ignored) { }
+    }
+
     private String dumpHome(boolean needPager) {
         // 🔴 必须用 --compressed。
         //
@@ -918,8 +1086,14 @@ public class Bridge {
                                 // dumpHome 返回空串 = 用户切走了（或界面读不到），直接收尾，
                                 // 否则 parsePager 拿到 -1 会继续 HOME + 盲滑
                                 String px0 = dumpHome(true);
-                                if (px0.isEmpty()) return o.toString();
-                                jumped = jumpToPage(parsePager(px0), ipg);
+                                if (px0.isEmpty()) {
+                                    // 🔴 无页码桌面（Pixel / AOSP）：读不到页码不是失败，
+                                    //    按「HOME 回第 1 页 → 左滑 (page-1) 次」过去。
+                                    dbg("无页码，改用滑动跳页 → 第 " + ipg + " 页");
+                                    jumped = jumpToPageBySwipe(ipg);
+                                } else {
+                                    jumped = jumpToPage(parsePager(px0), ipg);
+                                }
                             }
                             if (jumped) {
                                 if (userLeft()) return o.toString();
@@ -1008,7 +1182,15 @@ public class Bridge {
                     //    以前是开头无条件 dump 一次（2.3 秒），索引命中时这次 dump 纯属浪费，
                     //    叠加 HOME 回默认页，观感就是「建了索引还从头翻」。
                     String xml = dumpHome(true);
-                    if (xml.isEmpty()) return o.toString();      // 用户切走了
+                    if (xml.isEmpty()) {
+                        // 读不到页码 ≠ 用户切走了：可能是无页码桌面（Pixel / AOSP）。
+                        // 真切走才收尾，否则改用滑动扫描（每页 dump + 翻文件夹，滑到内容重复为止）。
+                        if (userLeft()) return o.toString();
+                        dbg("无页码，改用滑动扫描全量查找");
+                        int[] pgOut = new int[]{-1};
+                        hit = sweepScan(label, pgOut);
+                        if (hit != null) hitPage = pgOut[0];
+                    } else {
                     int[] pager = parsePager(xml);
                     // 🔴 读不到页数时**不能默认 8 页**：桌面只有 3 页的话后面 5 页全是空的，
                     //    表现就是「在最后一页疯狂右滑」。默认 3 页，够覆盖绝大多数桌面。
@@ -1064,6 +1246,7 @@ public class Bridge {
                             if (hit != null) break;
                         }
                     }
+                    }   // ← else：有页码的分支到此结束
 
                     if (hit == null) {
                         service.shellLong("rm -f /sdcard/mineapp_loc.xml");
@@ -1163,17 +1346,23 @@ public class Bridge {
                     // 🔴 读不到页数时**不能默认 8 页**：桌面只有 3 页的话，
                     //    后面 5 页全是空的，表现就是「在最后一页疯狂右滑」。
                     int total = pager[1] > 0 ? pager[1] : 0;
+                    boolean sweepMode = false;
                     if (total <= 0) {
-                        // 完全读不到页码 = 这个桌面的无障碍树里没有任何分页信息。
-                        // 硬着头皮按 3 页试只会索引出一堆错坐标（定位时点到别的应用），
-                        // 不如明确告诉用户「不支持」，让他去提 issue 反馈机型。
-                        dbg("读不到页码：当前桌面不支持应用查找");
-                        o.put("ok", false);
-                        o.put("unsupported", true);
-                        // 必须先把 App 拉回前台：前端用的是 HTML toast，
-                        // 界面不在前台时用户什么都看不到（实测点了「开始」毫无反应）。
-                        backToApp();
-                        return o.toString();
+                        // 完全读不到页码（Pixel / AOSP 桌面）：改用滑动探测数页数。
+                        // 探测失败才认为这台设备的桌面真的不支持。
+                        dbg("读不到页码，改用滑动探测");
+                        total = probeSweep();
+                        if (total <= 0) {
+                            dbg("滑动探测也失败：当前桌面不支持应用查找");
+                            o.put("ok", false);
+                            o.put("unsupported", true);
+                            // 必须先把 App 拉回前台：前端用的是 HTML 模态，
+                            // 界面不在前台时用户什么都看不到（实测点了「开始」毫无反应）。
+                            backToApp();
+                            return o.toString();
+                        }
+                        sweepMode = true;
+                        pager = new int[]{-1, total};     // 无圆点、无当前页
                     }
                     // 把圆点坐标存下来，之后跳页连 dump 都不用
                     StringBuilder dots = new StringBuilder();
@@ -1186,12 +1375,24 @@ public class Bridge {
                     if (resumePage > total) resumePage = 1;
 
                     int added = 0, page = resumePage;
+                    // 滑动探测结束时停在最左页，从它开始按差值左滑，不用再按 HOME
+                    int sweepCur = 1;
                     notifyLocate(resumePage > 1
                             ? "从第 " + resumePage + "/" + total + " 页继续索引"
                             : "开始遍历桌面 · 共 " + total + " 页 · 可随时打断", false);
                     for (; page <= total && page <= 8; page++) {
                         if (idxStop || touchHit || !isLauncherFront()) break;
-                        jumpToPage(pager, page);
+                        if (sweepMode) {
+                            // 🔴 这里不能用 jumpToPage：它读不到当前页时会按 HOME，
+                            //    而 HOME 回的是「默认页」，不一定是最左页 —— 差值就错了。
+                            while (sweepCur < page) {
+                                if (interrupted()) break;
+                                swipePage(true);
+                                sweepCur++;
+                            }
+                        } else {
+                            jumpToPage(pager, page);
+                        }
                         String xml = dumpHome(false);
                         added += indexPage(index, xml, page, "");
                         // 该页的文件夹（带名字：定位时能直接打开目标文件夹，不用逐个试）
@@ -1215,12 +1416,15 @@ public class Bridge {
                         // 每页文件夹处理完，确认还停在本页（BACK 万一没关掉文件夹、或用户手动滑过）。
                         // 顺便把 pager 换成实测值：下一轮 jumpToPage 靠 pager[0] 算差值，
                         // 用开局那份旧的会导致「多滑一页再修正」。
-                        int[] nowP = parsePager(dumpHome(true));
-                        if (nowP[0] > 0) {
-                            pager = nowP;
-                            if (nowP[0] != page) {
-                                dbg("索引：页号偏了(" + nowP[0] + "→" + page + ")，纠正");
-                                jumpToPage(pager, page);
+                        // 滑动模式下没有页码可测，这一步纯属白等 3 秒（实测每页多花 9 秒），跳过
+                        if (!sweepMode) {
+                            int[] nowP = parsePager(dumpHome(true));
+                            if (nowP[0] > 0) {
+                                pager = nowP;
+                                if (nowP[0] != page) {
+                                    dbg("索引：页号偏了(" + nowP[0] + "→" + page + ")，纠正");
+                                    jumpToPage(pager, page);
+                                }
                             }
                         }
                         // 每页存一次盘，随时中断都不丢
@@ -1305,6 +1509,26 @@ public class Bridge {
     }
 
     /** 用已保存的圆点坐标跳页：不 dump，几十毫秒 */
+    /**
+     * 无页码桌面专用：HOME 回第 1 页，再左滑 (page-1) 次。
+     *
+     * 前提是 HOME 落在最左一页 —— Pixel / AOSP 桌面确实如此；
+     * 若某些桌面 HOME 回到「默认页」，这里会偏，所以只在读不到页码时才用。
+     */
+    private boolean jumpToPageBySwipe(int page) {
+        if (page < 1) return false;
+        service.shellLong("input keyevent 3");
+        try { Thread.sleep(500); } catch (InterruptedException ignored) { }
+        for (int i = 1; i < page; i++) {
+            if (interrupted()) {
+                dbg("滑动跳页被打断");
+                return false;
+            }
+            swipePage(true);
+        }
+        return true;
+    }
+
     private boolean jumpToPageSaved(int page) {
         try {
             android.content.SharedPreferences sp =
