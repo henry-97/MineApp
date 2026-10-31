@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""从 Termux 版的 server.py 生成 APK 需要的资源。
+"""从 webui/frontend.py 生成 APK 需要的资源。
 
 产出：
   assets/index.html      —— 原样提取前端，仅注入一层 fetch→Java 桥接的 shim
   src/java/.../AppNames.java —— 包名到中文名的映射
 
-这样前端逻辑（排序、持久化、交互）与 Termux 版完全一致，不产生第二份实现。
+这样前端逻辑（排序、持久化、交互）只存在一份，不产生第二份实现。
 """
 import os
 import re
 import sys
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(os.path.dirname(BASE), "termux", "webui", "server.py")
+SRC = os.path.join(os.path.dirname(BASE), "termux", "webui", "frontend.py")
 PKG_DIR = os.path.join(BASE, "src", "java", "com", "henry", "appmanager")
 
 SHIM = r"""
@@ -131,7 +131,7 @@ def main() -> int:
         "import java.util.HashMap;",
         "import java.util.Map;",
         "",
-        "/** 由 tools/gen_assets.py 从 server.py 的 APP_NAMES 自动生成，请勿手改。 */",
+        "/** 由 tools/gen_assets.py 从 frontend.py 的 APP_NAMES 自动生成，请勿手改。 */",
         "public final class AppNames {",
         "    public static final Map<String, String> MAP = new HashMap<String, String>();",
         "    static {",

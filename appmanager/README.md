@@ -113,7 +113,7 @@
    aapt2 → javac → d8 → zipalign → apksigner 五步直出 APK，构建 10 秒级，产物不到 100 KB。
 
 4. **前端只有一份**
-   HTML/CSS/JS 全部写在 `termux/webui/server.py` 的 `HTML = r'''...'''` 里，
+   HTML/CSS/JS 全部写在 `termux/webui/frontend.py` 的 `HTML = r'''...'''` 里，
    构建时由 `tools/gen_assets.py` 提取并注入一层「fetch → Java 桥」的 shim 写进
    `assets/index.html`。改界面只改一处，不会出现两个版本走偏。
 
@@ -185,7 +185,7 @@ cd android-app/appmanager
 
 脚本依次做：
 
-1. `tools/gen_assets.py` 从 `server.py` 提取 HTML + 包名映射，生成 `assets/index.html`、`AppNames.java`
+1. `tools/gen_assets.py` 从 `frontend.py` 提取 HTML + 包名映射，生成 `assets/index.html`、`AppNames.java`
 2. `tools/gen_icon.py` 生成自适应图标各密度 PNG
 3. `aapt2 compile` / `aapt2 link`（生成 `R.java`）
 4. `javac`（`-bootclasspath android.jar`）
@@ -221,7 +221,7 @@ android-app/
 │   ├── res/                     图标、字符串、主题
 │   ├── assets/index.html        前端（自动生成，勿手改）
 │   └── tools/                   gen_assets.py / gen_icon.py / gen_manifest.py
-├── termux/webui/server.py       ★ 前端唯一真源（HTML/CSS/JS 都在这里）
+├── termux/webui/frontend.py     ★ 前端唯一真源（HTML/CSS/JS 都在这里）
 └── adbprobe/                    协议调试用 Python 客户端（排查 ADB 问题）
 ```
 

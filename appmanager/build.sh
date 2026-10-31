@@ -53,7 +53,7 @@ if [ ! -f "$KEYSTORE" ]; then
     -dname "CN=App Manager, OU=Dev, O=Local, L=Local, S=Local, C=CN"
 fi
 
-echo "== 0. 生成资源（从 server.py 提取 HTML 与名称映射） =="
+echo "== 0. 生成资源（从 frontend.py 提取 HTML 与名称映射） =="
 # 🔴 gen_manifest.py 必须排第一：gen_assets.py 要从 AndroidManifest.xml 读版本号
 #    注入前端。顺序反了会读到上一次构建的版本，界面显示的版本号永远慢一版。
 "$PYTHON" "$BASE/tools/gen_manifest.py"

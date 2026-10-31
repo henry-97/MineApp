@@ -3,7 +3,7 @@ package com.henry.appmanager;
 import java.util.HashMap;
 import java.util.Map;
 
-/** 由 tools/gen_assets.py 从 server.py 的 APP_NAMES 自动生成，请勿手改。 */
+/** 由 tools/gen_assets.py 从 frontend.py 的 APP_NAMES 自动生成，请勿手改。 */
 public final class AppNames {
     public static final Map<String, String> MAP = new HashMap<String, String>();
     static {

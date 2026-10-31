@@ -344,12 +344,12 @@ MineApp/
 │       ├── gen_icon.py           生成 6 套自适应图标
 │       └── gen_manifest.py       生成 12 个 activity-alias
 ├── termux/webui/
-│   └── server.py                 前端唯一真源（内嵌整个 HTML/CSS/JS）
+│   └── frontend.py               前端唯一真源（内嵌整个 HTML/CSS/JS）
 ├── docs/                         各版本发布说明、图标与截图
 └── dist/                         构建产物（APK）
 ```
 
-**前端只有一份。** `server.py` 里内嵌了整个 HTML/CSS/JS，`gen_assets.py` 把它原样抽出来，
+**前端只有一份。** `frontend.py` 里内嵌了整个 HTML/CSS/JS，`gen_assets.py` 把它原样抽出来，
 再注入一层 `fetch → Java 桥` 的 shim，APK 里跑的就是这份界面 —— 不存在两份实现需要同步。
 
 > 本项目不需要提前装 Termux。`termux/` 这个目录名是历史遗留：早期提供过「Termux + Python 脚本免 root」的分发形态，

@@ -364,12 +364,12 @@ MineApp/
 │       ├── gen_icon.py           Generates the 6 adaptive icon sets
 │       └── gen_manifest.py       Generates the 12 activity-aliases
 ├── termux/webui/
-│   └── server.py                 Single source of truth for the UI (HTML/CSS/JS inlined)
+│   └── frontend.py               Single source of truth for the UI (HTML/CSS/JS inlined)
 ├── docs/                         Per-release notes, icons and screenshots
 └── dist/                         Build output (APK)
 ```
 
-**There is only one copy of the front-end.** `server.py` embeds the whole HTML/CSS/JS;
+**There is only one copy of the front-end.** `frontend.py` embeds the whole HTML/CSS/JS;
 `gen_assets.py` extracts it verbatim and injects a `fetch → Java bridge` shim, so the APK runs
 exactly that UI — no second implementation to keep in sync.
 

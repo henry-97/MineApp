@@ -118,6 +118,8 @@ border-radius:10px;background:var(--redbg);border:0.5px solid #eec2c2;line-heigh
 .banner b{font-size:13px;font-weight:600;color:var(--red)}
 .banner .fix{font-size:11.5px;color:var(--ink2);font-family:ui-monospace,monospace;word-break:break-all}
 .banner .guide{font-size:12.5px;color:#185fa5;text-decoration:underline;margin-top:1px}
+/* 断连时的安抚说明：跟 hint 同一行距，但不走等宽字体，读起来是「人话」不是命令 */
+.banner .safe{font-size:11.5px;color:var(--ink2);line-height:1.5}
 #battery:active{opacity:.55}
 .info-title{font-size:15px;font-weight:600;color:var(--ink);margin:0 0 10px}
 .info-t{font-size:13px;color:var(--ink2);line-height:1.7;margin-bottom:10px}
@@ -641,6 +643,7 @@ var I18N = {
     cfmMillet: '保存后白名单会从 {a} 个变成 {b} 个（整体覆盖），确定吗？',
     agoNever: '24h 以上',
     bannerOff: '调试通道未连接', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip 5555',
+    bannerOffSafe: '已设置的归档与限制依然生效，待方便时再授权即可',
     bannerUnauth: '等待授权', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
     waitAuth: '刷新中，请稍后',
     bannerOffline: '设备离线', bannerOfflineHint: '重新执行一次：adb tcpip 5555',
@@ -652,7 +655,7 @@ var I18N = {
     guide3: '用数据线连接电脑，在电脑上执行：',
     guide4: '回到本应用，点右上角刷新',
     guide5: '手机弹出「允许 USB 调试吗」时，勾选「一律允许」再点确定',
-    guideNote: '以上步骤只需在每次手机重启后重做第 3、5 步；不重启则可长期使用。本应用不需要 Termux、Python 或 root。<br>软件更新（覆盖安装）不会丢授权 —— adb 的授权记录在系统侧，与安装包无关。',
+    guideNote: '<b>一次限制，永久生效。</b>重启后即使暂未授权，已设置的归档与限制依然有效；不授权只是暂时读不到应用列表、不能新设限制，待方便时再授权即可。<br>以上步骤只需在每次手机重启后重做第 3、5 步；不重启则可长期使用。本应用不需要 Termux、Python 或 root。<br>软件更新（覆盖安装）不会丢授权 —— adb 的授权记录在系统侧，与安装包无关。',
     ok: '知道了', cancel: '取消', confirm: '确定',
     battTitle: '电池健康度 {p}',
     battLevel: '当前电量', battSys: '系统状态',
@@ -780,6 +783,7 @@ var I18N = {
     cfmMillet: 'Saving replaces the allowlist: {a} → {b}. Continue?',
     agoNever: '>24h',
     bannerOff: 'ADB channel not connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip 5555',
+    bannerOffSafe: 'Your archives and restrictions stay in effect — re-authorise whenever convenient',
     bannerUnauth: 'Waiting for authorization', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
     waitAuth: 'Refreshing, please wait…',
     bannerOffline: 'Device offline', bannerOfflineHint: 'Run again: adb tcpip 5555',
@@ -791,7 +795,7 @@ var I18N = {
     guide3: 'Connect to a PC with a cable, then run:',
     guide4: 'Return to this app and tap refresh at the top right',
     guide5: 'When "Allow USB debugging?" appears, tick "Always allow" and confirm',
-    guideNote: 'Steps 3 and 5 are only needed after each reboot. No Termux, Python or root required.',
+    guideNote: '<b>Restrict once, permanent effect.</b> After a reboot your archives and restrictions stay in force even before you re-authorise — without authorisation you simply cannot read the app list or add new restrictions, so re-authorise whenever convenient.<br>Steps 3 and 5 are only needed after each reboot. No Termux, Python or root required.<br>A covering install does not lose the authorisation — the adb grant lives in system state, not in the APK.',
     ok: 'Got it', cancel: 'Cancel', confirm: 'OK',
     battTitle: 'Battery health {p}',
     battLevel: 'Level', battSys: 'System status',
@@ -1450,6 +1454,7 @@ function updateBanner(d){
     hint = T('bannerErrHint');
   }
   el.innerHTML = '<b>' + title + '</b><span class="fix">' + hint + '</span>'
+    + ((st === 'unauthorized' || st === 'error') ? '' : '<span class="safe">' + T('bannerOffSafe') + '</span>')
     + '<span class="guide" id="bannerGuide">' + T('bannerGuide') + '</span>';
   el.style.display = 'flex';
   var g = document.getElementById('bannerGuide');

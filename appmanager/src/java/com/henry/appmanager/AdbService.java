@@ -18,7 +18,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 应用管理器的数据层：把原 server.py 的取数与批量操作逐条移植过来。
+ * 应用管理器的数据层：把早期 Python 服务端的取数与批量操作逐条移植过来。
  *
  * 与原实现的差异仅在于传输层 —— 不再走 HTTP，直接调用 {@link AdbClient}。
  * 排序规则、解析逻辑、成功判定全部保持一致。
@@ -240,7 +240,7 @@ public class AdbService {
         return sh(cmd, 30000, true);
     }
 
-    /** 与 server.py 的 adb_state 对应：返回 ok / unauthorized / disconnected。 */
+    /** 对应早期 Python 服务端的 adb_state：返回 ok / unauthorized / disconnected。 */
     public String state() {
         synchronized (lock) {
             try {
