@@ -485,6 +485,28 @@ public class Bridge {
     }
 
     /** 收集当前页所有文件夹的中心坐标 */
+    /**
+     * 这个节点是不是桌面文件夹。
+     *
+     * 🔴 不能只看 class：MIUI 的文件夹是 `RelativeLayout`，而 Pixel / AOSP 是
+     *    `FrameLayout` —— 以前只认 RelativeLayout，导致非 MIUI 桌面上
+     *    **文件夹从来没被识别过**，里面的应用永远索引不到（实测 Pixel 两个文件夹被完全跳过）。
+     *
+     * 现在按「可点击 + 长得像文件夹」判断：
+     *   - class 是 RelativeLayout（MIUI）
+     *   - 或者无障碍名是 "Folder: ..." / 含「文件夹」「个应用」（各家通用文案）
+     */
+    private static boolean isFolderNode(String tag, String desc) {
+        if (desc == null || desc.isEmpty()) return false;
+        if (!"true".equals(nodeAttr(tag, "clickable"))) return false;
+        String cls = nodeAttr(tag, "class");
+        if (cls != null && cls.endsWith("RelativeLayout")) return true;
+        String low = desc.toLowerCase();
+        if (low.startsWith("folder:")) return true;
+        if (desc.contains("文件夹") || desc.contains("个应用")) return true;
+        return false;
+    }
+
     private static java.util.List<int[]> findFolders(String xml) {
         java.util.List<int[]> out = new java.util.ArrayList<int[]>();
         java.util.regex.Matcher m = java.util.regex.Pattern
@@ -493,9 +515,7 @@ public class Bridge {
             String tag = m.group();
             String desc = nodeAttr(tag, "content-desc");
             if (desc == null || desc.isEmpty()) continue;
-            String cls = nodeAttr(tag, "class");
-            if (cls == null || !cls.endsWith("RelativeLayout")) continue;
-            if (!"true".equals(nodeAttr(tag, "clickable"))) continue;
+            if (!isFolderNode(tag, desc)) continue;
             String bounds = nodeAttr(tag, "bounds");
             if (bounds == null) continue;
             java.util.regex.Matcher b = java.util.regex.Pattern
@@ -523,9 +543,7 @@ public class Bridge {
             String tag = m.group();
             String desc = nodeAttr(tag, "content-desc");
             if (desc == null || desc.isEmpty()) continue;
-            String cls = nodeAttr(tag, "class");
-            if (cls == null || !cls.endsWith("RelativeLayout")) continue;
-            if (!"true".equals(nodeAttr(tag, "clickable"))) continue;
+            if (!isFolderNode(tag, desc)) continue;
             String bounds = nodeAttr(tag, "bounds");
             if (bounds == null) continue;
             java.util.regex.Matcher b = java.util.regex.Pattern
@@ -536,6 +554,27 @@ public class Bridge {
             out.add(new Object[]{(x1 + x2) / 2, (y1 + y2) / 2, desc});
         }
         return out;
+    }
+
+    /**
+     * 这一页的文件夹名能不能用来定位。
+     *
+     * 判据：有重名，或者名字是占位符（"Folder: null, 2 items" 这种）。
+     * 只要有一个不满足，**整页**改用序号标识 —— 一半按名字一半按序号会乱。
+     *
+     * MIUI 的文件夹名是「常用App」这类真实名字，不受影响，仍走名字匹配。
+     */
+    private static boolean folderNamesAreUseless(java.util.List<Object[]> folders) {
+        if (folders.size() <= 1) return false;      // 只有一个时，名字再烂也只有它能选
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        for (Object[] f : folders) {
+            String n = (String) f[2];
+            if (n == null || n.trim().isEmpty()) return true;
+            String low = n.trim().toLowerCase();
+            if (low.startsWith("folder:") || low.equals("null")) return true;
+            if (!seen.add(n)) return true;          // 重名
+        }
+        return false;
     }
 
     /** 长按坐标：必须带 2~4px 位移，零距离会被当成点击直接打开应用 */
@@ -1108,9 +1147,18 @@ public class Bridge {
                                     //    失败后还会把索引删掉 —— 实测「迪士尼乐园」就是这么丢的。
                                     //    现在：所有同名文件夹都试一遍。
                                     java.util.List<Object[]> fs = findFoldersNamed(px);
-                                    for (Object[] f : fs) {
+                                    // 索引里存成 "#2" 的（占位文件夹名的桌面，如 Pixel）：
+                                    // 直接点该页第 3 个文件夹，不用挨个试
+                                    int wantIdx = idxFolder.startsWith("#")
+                                            ? parseIntSafe(idxFolder.substring(1), -1) : -1;
+                                    for (int fi = 0; fi < fs.size(); fi++) {
+                                        Object[] f = fs.get(fi);
                                         if (userLeft()) return o.toString();
-                                        if (!idxFolder.equals(f[2])) continue;
+                                        if (wantIdx >= 0) {
+                                            if (fi != wantIdx) continue;
+                                        } else if (!idxFolder.equals(f[2])) {
+                                            continue;
+                                        }
                                         service.shellLong("input tap " + f[0] + " " + f[1]);
                                         try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                                         String fx = dumpHome(false);
@@ -1397,10 +1445,18 @@ public class Bridge {
                         added += indexPage(index, xml, page, "");
                         // 该页的文件夹（带名字：定位时能直接打开目标文件夹，不用逐个试）
                         java.util.List<Object[]> folders = findFoldersNamed(xml);
+                        // 🔴 有的桌面（Pixel / AOSP）所有文件夹的无障碍名**完全一样**
+                        //    （"Folder: null, 2 items"），靠名字定位必然点错、只能一个个试。
+                        //    这种情况下改用「该页第几个文件夹」来标识（"#0"、"#1"…）——
+                        //    同一页的 dump 顺序稳定，索引和定位时拿到的序号一致。
+                        boolean useFolderIndex = folderNamesAreUseless(folders);
+                        if (useFolderIndex && !folders.isEmpty()) {
+                            dbg("文件夹名不可用（重复或占位），改用序号标识，本页 " + folders.size() + " 个");
+                        }
                         for (int i = 0; i < folders.size(); i++) {
                             if (idxStop || touchHit || !isLauncherFront()) break;
                             Object[] f = folders.get(i);
-                            String fname = (String) f[2];
+                            String fname = useFolderIndex ? ("#" + i) : (String) f[2];
                             service.shellLong("input tap " + ((Integer) f[0]) + " " + ((Integer) f[1]));
                             try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                             added += indexPage(index, dumpHome(false), page, fname);
