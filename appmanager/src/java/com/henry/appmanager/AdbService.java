@@ -57,8 +57,6 @@ public class AdbService {
         HEALTH_TEXT.put(7, "过冷");
     }
 
-    private static final Pattern PSS_LINE =
-            Pattern.compile("^([\\d,]+)K:\\s+([A-Za-z0-9_.]+)");
     private static final Pattern MEM_TOTAL =
             Pattern.compile("MemTotal:\\s+(\\d+)\\s+kB");
     private static final Pattern MEM_AVAIL =

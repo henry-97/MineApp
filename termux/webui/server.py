@@ -470,8 +470,6 @@ margin:8px 16px 0;padding:9px 12px;border-radius:10px}
 .tsect{font-size:12px;color:var(--ink3);margin:18px 0 2px}
 .edit{flex:none;font-size:13px;min-height:30px;padding:0 14px;border-radius:8px;
 background:var(--card);border:0.5px solid var(--line);color:var(--ink2)}
-.sheet-ft{padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:0.5px solid var(--line)}
-.sheet-ft button{width:100%;min-height:42px;font-size:16px}
 .switch{position:relative;display:inline-block;width:38px;height:22px;flex:none}
 .switch input{display:none}
 .switch .slider{position:absolute;inset:0;background:var(--line);border-radius:22px;
@@ -536,13 +534,11 @@ font-size:14px;color:var(--ink3);border:1px solid var(--track);cursor:pointer;
 user-select:none;-webkit-tap-highlight-color:transparent;transition:background .12s,color .12s}
 .kill-x:active{background:var(--track);color:var(--ink)}
 /* 设置页外链：跳到浏览器打开，不在 WebView 里替换界面 */
-.ext-row{display:flex;align-items:center;gap:8px;padding:2px 0 8px;font-size:13px}
 .ext{color:#0f6e56;text-decoration:none;padding:6px 2px;border-radius:6px}
 .ext:active{background:var(--track)}
 .ext-sep{color:var(--ink3);font-size:12px}
 .ext-note{font-size:11.5px;color:var(--ink3);line-height:1.55;padding:0 0 6px}
 /* 版本号：构建时由 gen_assets.py 把 __APP_VERSION__ 换成 manifest 里的 versionName */
-.ver-line{font-size:11.5px;color:var(--ink3);line-height:1.6;padding:0 0 6px;letter-spacing:.3px}
 .refresh{transform-origin:50% 50%;will-change:transform}
 /* 用对称 SVG 代替 ↻ 字符：字符的字形墨迹不在 em 框正中，绕中心旋转会看出偏心摇晃 */
 .refresh svg{display:block}
@@ -958,12 +954,7 @@ var I18N = {
     battLevel: '当前电量', battSys: '系统状态',
     battMax: '历史最高', battLast: '最近一次学习', battMin: '历史最低（采用值）',
     battDesign: '电池设计容量',
-    battDesignAuto: '系统读取',
-    battDesignUser: '手动设置',
-    battDesignDevice: '按机型表匹配',
-    battDesignDefault: '系统读不到，估算',
     battDesignNote: '部分机型可能不支持自动读取容量，可&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。',
-    battOpenSys: '去关于本机页查看 →',
     battDesignSaved: '已保存：{n} mAh',
     battDesignCleared: '已清空，回到自动估算',
     battDesignBad: '请填 1000~30000 之间的数值',
@@ -971,7 +962,7 @@ var I18N = {
       + '<br><br><b>关于数值波动</b>：首次检测结果可能滞后或有波动，这是系统的学习机制决定的 —— 它需要若干个完整的充放电周期才能收敛。'
       + '<b>日常使用一周左右</b>即可得到比较稳定的值；刚装好时看到的数字仅供参考，不必在意一两天的跳动。',
     tSaved: '已保存 {n} 个应用', tCompiling: '正在编译，请稍候',
-    compiling: '编译中', reverting: '还原中',
+    reverting: '还原中',
     tFail: '操作失败：{m}', tCompiled: '预编译完成 {n}s', tReverted: '已取消预编译 {n}s',
     tAlready: '已经是 AOT 状态，无需重复编译',
     tNotAot: '本来就没有全量编译，无需取消',
@@ -987,7 +978,6 @@ var I18N = {
     tPerfNoAdb: '调试未连接，性能模式未生效',
     tPerfOn: '性能模式已开启', tPerfOff: '性能模式已关闭',
     tNameOk: '名称已更新，桌面图标稍后刷新', tNameFail: '已保存，桌面名称未能修改',
-    tBatch: '完成 {ok} 个，失败 {fail} 个',
     tuneTitle: '性能调优',
     tunePerf: '性能模式', tunePerfSub: '关闭省电与均衡，优先性能',
     tuneSave: '省电模式', tuneSaveSub: '限制后台活动以延长续航',
@@ -1010,7 +1000,7 @@ var I18N = {
     keepHidden: '已隐藏后台卡片', keepShown: '已显示后台卡片',
     keepFail: '系统没接受这个设置',
     extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
-    updTitle: '检查更新', updCheck: '检查', updChecking: '检查中…',
+    updCheck: '检查', updChecking: '检查中…',
     updCurrent: 'v {v}', updLatest: '已是最新版本 {v}',
     updLatestShort: '已是最新', updNewShort: '发现 v {v}',
     updFailShort: '检查失败', updCheckingShort: '检查中', updRestart: '将自动重启',
@@ -1103,12 +1093,7 @@ var I18N = {
     battLevel: 'Level', battSys: 'System status',
     battMax: 'All-time high', battLast: 'Latest learned', battMin: 'All-time low (used)',
     battDesign: 'Design capacity',
-    battDesignAuto: 'from system',
-    battDesignUser: 'manual',
-    battDesignDevice: 'matched by model',
-    battDesignDefault: 'unreadable, estimated',
     battDesignNote: 'Some models cannot read it automatically — <a href="#" id="lnkBattSet">check here</a> and enter it manually.',
-    battOpenSys: 'Open "My device" to see the battery capacity →',
     battDesignSaved: 'Saved: {n} mAh',
     battDesignCleared: 'Cleared — back to auto',
     battDesignBad: 'Enter a value between 1000 and 30000',
@@ -1116,7 +1101,7 @@ var I18N = {
       + '<br><br><b>About fluctuations</b>: the first reading may lag or bounce around. That is how the system learns — it needs a few complete charge cycles to converge. '
       + 'Expect a stable figure after <b>about a week of normal use</b>; right after installing, treat the number as a rough reference and do not worry about day-to-day jitter.',
     tSaved: 'Saved {n} apps', tCompiling: 'Compiling, please wait',
-    compiling: 'Compiling', reverting: 'Reverting',
+    reverting: 'Reverting',
     tFail: 'Failed: {m}', tCompiled: 'Compiled in {n}s', tReverted: 'Reverted in {n}s',
     tAlready: 'Already AOT-compiled, nothing to do',
     tNotAot: 'Not AOT-compiled, nothing to undo',
@@ -1132,7 +1117,6 @@ var I18N = {
     tPerfNoAdb: 'ADB not connected, performance mode not applied',
     tPerfOn: 'Performance mode on', tPerfOff: 'Performance mode off',
     tNameOk: 'Name updated, launcher label refreshes shortly', tNameFail: 'Saved, but launcher label could not change',
-    tBatch: '{ok} done, {fail} failed',
     tuneTitle: 'Performance tuning',
     tunePerf: 'Performance mode', tunePerfSub: 'Disable battery saver and balanced mode',
     tuneSave: 'Battery saver', tuneSaveSub: 'Limit background activity to extend battery life',
@@ -1155,7 +1139,7 @@ var I18N = {
     keepHidden: 'Recents card hidden', keepShown: 'Recents card shown',
     keepFail: 'The system refused this setting',
     extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
-    updTitle: 'Check for updates', updCheck: 'Check', updChecking: 'Checking…',
+    updCheck: 'Check', updChecking: 'Checking…',
     updCurrent: 'v {v}', updLatest: 'Up to date ({v})',
     updLatestShort: 'Up to date', updNewShort: 'v {v} found',
     updFailShort: 'Check failed', updCheckingShort: 'Checking', updRestart: 'Will restart',
@@ -1347,9 +1331,6 @@ function applyTheme(){
   var dark = themeMode === 'dark'
     || (themeMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.classList.toggle('dark', dark);
-  // 把当前主题告诉 Java 层：应用外的原生 Toast 也要用同一套配色，
-  // 否则会出现「应用内深色、应用外白色」的割裂（浏览器里没有 Bridge，跳过）
-  try { if (window.Bridge && Bridge.theme) Bridge.theme(0, dark ? '1' : '0'); } catch (e) {}
 }
 
 function renderSettings(){

@@ -1044,11 +1044,6 @@ public class Bridge {
      * 中断判定：每步之前看一眼前台是不是桌面 —— 用户切去别的应用就立刻停。
      */
     @JavascriptInterface
-    public void stopindex(int id, String arg) {
-        idxStop = true;
-    }
-
-    @JavascriptInterface
     public void buildindex(int id, String arg) {
         dispatchHeavy(id, new Task() {
             @Override
@@ -1493,17 +1488,6 @@ public class Bridge {
         });
     }
 
-    /** 桌面态提示：这时 App 已退到后台，WebView 里的 toast 看不见，必须用系统 Toast */
-    private void toastOn(final String msg) {
-        main.post(new Runnable() {
-            @Override public void run() {
-                try {
-                    makeUiToast(msg, android.widget.Toast.LENGTH_SHORT).show();
-                } catch (Throwable ignored) { }
-            }
-        });
-    }
-
     /**
      * 会走秒的 Toast —— 定位过程中一直挂在屏幕上，让用户知道没卡死。
      *
@@ -1534,26 +1518,6 @@ public class Bridge {
         }
         void show() { try { toast.show(); } catch (Throwable ignored) { } }
         void cancel() { try { toast.cancel(); } catch (Throwable ignored) { } }
-    }
-
-    /** 前端 applyTheme() 上报当前主题，供原生 Toast 用同一套配色。 */
-    @JavascriptInterface
-    public void theme(int id, String arg) {
-        darkUi = "1".equals(arg);
-    }
-
-    private static volatile Boolean darkUi;   // null = 前端还没上报过
-
-    private boolean isDarkUi() {
-        Boolean v = darkUi;
-        if (v != null) return v;
-        try {
-            int m = web.getContext().getResources().getConfiguration().uiMode
-                    & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
-            return m == android.content.res.Configuration.UI_MODE_NIGHT_YES;
-        } catch (Throwable e) {
-            return false;
-        }
     }
 
     private UiToast makeUiToast(String text, int duration) {
@@ -1684,7 +1648,7 @@ public class Bridge {
      * 定位过程提示：用**通知**而不是 Toast。
      *
      * 🔴 Android 11+ 禁止后台应用弹 Toast —— 点定位后马上回桌面，App 进入后台，
-     * toastOn 就再也不显示了（实测确认）。改用通知，并用 setUsesChronometer(true)
+     * 后台 Toast 就再也不显示了（实测确认）。改用通知，并用 setUsesChronometer(true)
      * 让系统自己走秒，比手动刷文字更稳、更省电。
      */
     // 🔴 渠道 id 带 v2：通知渠道的重要性创建后**不能修改**，
@@ -1784,43 +1748,6 @@ public class Bridge {
                 nm.cancel(LOC_ID);
             }
         } catch (Throwable ignored) { }
-    }
-
-    /** 按已知坐标长按（缓存命中时用，省掉 2.3 秒的 dump） */
-    @JavascriptInterface
-    public void tapat(int id, final String arg) {
-        // 参数 "page|x,y"：page 为 -1 表示不跳页
-        final String raw = arg == null ? "" : arg;
-        dispatchLoc(id, new Task() {
-            @Override
-            public String run() {
-                JSONObject o = new JSONObject();
-                try {
-                    String pageStr = "";
-                    String xyStr = raw;
-                    int bar = raw.indexOf('|');
-                    if (bar >= 0) { pageStr = raw.substring(0, bar); xyStr = raw.substring(bar + 1); }
-                    String[] p = xyStr.split(",");
-                    if (p.length < 2) { o.put("ok", false); return o.toString(); }
-                    int x = parseIntSafe(p[0], -1);
-                    int y = parseIntSafe(p[1], -1);
-                    if (x < 0 || y < 0) { o.put("ok", false); return o.toString(); }
-                    service.shellLong("input keyevent 3");
-                    try { Thread.sleep(300); } catch (InterruptedException ignored) { }
-                    int pg = parseIntSafe(pageStr, -1);
-                    if (pg >= 1 && !jumpToPageSaved(pg)) {
-                        String xml = dumpHome(false);
-                        jumpToPage(parsePager(xml), pg);
-                    }
-                    longPress(x, y);
-                    o.put("ok", true);
-                    toastOn("按上次记录的位置，若不对请再点一次重新查找");
-                } catch (Throwable e) {
-                    android.util.Log.w("Bridge", "tapat 失败: " + e);
-                }
-                return o.toString();
-            }
-        });
     }
 
     /**

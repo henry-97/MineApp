@@ -222,11 +222,6 @@ public class AdbClient {
         return c.doFinal(block);
     }
 
-    /** 自测用：对固定数据签名并返回十六进制，便于与 Python 独立实现比对。 */
-    public String signHex(byte[] data) throws Exception {
-        return toHex(sign(data));
-    }
-
     static String toHex(byte[] d) {
         StringBuilder sb = new StringBuilder(d.length * 2);
         for (byte x : d) sb.append(String.format("%02x", x & 0xFF));

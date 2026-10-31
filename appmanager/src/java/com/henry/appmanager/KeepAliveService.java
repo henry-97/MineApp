@@ -25,7 +25,6 @@ import org.json.JSONObject;
  */
 public class KeepAliveService extends Service {
 
-    private static final String TAG = "KeepAlive";
     /**
      * 渠道 ID 带版本号：渠道的重要性一旦创建就无法修改，改用 IMPORTANCE_DEFAULT
      * （无声、无振动）才能让它留在通知主区域，而不是被系统折叠进「更多通知」。
