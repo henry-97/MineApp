@@ -65,6 +65,7 @@ SHIM = r"""
     // 顺序反了会被当成 aot 接口（编译），拿到的是 ok/aot/skipped/status/msg
     else if (url.indexOf('/api/aotsync') === 0) p = call('aotsync', '');
     else if (url.indexOf('/api/aot') === 0) p = call('aot', (body.pkg || '') + '|' + (body.on ? '1' : '0'));
+    else if (url.indexOf('/api/setport') === 0) p = call('setport', String(body.port == null ? '' : body.port));
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
     else if (url.indexOf('/api/opensetting') === 0) p = call('opensetting', String(body.k || ''));

@@ -67,7 +67,9 @@ with information that never goes stale.
 
 **After that the PC is out of the picture** — freezing, restricting, AOT compilation and performance
 profiles are all a few taps on the phone, with no adb tooling involved. As long as you do not reboot,
-that single `adb tcpip` keeps working; after a reboot, just run it once more.
+that single `adb tcpip` keeps working. After a reboot, every restriction stays in effect even before
+you re-authorise — you just cannot refresh the app list until you run it once more at your convenience,
+**so rebooting often is nothing to worry about**.
 
 ### Compared to the usual options
 

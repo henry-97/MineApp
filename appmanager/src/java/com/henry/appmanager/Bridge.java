@@ -1939,6 +1939,40 @@ public class Bridge {
         });
     }
 
+    /**
+     * 自定义 adbd 的 TCP 端口（默认 5555，只有用户主动点了「自定义端口」才会调用）。
+     *
+     * 参数是端口号字符串。越界（<1024 或 >65535）直接拒绝 —— 1024 以下要 root，
+     * adb tcpip 本身也会失败，放过去只会让用户以为设置成功了却连不上。
+     */
+    @JavascriptInterface
+    public void setport(int id, String arg) {
+        final int p = parseIntSafe(arg == null ? "" : arg.trim(), -1);
+        dispatch(id, new Task() {
+            @Override
+            public String run() {
+                JSONObject o = new JSONObject();
+                try {
+                    if (p < AdbService.PORT_MIN || p > AdbService.PORT_MAX) {
+                        o.put("ok", false);
+                        o.put("msg", "range");
+                        return o.toString();
+                    }
+                    boolean applied = service.setPort(p);
+                    o.put("ok", applied);
+                    o.put("port", service.getPort());
+                    if (!applied) o.put("msg", "range");
+                } catch (Throwable e) {
+                    try {
+                        o.put("ok", false);
+                        o.put("msg", String.valueOf(e.getMessage()));
+                    } catch (Exception ignored) { }
+                }
+                return o.toString();
+            }
+        });
+    }
+
     @JavascriptInterface
     public void freeze(int id, String pkgs) {
         batch(id, pkgs, "freeze");

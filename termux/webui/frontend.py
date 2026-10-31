@@ -136,6 +136,22 @@ display:flex;align-items:center;justify-content:center;margin-top:1px}
 font-family:ui-monospace,monospace;font-size:12px;color:var(--ink)}
 .info-note{font-size:12px;color:var(--ink3);line-height:1.65;margin-top:12px;
 padding-top:10px;border-top:0.5px solid var(--line)}
+/* 自定义端口：默认只露一行「…点此设置」，点开才展开输入框 ——
+   旧用户不点就永远看不到，避免打扰 */
+.info-port{font-size:12.5px;color:var(--ink3);margin-top:10px;line-height:1.6}
+.info-port a{color:#185fa5;text-decoration:underline}
+#portBox{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#portIn{width:96px;height:32px;padding:0 9px;font-size:14px;border-radius:8px;
+border:0.5px solid var(--line);background:var(--card);color:var(--ink);
+outline:none;-webkit-appearance:none}
+/* 🔴 必须显式覆盖 min-height / font-size / font-weight / padding：
+   全局 button 是 min-height:52px、font-size:16px、padding:14px 20px（给大按钮用的），
+   只写 padding 和字号会让按钮被撑到 52px 高，跟 32px 的输入框严重不协调 */
+#portSave{height:32px;min-height:32px;padding:0 14px;font-size:13px;font-weight:400;
+line-height:1;border-radius:8px;border:0.5px solid var(--line);
+background:var(--card);color:var(--ink);cursor:pointer}
+#portSave:active{background:var(--bg)}
+.port-range{flex:1 0 100%;font-size:11.5px;color:var(--ink3);line-height:1.55}
 .refresh{flex:none;width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;
 background:var(--card);border:0.5px solid var(--line);color:var(--ink2);
 font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;margin-left:auto}
@@ -642,11 +658,11 @@ var I18N = {
     milletNote: '把应用加进系统的 doze / standby 白名单（MILLET_NO_RESTRICT_APP），系统不再按「长时间未使用」压制它的后台活动。注意：这不改变 MIUI 界面里的「省电策略」—— 那个开关是 powerkeeper 自己维护的另一套状态，需要到应用信息页单独设成「无限制」。',
     cfmMillet: '保存后白名单会从 {a} 个变成 {b} 个（整体覆盖），确定吗？',
     agoNever: '24h 以上',
-    bannerOff: '调试通道未连接', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip 5555',
+    bannerOff: '等待调试通道连接后即可刷新应用列表', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip {p}',
     bannerOffSafe: '已设置的归档与限制依然生效，待方便时再授权即可',
     bannerUnauth: '等待授权', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
     waitAuth: '刷新中，请稍后',
-    bannerOffline: '设备离线', bannerOfflineHint: '重新执行一次：adb tcpip 5555',
+    bannerOffline: '设备离线', bannerOfflineHint: '重新执行一次：adb tcpip {p}',
     bannerErr: '调试通道异常', bannerErrHint: '请按下方指引重新开启',
     bannerGuide: '查看操作指引 ›',
     guideTitle: '开启调试通道',
@@ -655,7 +671,11 @@ var I18N = {
     guide3: '用数据线连接电脑，在电脑上执行：',
     guide4: '回到本应用，点右上角刷新',
     guide5: '手机弹出「允许 USB 调试吗」时，勾选「一律允许」再点确定',
-    guideNote: '<b>一次限制，永久生效。</b>重启后即使暂未授权，已设置的归档与限制依然有效；不授权只是暂时读不到应用列表、不能新设限制，待方便时再授权即可。<br>以上步骤只需在每次手机重启后重做第 3、5 步；不重启则可长期使用。本应用不需要 Termux、Python 或 root。<br>软件更新（覆盖安装）不会丢授权 —— adb 的授权记录在系统侧，与安装包无关。',
+    portAsk: '自定义其他 adb tcp 端口？', portSet: '点此设置', portSave: '保存',
+    portRange: '范围 1024–65535。改完请在电脑上执行上面对应的命令，端口要与这里一致。',
+    portBad: '请填 1024–65535 之间的端口',
+    portSaved: '端口已改为 {p}，请在电脑上执行：adb tcpip {p}',
+    guideNote: '<b>一次限制，永久生效。</b>重启后即使暂未授权，已设置的归档与限制依然有效；不授权只是暂时读不到应用列表、不能新设限制，待方便时再授权（即执行步骤 3、5）即可。<br>软件更新（覆盖安装）不会丢授权 —— adb 的授权记录在系统侧，与安装包无关。',
     ok: '知道了', cancel: '取消', confirm: '确定',
     battTitle: '电池健康度 {p}',
     battLevel: '当前电量', battSys: '系统状态',
@@ -782,11 +802,11 @@ var I18N = {
     milletNote: 'Adds the app to the system doze / standby allowlist (MILLET_NO_RESTRICT_APP) so the OS stops throttling it as "unused". Note: this does NOT change the battery policy in MIUI\'s UI — that toggle is separate state kept by powerkeeper and has to be set to "No restrictions" on the app-info page.',
     cfmMillet: 'Saving replaces the allowlist: {a} → {b}. Continue?',
     agoNever: '>24h',
-    bannerOff: 'ADB channel not connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip 5555',
+    bannerOff: 'Waiting for the ADB channel — the list refreshes once connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip {p}',
     bannerOffSafe: 'Your archives and restrictions stay in effect — re-authorise whenever convenient',
     bannerUnauth: 'Waiting for authorization', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
     waitAuth: 'Refreshing, please wait…',
-    bannerOffline: 'Device offline', bannerOfflineHint: 'Run again: adb tcpip 5555',
+    bannerOffline: 'Device offline', bannerOfflineHint: 'Run again: adb tcpip {p}',
     bannerErr: 'ADB channel error', bannerErrHint: 'Follow the guide below to re-enable',
     bannerGuide: 'Setup guide ›',
     guideTitle: 'Enable the ADB channel',
@@ -795,7 +815,11 @@ var I18N = {
     guide3: 'Connect to a PC with a cable, then run:',
     guide4: 'Return to this app and tap refresh at the top right',
     guide5: 'When "Allow USB debugging?" appears, tick "Always allow" and confirm',
-    guideNote: '<b>Restrict once, permanent effect.</b> After a reboot your archives and restrictions stay in force even before you re-authorise — without authorisation you simply cannot read the app list or add new restrictions, so re-authorise whenever convenient.<br>Steps 3 and 5 are only needed after each reboot. No Termux, Python or root required.<br>A covering install does not lose the authorisation — the adb grant lives in system state, not in the APK.',
+    portAsk: 'Use a different adb tcp port?', portSet: 'Set it', portSave: 'Save',
+    portRange: 'Range 1024–65535. After saving, run the command above on your PC with the same port.',
+    portBad: 'Enter a port between 1024 and 65535',
+    portSaved: 'Port set to {p} — run on your PC: adb tcpip {p}',
+    guideNote: '<b>Restrict once, permanent effect.</b> After a reboot your archives and restrictions stay in force even before you re-authorise — without authorisation you simply cannot read the app list or add new restrictions, so re-authorise whenever convenient (i.e. redo steps 3 and 5).<br>A covering install does not lose the authorisation — the adb grant lives in system state, not in the APK.',
     ok: 'Got it', cancel: 'Cancel', confirm: 'OK',
     battTitle: 'Battery health {p}',
     battLevel: 'Level', battSys: 'System status',
@@ -1160,11 +1184,49 @@ function showGuide(){
     '<div class="info-title">' + T('guideTitle') + '</div>'
     + '<div class="info-step"><b>1</b><span>' + T('guide1') + '</span></div>'
     + '<div class="info-step"><b>2</b><span>' + T('guide2') + '</span></div>'
-    + '<div class="info-step"><b>3</b><span>' + T('guide3') + '<br><code>adb tcpip 5555</code></span></div>'
+    + '<div class="info-step"><b>3</b><span>' + T('guide3') + '<br><code>adb tcpip ' + adbPort + '</code></span></div>'
     + '<div class="info-step"><b>4</b><span>' + T('guide4') + ' ↻</span></div>'
     + '<div class="info-step"><b>5</b><span>' + T('guide5') + '</span></div>'
     + '<div class="info-note">' + T('guideNote') + '</div>'
+    + '<div class="info-port">'
+    +   '<span>' + T('portAsk') + '</span> <a href="#" id="lnkPort">' + T('portSet') + '</a>'
+    +   '<div id="portBox" style="display:none">'
+    +     '<input id="portIn" type="number" inputmode="numeric" min="1024" max="65535" value="' + adbPort + '">'
+    +     '<button id="portSave">' + T('portSave') + '</button>'
+    +     '<div class="port-range">' + T('portRange') + '</div>'
+    +   '</div>'
+    + '</div>'
   );
+  var lk = document.getElementById('lnkPort');
+  if (lk) lk.onclick = function(e){
+    if (e) e.preventDefault();
+    var box = document.getElementById('portBox');
+    var inp = document.getElementById('portIn');
+    if (box) box.style.display = 'flex';
+    if (inp) { inp.value = adbPort; inp.focus(); inp.select(); }
+    return false;
+  };
+  var sv = document.getElementById('portSave');
+  if (sv) sv.onclick = savePort;
+}
+
+/* 保存自定义端口。成功后就地重绘引导弹窗 —— 第 3 步的命令要跟着变，
+   用户照着新命令去电脑上执行，两边端口才一致。 */
+function savePort(){
+  var inp = document.getElementById('portIn');
+  var v = parseInt(inp ? inp.value : '', 10);
+  if (!(v >= 1024 && v <= 65535)){ toast(T('portBad')); return; }
+  fetch('/api/setport', {method:'POST', headers:{'Content-Type':'application/json'},
+                         body: JSON.stringify({port: v})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok){ toast(T('portBad')); return; }
+      adbPort = d.port || v;
+      toast(T2('portSaved', {p: adbPort}));
+      showGuide();
+      load(true);
+    })
+    .catch(function(){ toast(T('portBad')); });
 }
 
 /* 排序规则：主列表与白名单列表共用 */
@@ -1442,13 +1504,13 @@ function updateBanner(d){
   if (adbOk){ el.style.display = 'none'; el.innerHTML = ''; return; }
   var st = d.adb_state || '';
   var title = T('bannerOff');
-  var hint = T('bannerOffHint');
+  var hint = T2('bannerOffHint', {p: adbPort});
   if (st === 'unauthorized'){
     title = T('bannerUnauth');
     hint = T('bannerUnauthHint');
   } else if (st === 'offline'){
     title = T('bannerOffline');
-    hint = T('bannerOfflineHint');
+    hint = T2('bannerOfflineHint', {p: adbPort});
   } else if (st === 'error'){
     title = T('bannerErr');
     hint = T('bannerErrHint');
@@ -1509,6 +1571,7 @@ function applyData(d){
   apps = d.apps || [];
   if (apps.length) idxReady = !!apps[0].idx_ready;
   idxPartial = !!(d && d.idx_partial);
+  adbPort = (d && d.adb_port) || 5555;
   idxAt = (d && d.idx_at) || 0;
   try { localStorage.setItem('idxAt', String(idxAt)); } catch (e) {}
   updateIdxAt();
@@ -1826,6 +1889,9 @@ var locLastPkg = '', locLastAt = 0;
 var idxReady = false;
 /* 索引没建完（上次遍历中途被打断）：部分应用没有定位按钮，要提示去补齐 */
 var idxPartial = false;
+/* adbd 的 TCP 端口。默认 5555；只有用户在引导弹窗里主动改过才会变，
+   旧用户完全感知不到这个功能的存在 */
+var adbPort = 5555;
 var idxAt = parseInt(localStorage.getItem('idxAt') || '0', 10) || 0;
 var LOC_TTL = 2 * 60 * 1000;
 var LOC_FORCE = 15000;

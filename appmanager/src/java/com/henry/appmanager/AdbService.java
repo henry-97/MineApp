@@ -29,7 +29,17 @@ public class AdbService {
     /** 正式版关掉逐条命令日志；Log.w 的异常告警保留，方便用户报 bug 时抓 */
     private static final boolean DEBUG = false;
     private static final String HOST = "127.0.0.1";
-    private static final int PORT = 5555;
+    /**
+     * adbd 的 TCP 端口。默认 5555 —— 绝大多数用户不用改，保持旧版体验。
+     *
+     * 只有用户主动在「操作指引」里点「自定义其他 adb tcp 端口」才会改成别的值，
+     * 存在 SharedPreferences（adb_port）里，重启 App 后仍然生效。
+     * 🔴 改端口后必须 drop() 断开旧连接，否则 conn() 会一直复用连在旧端口上的 transport。
+     */
+    private volatile int port = 5555;
+    /** 端口合法区间：1024 以下需要 root，adb tcpip 会直接失败 */
+    public static final int PORT_MIN = 1024;
+    public static final int PORT_MAX = 65535;
 
     /**
      * 全量 AOT 编译建议预留的可用内存（MB）。
@@ -89,6 +99,11 @@ public class AdbService {
             } catch (Exception e) {
                 Log.w(TAG, "密钥初始化失败: " + e);
             }
+            // 读回用户自定义的端口；没设过就是 5555（老用户行为完全不变）
+            try {
+                int saved = appCtx.getSharedPreferences("app", 0).getInt("adb_port", 5555);
+                if (saved >= PORT_MIN && saved <= PORT_MAX) s.port = saved;
+            } catch (Throwable ignored) { }
             shared = s;
         }
         return shared;
@@ -121,7 +136,7 @@ public class AdbService {
         if (conn != null) { conn.close(); conn = null; }
         AdbClient c = new AdbClient(log);
         c.applyKey(key);
-        c.connect(HOST, PORT);
+        c.connect(HOST, port);
         conn = c;
         if (DEBUG) Log.i(TAG, "新建 adbd 连接，后续命令复用这条 transport");
         return c;
@@ -132,6 +147,33 @@ public class AdbService {
             conn.close();
             conn = null;
         }
+    }
+
+    /** 当前使用的 adbd 端口（默认 5555）。 */
+    public int getPort() {
+        return port;
+    }
+
+    /**
+     * 改端口。只接受 1024–65535，越界直接忽略并返回 false。
+     *
+     * 🔴 必须 drop()：conn() 只在「连接已断开」时才重建，不断开的话会继续复用
+     *    连在旧端口上的 transport，用户改了端口却毫无效果。
+     */
+    public boolean setPort(int p) {
+        if (p < PORT_MIN || p > PORT_MAX) return false;
+        boolean changed = (p != port);
+        port = p;
+        try {
+            if (appCtx != null) {
+                appCtx.getSharedPreferences("app", 0).edit().putInt("adb_port", p).apply();
+            }
+        } catch (Throwable ignored) { }
+        if (changed) {
+            synchronized (lock) { drop(); }
+            Log.i(TAG, "端口改为 " + p + "，已断开旧连接");
+        }
+        return true;
     }
 
     /**
@@ -228,7 +270,7 @@ public class AdbService {
                 }
                 AdbClient c = new AdbClient(log);
                 c.applyKey(key);
-                c.connect(HOST, PORT);
+                c.connect(HOST, port);
                 longConn = c;
             }
             return longConn.shell(cmd, 0, false);
@@ -1341,6 +1383,7 @@ public class AdbService {
             out.put("adb_ok", true);
             out.put("adb_state", "ok");
             out.put("adb_msg", "");
+            out.put("adb_port", port);
             out.put("idx_at", locIndexAt);
             out.put("idx_partial", locIndexPage > 1);
             out.put("perf", getPerfMode());
@@ -1381,6 +1424,7 @@ public class AdbService {
             out.put("adb_ok", false);
             out.put("adb_state", st);
             out.put("adb_msg", "");
+            out.put("adb_port", port);
         } catch (Exception ignored) { }
         return out.toString();
     }
@@ -1405,6 +1449,7 @@ public class AdbService {
                 out.put("adb_ok", false);
                 out.put("adb_state", st);
                 out.put("adb_msg", "");
+                out.put("adb_port", port);
             } catch (Exception ignored) { }
             return out.toString();
         }
@@ -1431,6 +1476,7 @@ public class AdbService {
             out.put("adb_ok", true);
             out.put("adb_state", "ok");
             out.put("adb_msg", "");
+            out.put("adb_port", port);
         } catch (Exception ignored) { }
         return out.toString();
     }
