@@ -112,22 +112,17 @@ you re-authorise — you just cannot refresh the app list until you run it once 
 | **Appearance** | 6 icon sets (blocks / clover × green / gold / black), two app names, light & dark theme, Chinese & English |
 | **List cache** | The fetched list is cached locally; re-entering within a minute does not refetch |
 
-> **"Restrict" and "Allowlist" are two independent switches — don't conflate them:**
+> **Three things that are easy to mix up — one table:**
 >
-> | | What it changes | Effect |
+> | Where you touch it | What it actually changes | Which layer it governs |
 > |---|---|---|
-> | **Restrict** | `appops RUN_IN_BACKGROUND` | The app's background-activity permission |
-> | **Allowlist** | The system power-management list (doze whitelist / `standby bucket = EXEMPTED`) | Whether the system throttles it in the background |
+> | This app → **Restrict** | `appops RUN_IN_BACKGROUND` | Whether the app may run in the background |
+> | This app → **Allowlist** | The system doze / standby allowlist (`EXEMPTED`) | Whether the system throttles it |
+> | MIUI Settings → **Battery saver** | Private state kept by `com.miui.powerkeeper` | MIUI's own power logic |
 >
-> They don't override each other, so **an app can be both Restricted and Allowlisted**.
->
-> Verified on device: all 22 allowlisted apps report `standby bucket = 5 (EXEMPTED)` and appear in
-> `dumpsys deviceidle whitelist`; sampled apps outside the list do not. In other words, the in-app
->
-> ⚠️ They are not the same thing: the Millet allowlist governs the **framework-level standby bucket /
-> doze exemption**, while the *Battery saver* toggle in MIUI's UI is separate state kept by
-> `com.miui.powerkeeper` and cannot be written through `settings`. To make the system UI show
-> "No restrictions", pick it once on the app-info page.
+> The first two don't override each other, so **an app can be both Restricted and Allowlisted**.
+> The third one we cannot write — to make MIUI's UI show "No restrictions", pick it once on the
+> app-info page.
 
 > **On "Performance" mode: it is not actually a battery hog**
 >
