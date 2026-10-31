@@ -557,10 +557,13 @@ public class Bridge {
                 .compile("<node\\b[^>]*>").matcher(xml);
         int cur = -1, total = -1;
         java.util.List<int[]> dots = new java.util.ArrayList<int[]>();
+        java.util.List<String> dotDescs = new java.util.ArrayList<String>();
         while (m.find()) {
             String tag = m.group();
             String desc = nodeAttr(tag, "content-desc");
             if (desc == null || desc.isEmpty()) continue;
+
+            // ① MIUI：「第 1 页共 3 页」
             if (desc.contains("页共")) {
                 java.util.regex.Matcher n = java.util.regex.Pattern
                         .compile("第\\s*(\\d+)\\s*页共\\s*(\\d+)\\s*页").matcher(desc);
@@ -568,7 +571,27 @@ public class Bridge {
                     cur = Integer.parseInt(n.group(1));
                     total = Integer.parseInt(n.group(2));
                 }
-            } else if (desc.matches("第\\s*\\d+\\s*屏")) {
+                continue;
+            }
+
+            // ② 其他 ROM 的常见写法：「第 1/3 屏」「1/3」「Page 1 of 3」「1 of 3」
+            //    🔴 不绑定 MIUI 文案 —— 很多国产 ROM 有页码，只是格式不同。
+            if (cur < 0) {
+                int[] pt = parsePagerText(desc);
+                if (pt != null) {
+                    // 「N/M」这种纯数字格式容易误匹配（时间、日期、版本号），
+                    // 要求节点落在屏幕下方 1/4 区域（页码指示器就在那儿）
+                    boolean numericOnly = desc.trim().matches("^\\d+\\s*[/／]\\s*\\d+$");
+                    if (!numericOnly || inBottomArea(tag)) {
+                        cur = pt[0];
+                        total = pt[1];
+                        continue;
+                    }
+                }
+            }
+
+            // ③ 圆点：MIUI「第 N 屏」或通用「Page N」
+            if (desc.matches("第\\s*\\d+\\s*屏") || desc.matches("(?i)page\\s*\\d+")) {
                 String bounds = nodeAttr(tag, "bounds");
                 if (bounds == null) continue;
                 java.util.regex.Matcher b = java.util.regex.Pattern
@@ -577,8 +600,23 @@ public class Bridge {
                 int x1 = Integer.parseInt(b.group(1)), y1 = Integer.parseInt(b.group(2));
                 int x2 = Integer.parseInt(b.group(3)), y2 = Integer.parseInt(b.group(4));
                 dots.add(new int[]{(x1 + x2) / 2, (y1 + y2) / 2});
+                dotDescs.add(desc);
             }
         }
+
+        // ④ 只有圆点没有文字时：圆点个数 = 总页数；
+        //    当前页优先看 selected="true" 的那个，退而求其次看「第 N 屏」里的 N
+        if (total < 0 && dots.size() > 1) {
+            total = dots.size();
+            if (cur < 0) {
+                for (int i = 0; i < dotDescs.size(); i++) {
+                    java.util.regex.Matcher n = java.util.regex.Pattern
+                            .compile("(\\d+)").matcher(dotDescs.get(i));
+                    if (n.find()) { cur = Integer.parseInt(n.group(1)); break; }
+                }
+            }
+        }
+
         int[] out = new int[2 + dots.size() * 2];
         out[0] = cur;
         out[1] = total;
@@ -587,6 +625,40 @@ public class Bridge {
             out[3 + i * 2] = dots.get(i)[1];
         }
         return out;
+    }
+
+    /** 从一段无障碍文本里解析「当前页 / 总页数」，认不出返回 null。 */
+    private static int[] parsePagerText(String desc) {
+        String s = desc.trim();
+        java.util.regex.Matcher n;
+        // 第 1/3 屏、第 1／3 页
+        n = java.util.regex.Pattern.compile("第\\s*(\\d+)\\s*[/／]\\s*(\\d+)\\s*[页屏]").matcher(s);
+        if (n.find()) return new int[]{Integer.parseInt(n.group(1)), Integer.parseInt(n.group(2))};
+        // Page 1 of 3 / Page 1/3
+        n = java.util.regex.Pattern.compile("(?i)page\\s*(\\d+)\\s*(?:of|[/／])\\s*(\\d+)").matcher(s);
+        if (n.find()) return new int[]{Integer.parseInt(n.group(1)), Integer.parseInt(n.group(2))};
+        // 1 of 3
+        n = java.util.regex.Pattern.compile("^(\\d+)\\s+of\\s+(\\d+)$").matcher(s);
+        if (n.find()) return new int[]{Integer.parseInt(n.group(1)), Integer.parseInt(n.group(2))};
+        // 纯 1/3
+        n = java.util.regex.Pattern.compile("^(\\d+)\\s*[/／]\\s*(\\d+)$").matcher(s);
+        if (n.find()) {
+            int a = Integer.parseInt(n.group(1)), b = Integer.parseInt(n.group(2));
+            if (a >= 1 && a <= b && b <= 20) return new int[]{a, b};
+        }
+        return null;
+    }
+
+    /** 节点是否落在屏幕下方 1/4（页码指示器通常在这个区域）。 */
+    private static boolean inBottomArea(String tag) {
+        String bounds = nodeAttr(tag, "bounds");
+        if (bounds == null) return false;
+        java.util.regex.Matcher b = java.util.regex.Pattern
+                .compile("\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]").matcher(bounds);
+        if (!b.find()) return false;
+        int y1 = Integer.parseInt(b.group(2)), y2 = Integer.parseInt(b.group(4));
+        int centerY = (y1 + y2) / 2;
+        return centerY > 1800;      // 1080×2400 屏幕上，1800 约在 3/4 处
     }
 
     /**
@@ -1092,8 +1164,16 @@ public class Bridge {
                     //    后面 5 页全是空的，表现就是「在最后一页疯狂右滑」。
                     int total = pager[1] > 0 ? pager[1] : 0;
                     if (total <= 0) {
-                        total = 3;      // 多数桌面 2~4 页，按 3 页试比按 8 页安全得多
-                        dbg("读不到页数，按 3 页试");
+                        // 完全读不到页码 = 这个桌面的无障碍树里没有任何分页信息。
+                        // 硬着头皮按 3 页试只会索引出一堆错坐标（定位时点到别的应用），
+                        // 不如明确告诉用户「不支持」，让他去提 issue 反馈机型。
+                        dbg("读不到页码：当前桌面不支持应用查找");
+                        o.put("ok", false);
+                        o.put("unsupported", true);
+                        // 必须先把 App 拉回前台：前端用的是 HTML toast，
+                        // 界面不在前台时用户什么都看不到（实测点了「开始」毫无反应）。
+                        backToApp();
+                        return o.toString();
                     }
                     // 把圆点坐标存下来，之后跳页连 dump 都不用
                     StringBuilder dots = new StringBuilder();
@@ -1340,11 +1420,43 @@ public class Bridge {
     }
 
     /** 前台是不是桌面 —— 用来判断用户有没有主动切走 */
+    /**
+     * 当前 ROM 的桌面（launcher）包名，惰性解析一次后缓存。
+     *
+     * 🔴 以前这里写死 `com.miui.home`，只在 MIUI / HyperOS 上成立。
+     *    在模拟器（nexuslauncher）或任何其他厂商的桌面上，前台判断永远为 false，
+     *    表现就是「点开始建索引，1 秒后提示用户切走了、直接中止」——
+     *    实测在 Android 14 模拟器上必现。
+     */
+    private String launcherPkg;
+
+    private String launcherPkg() {
+        if (launcherPkg != null) return launcherPkg;
+        try {
+            String out = service.shellLong("cmd package resolve-activity --brief "
+                    + "-a android.intent.action.MAIN -c android.intent.category.HOME | tail -1");
+            if (out != null) {
+                String s = out.trim();
+                int slash = s.indexOf('/');
+                if (slash > 0) {
+                    launcherPkg = s.substring(0, slash);
+                    dbg("桌面包名 = " + launcherPkg);
+                    return launcherPkg;
+                }
+            }
+        } catch (Throwable ignored) { }
+        return null;      // 解析失败 → 调用方按「不误停」处理
+    }
+
     private boolean isLauncherFront() {
         try {
             String out = service.shellLong(
                     "dumpsys activity activities | grep -m1 topResumedActivity");
-            return out != null && out.contains("com.miui.home");
+            if (out == null) return true;
+            String lp = launcherPkg();
+            if (lp != null) return out.contains(lp);
+            // 拿不到桌面包名时退回旧判据，至少 MIUI 上还能用
+            return out.contains("com.miui.home");
         } catch (Throwable e) {
             return true;      // 读不到就当还在桌面，别误停
         }

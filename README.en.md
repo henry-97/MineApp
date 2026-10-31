@@ -366,9 +366,6 @@ MineApp/
 └── dist/                         Build output (APK)
 ```
 
-**There is only one copy of the front-end.** `frontend.py` embeds the whole HTML/CSS/JS;
-`gen_assets.py` extracts it verbatim and injects a `fetch → Java bridge` shim, so the APK runs
-exactly that UI — no second implementation to keep in sync.
 
 > This project does not require Termux. The `termux/` folder name is historical: an early
 > distribution ran the app as a Termux + Python script without root. It now only holds the

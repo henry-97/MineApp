@@ -317,6 +317,9 @@ background:var(--bluebg);color:var(--ink);border:0.5px solid var(--line);
 font-size:13px;line-height:1.5;cursor:pointer}
 .idxhint:active{opacity:.7}
 .idxhint b{font-weight:600;color:var(--blue)}
+/* 「不再提示」：蓝字、与正文同基线、右对齐，不抢主文案的注意力 */
+.idxhint .hint-off{display:inline-block;margin-left:8px;color:var(--blue);
+text-decoration:underline;font-size:12px;white-space:nowrap}
 .empty{padding:60px 20px;text-align:center;color:var(--ink3);font-size:16px}
 .sortbar{display:flex;gap:8px;margin-top:8px}
 .sec{font-size:13px;color:var(--ink2);font-weight:500;margin:16px 0 5px}
@@ -748,6 +751,8 @@ var I18N = {
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
     idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
+    idxHintOff: '不再提示',
+    idxUnsupported: '检测到应用查找暂不支持本系统，建议反馈 issue，以便持续更新',
     idxHintPartial: '索引还没建完 —— 部分应用没有定位按钮。<b>点此继续</b>',
     locAskTitle: '还没初始化查找索引',
     locAskBody: '直接查找要一页一页翻桌面、逐个开文件夹，可能需要几十秒；初始化会把所有应用的位置记下来，之后查找几乎秒出。\n初始化约需几分钟，期间可以随时操作手机打断，下次接着来。建议先初始化。',
@@ -893,6 +898,8 @@ var I18N = {
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
     idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
+    idxHintOff: 'Don\'t show again',
+    idxUnsupported: 'App lookup is not supported on this launcher yet — please open an issue so we can add it',
     idxHintPartial: 'Index is incomplete — some apps have no locate button. <b>Tap to resume</b>',
     locAskTitle: 'No location index yet',
     locAskBody: 'A direct lookup walks every page and opens every folder — it can take tens of seconds. Building the index first records where every app lives, so later lookups are near-instant.\nIndexing takes a few minutes; you can interrupt it any time and resume later. Building it first is recommended.',
@@ -1977,18 +1984,36 @@ function updateIdxAt(){
 function updateIdxHint(){
   var el = document.getElementById('idxHint');
   if (!el) return;
+  // 用户点过「不再提示」就永远不出现（存在本机，重装/清数据才会恢复）
+  if (localStorage.getItem('idxHintOff') === '1'){
+    el.style.display = 'none';
+    el.onclick = null;
+    return;
+  }
   if (!idxReady){
-    el.innerHTML = T('idxHintNone');
+    el.innerHTML = T('idxHintNone') + '<span class="hint-off">' + T('idxHintOff') + '</span>';
     el.style.display = '';
-    el.onclick = function(){ openSettings(); };
+    bindIdxHint(el);
   } else if (idxPartial){
-    el.innerHTML = T('idxHintPartial');
+    el.innerHTML = T('idxHintPartial') + '<span class="hint-off">' + T('idxHintOff') + '</span>';
     el.style.display = '';
-    el.onclick = function(){ openSettings(); };
+    bindIdxHint(el);
   } else {
     el.style.display = 'none';
     el.onclick = null;
   }
+}
+
+/* 整条点击 = 去设置页；点「不再提示」= 永久关掉，不触发跳转 */
+function bindIdxHint(el){
+  el.onclick = function(){ openSettings(); };
+  var off = el.querySelector('.hint-off');
+  if (off) off.onclick = function(e){
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    localStorage.setItem('idxHintOff', '1');
+    el.style.display = 'none';
+    return false;
+  };
 }
 
 /* 跳到设置页并把「开始」按钮脉冲几下，引导点击 */
@@ -2238,6 +2263,15 @@ document.getElementById('idxBtn').onclick = function(){
       idxRunning = false;
       btn.disabled = false;
       btn.textContent = T('idxStart');
+      if (d && d.unsupported){
+        // 用模态而不是 toast：Java 侧的 backToApp 是异步的，toast 在后台渲染，
+        // 用户回到前台时早已过期（实测两轮都抓不到）。模态会一直挂着，不怕错过。
+        setTimeout(function(){
+          askInfo('<div class="info-title">' + T('idxUnsupported') + '</div>'
+                  + '<div class="info-note">github.com/henry-97/MineApp/issues</div>');
+        }, 1200);
+        return;
+      }
       if (!d || !d.ok){ toast(T('idxFail')); return; }
       if (d.done) markIdxDone();
       toast(d.done ? T2('idxDone', {n: d.count}) : T('idxPaused'));
