@@ -615,10 +615,16 @@ public class AdbService {
         }
 
         int designMah = designMah();
-        int healthPct = 0;
+        int rawPct = 0;
         if (capMin > 0 && designMah > 0) {
-            healthPct = (int) Math.round(capMin * 100.0 / designMah);
+            rawPct = (int) Math.round(capMin * 100.0 / designMah);
         }
+        // 🔴 必须封顶 100：设计容量是用户手填的（允许 1000~30000），
+        //    填成 1000 而学习容量是 4270 时会算出 427%（实测确认）。
+        //    新电池实测容量略高于标称、算出 101~103% 属正常，也一并按 100% 显示。
+        int healthPct = Math.min(100, rawPct);
+        // 明显超过 100% 说明「设计容量填小了」，界面要提示用户核对而不是假装正常
+        boolean designLow = rawPct > 103;
         try {
             o.put("level", level);
             o.put("health", health);
@@ -631,6 +637,7 @@ public class AdbService {
             o.put("learned_max", learnedMax);
             o.put("design_mah", designMah);
             o.put("design_src", designSrc);
+            o.put("design_low", designLow);
         } catch (Exception ignored) { }
         return o;
     }

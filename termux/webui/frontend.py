@@ -298,13 +298,15 @@ font-family:inherit;cursor:pointer;white-space:nowrap}
 button:disabled{opacity:.45}
 .primary{background:#0f6e56;color:#fff}
 .ghost{background:var(--bg);color:var(--ink);border:0.5px solid var(--line)}
+/* z-index 必须高于设置页(sheet=50)和弹窗(modal=90)：
+   以前是 40，在设置页里点「开始」时提示条被整页盖住，一条都看不见 */
 #toast{position:fixed;left:50%;bottom:116px;transform:translateX(-50%) translateY(10px);
 /* 跟随主题：浅色主题用浅底深字，深色主题用深底浅字。
    以前写死 #2c2c2a 黑底，浅色主题下很突兀，也和系统 Toast 不一致 */
 background:var(--card);color:var(--ink);border:0.5px solid var(--line);
 box-shadow:0 6px 24px rgba(0,0,0,.14);
 padding:12px 18px;border-radius:16px;font-size:14px;opacity:0;
-transition:opacity .2s,transform .2s;pointer-events:none;z-index:40;
+transition:opacity .2s,transform .2s;pointer-events:none;z-index:95;
 width:70vw;max-width:70vw;box-sizing:border-box;text-align:center}
 html.dark #toast{box-shadow:0 6px 24px rgba(0,0,0,.5)}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -503,7 +505,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </div>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="battDesignNote" data-html="1">部分机型可能不支持自动读取容量，可&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。</span>
+      <span data-t="battDesignNote" data-html="1">部分机型可能不支持自动读取容量，建议&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。</span>
     </div>
     <div class="setrow" style="margin-bottom:0;gap:8px">
       <span class="setrow-lb" data-t="keepCard">显示后台卡片</span>
@@ -684,10 +686,18 @@ var I18N = {
     battLevel: '当前电量', battSys: '系统状态',
     battMax: '历史最高', battLast: '最近一次学习', battMin: '历史最低（采用值）',
     battDesign: '电池设计容量',
-    battDesignNote: '部分机型可能不支持自动读取容量，可&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。',
+    battDesignNote: '部分机型可能不支持自动读取容量，建议&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。',
     battDesignSaved: '已保存：{n} mAh',
     battDesignCleared: '已清空，回到自动估算',
     battDesignBad: '请填 1000~30000 之间的数值',
+    battDesignLow: '检测到设计容量（{d} mAh）比实测学习容量（{m} mAh）还小，健康度已按 100% 封顶。建议核对机型参数后重新填写。',
+    /* 🔴 这四个键是**动态拼接**用的（'battDesign' + 'User'），
+       代码里不会出现带引号的 'battDesignUser'，按「未被引用」删掉会让界面
+       直接显示成 battDesignUser 这种原始键名（实测踩到）。别删。 */
+    battDesignAuto: '系统读取',
+    battDesignDefault: '系统读不到，估算',
+    battDesignDevice: '按机型表匹配',
+    battDesignUser: '手动设置',
     battNote: '系统在每次完整充电后，会用实际充入的电量反推电池当时的真实满电容量，记为一个学习值。<br>健康度 = 学习容量 ÷ 设计容量。<br>因为电池健康只会下降不会回升，这里取<b>历史最低值 Min</b> 作为依据，避免个别偏高的学习值把结果拉高。<br>这个口径偏保守，结果可能略低于实际值，但偏差在可控范围内。'
       + '<br><br><b>关于数值波动</b>：首次检测结果可能滞后或有波动，这是系统的学习机制决定的 —— 它需要若干个完整的充放电周期才能收敛。'
       + '<b>日常使用一周左右</b>即可得到比较稳定的值；刚装好时看到的数字仅供参考，不必在意一两天的跳动。',
@@ -753,6 +763,9 @@ var I18N = {
     idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
     idxHintOff: '不再提示',
     idxUnsupported: '检测到应用查找暂不支持本系统，建议反馈 issue，以便持续更新',
+    injectTitle: '开启「USB 调试（安全设置）」',
+    injectText: '允许通过 USB 调试修改权限或模拟点击',
+    injectBody: '系统拦截了模拟点击，应用查找无法继续。请到「开发者选项」打开「USB 调试（安全设置）」—— 它下面写着「允许通过 USB 调试修改权限或模拟点击」，不要开成上面那个「USB 调试」。打开后重启手机（这个开关必须重启才生效），再回来点「开始」。',
     idxHintPartial: '索引还没建完 —— 部分应用没有定位按钮。<b>点此继续</b>',
     locAskTitle: '还没初始化查找索引',
     locAskBody: '直接查找要一页一页翻桌面、逐个开文件夹，可能需要几十秒；初始化会把所有应用的位置记下来，之后查找几乎秒出。\n初始化约需几分钟，期间可以随时操作手机打断，下次接着来。建议先初始化。',
@@ -830,10 +843,15 @@ var I18N = {
     battLevel: 'Level', battSys: 'System status',
     battMax: 'All-time high', battLast: 'Latest learned', battMin: 'All-time low (used)',
     battDesign: 'Design capacity',
-    battDesignNote: 'Some models cannot read it automatically — <a href="#" id="lnkBattSet">check here</a> and enter it manually.',
+    battDesignNote: 'Some models cannot read it automatically — it is best to <a href="#" id="lnkBattSet">check here</a> and then enter it manually.',
     battDesignSaved: 'Saved: {n} mAh',
     battDesignCleared: 'Cleared — back to auto',
     battDesignBad: 'Enter a value between 1000 and 30000',
+    battDesignLow: 'Detected: design capacity ({d} mAh) is below the measured learned capacity ({m} mAh), so health is capped at 100%. Double-check the spec and re-enter it.',
+    battDesignAuto: 'from system',
+    battDesignDefault: 'unreadable, estimated',
+    battDesignDevice: 'matched by model',
+    battDesignUser: 'manual',
     battNote: 'After each full charge the system infers the real full capacity from the charge actually delivered, and records it as a learned value.<br>Health = learned capacity ÷ design capacity.<br>Battery health only decreases, so the <b>all-time low (Min)</b> is used to keep occasional high readings from inflating the result.<br>This is deliberately conservative: the figure may sit slightly below the true capacity, but the deviation stays within a small, predictable range.'
       + '<br><br><b>About fluctuations</b>: the first reading may lag or bounce around. That is how the system learns — it needs a few complete charge cycles to converge. '
       + 'Expect a stable figure after <b>about a week of normal use</b>; right after installing, treat the number as a rough reference and do not worry about day-to-day jitter.',
@@ -900,6 +918,9 @@ var I18N = {
     idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
     idxHintOff: 'Don\'t show again',
     idxUnsupported: 'App lookup is not supported on this launcher yet — please open an issue so we can add it',
+    injectTitle: 'Enable "USB debugging (Security settings)"',
+    injectText: 'Allow modifying permissions or simulating taps over USB',
+    injectBody: 'The system blocked simulated taps, so app lookup cannot continue. In Developer options, enable "USB debugging (Security settings)" — its description reads "allow modifying permissions or simulating taps over USB"; do not confuse it with the plain "USB debugging" above it. Reboot the phone (the switch only takes effect after a reboot), then tap Start again.',
     idxHintPartial: 'Index is incomplete — some apps have no locate button. <b>Tap to resume</b>',
     locAskTitle: 'No location index yet',
     locAskBody: 'A direct lookup walks every page and opens every folder — it can take tens of seconds. Building the index first records where every app lives, so later lookups are near-instant.\nIndexing takes a few minutes; you can interrupt it any time and resume later. Building it first is recommended.',
@@ -1452,6 +1473,8 @@ function showBatteryInfo(){
     + (b.health ? ' · ' + T('battSys') + ' <b>' + healthName(b.health) + '</b>' : '')
     + (b.temp > 0 ? ' · ' + T('temp').replace('℃','') + ' <b>' + b.temp + '°C</b>' : '') + '</div>'
     + rows
+    + (b.design_low ? '<div class="info-note" style="color:var(--red)">'
+        + T2('battDesignLow', {d: b.design_mah, m: b.learned_min}) + '</div>' : '')
     + '<div class="info-note">' + T('battNote') + '</div>'
   );
 }
@@ -1981,6 +2004,23 @@ function updateIdxAt(){
 /* 索引引导条：没索引 / 索引没建完时挂在列表上方，点一下直接进设置页。
    🔴 以前这两种情况是「静默」的：应用没有定位按钮、或者点了定位要翻两分钟，
       用户完全不知道为什么（实测被问到「为什么有些应用没有定位按钮」）。 */
+/* 注入被系统拒绝：把本地化文案交给 Java，同时弹系统 Toast + 发一条通知
+   （通知点一下直接跳到开发者选项）。只弹 Toast 不够 —— 它一两秒就没了，
+   用户去设置里开完开关、重启回来，早忘了说过什么。 */
+function hintInjectBlocked(){
+  // 🔴 用应用内提示条而不是系统 Toast：系统 Toast 只有两行，
+  //    「允许通过 USB 调试修改权限或模拟点击」这句必然被截成「…修改修…」，
+  //    用户根本看不出该开哪个开关（实测截图确认）。应用内这条能整段换行。
+  toast(T('injectBody'), 9000);
+  // 再发一条通知：用户去设置里开完开关、重启回来，通知还在，点一下直接跳开发者选项
+  try {
+    if (window.Bridge && window.Bridge.hintinject) {
+      window.Bridge.hintinject(0, JSON.stringify(
+        {title: T('injectTitle'), text: T('injectText'), body: T('injectBody')}));
+    }
+  } catch (e) {}
+}
+
 function updateIdxHint(){
   var el = document.getElementById('idxHint');
   if (!el) return;
@@ -2052,6 +2092,7 @@ function doLocate(pkg, label, force, c, now){
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (slowTip) clearTimeout(slowTip);
+      if (d && d.needInject){ hintInjectBlocked(); return; }
       if (d && d.found){
         locCache[pkg] = {page: d.page, t: Date.now()};
         try { localStorage.setItem('locCache', JSON.stringify(locCache)); } catch (e) {}
@@ -2263,6 +2304,7 @@ document.getElementById('idxBtn').onclick = function(){
       idxRunning = false;
       btn.disabled = false;
       btn.textContent = T('idxStart');
+      if (d && d.needInject){ hintInjectBlocked(); return; }
       if (d && d.unsupported){
         // 这台设备的桌面不支持 → 引导条再挂着也没意义，直接自动隐藏
         // （不等用户点「不再提示」，否则每次打开都提醒一次「点此构建」，点完还是失败）
@@ -2584,7 +2626,8 @@ document.addEventListener('click', function(e){
   din.addEventListener('change', function(){
     var raw = din.value.trim();
     var v = raw === '' ? 0 : parseInt(raw, 10);
-    if (raw !== '' && (isNaN(v) || v < 1000 || v > 30000)){
+    // 必须整串都是数字：parseInt('1000d') 会静默得到 1000，把脏输入当合法值
+    if (raw !== '' && (!/^[0-9]+$/.test(raw) || isNaN(v) || v < 1000 || v > 30000)){
       toast(T('battDesignBad'));
       din.value = '';
       return;

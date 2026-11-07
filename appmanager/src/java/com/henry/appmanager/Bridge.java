@@ -1029,6 +1029,14 @@ public class Bridge {
             @Override
             public String run() {
                 JSONObject o = new JSONObject();
+                // 注入被系统拒绝时，后面每一步（HOME / 滑动 / 点击）都做不了。
+                // 以前这种情况会在 1 秒后报「已停止（你切换了应用）」，把系统限制
+                // 说成了用户操作（issue #3）。入口处先拦一道，让前端弹可操作的提示。
+                Boolean canInject = injectAllowed();
+                if (canInject != null && !canInject) {
+                    dbg("注入被拒：中止（needInject）");
+                    return "{\"ok\":false,\"needInject\":true}";
+                }
                 String raw = arg == null ? "" : arg;
                 // 参数 "应用名|提示文案|缓存页号"：页号 -1 或省略表示不确定，需要逐页找
                 String[] parts = raw.split("\\|", -1);
@@ -1352,6 +1360,14 @@ public class Bridge {
             @Override
             public String run() {
                 JSONObject o = new JSONObject();
+                // 注入被系统拒绝时，后面每一步（HOME / 滑动 / 点击）都做不了。
+                // 以前这种情况会在 1 秒后报「已停止（你切换了应用）」，把系统限制
+                // 说成了用户操作（issue #3）。入口处先拦一道，让前端弹可操作的提示。
+                Boolean canInject = injectAllowed();
+                if (canInject != null && !canInject) {
+                    dbg("注入被拒：中止（needInject）");
+                    return "{\"ok\":false,\"needInject\":true}";
+                }
                 idxStop = false;
                 locStop = false;          // 静态标志：上次定位按过「停止」不能把索引一起带停
                 locDeadline = 0;          // 建索引不看定位的超时判据
@@ -1955,6 +1971,119 @@ public class Bridge {
 
     private static final String LOC_RES_CH = "app_manager_locate_result";
     private static final int LOC_RES_ID = 1003;
+
+    // ==================== 注入能力探测 ====================
+    private static final String INJECT_CH = "app_manager_inject_hint";
+    private static final int INJECT_ID = 1004;
+    /** 探测成功过就记住，省掉后续每次的往返（关掉开关必须重启，本进程内不会变）。 */
+    private static volatile boolean injectOk;
+
+    /**
+     * 探测 shell(uid 2000) 能否注入输入事件。
+     *
+     * 🔴 为什么不能只读 persist.security.adbinput：那是小米专有属性，
+     *    非小米 ROM 上恒为空串，照「!=1 就拦」会把 Pixel / 三星用户全拦死。
+     *    这里直接拿一次无害注入去试，任何 ROM 都适用。
+     *
+     * 用 keyevent 0（KEYCODE_UNKNOWN）：注入权限是在 InputManagerService 里
+     * 按调用方 uid 检查的，早于任何按键语义处理，所以它同样会被拦；
+     * 而它对系统没有任何实际影响。
+     */
+    private Boolean injectAllowed() {
+        if (injectOk) return Boolean.TRUE;
+        try {
+            String r = service.shellLong("sh -c 'input keyevent 0 2>&1; echo RC=$?'");
+            if (r == null || r.trim().isEmpty()) return null;
+            // 只看退出码不可靠（input 遇到非法参数也返 0），有明确拒绝证据才下结论
+            if (r.contains("SecurityException") || r.contains("INJECT_EVENTS")
+                    || r.contains("Permission Denial")) return Boolean.FALSE;
+            if (r.contains("RC=0")) {
+                injectOk = true;
+                return Boolean.TRUE;
+            }
+            return null;          // 认不出来 → 放行，宁可不禁
+        } catch (Throwable e) {
+            return null;
+        }
+    }
+
+    /**
+     * 注入被拒时的提示：系统 Toast + 一条能点开开发者选项的通知。
+     *
+     * 文案由前端传进来（应用内支持中英切换，Java 侧不该写死一种语言）。
+     *
+     * 只负责**发通知**：正文交给通知栏（可展开看全），应用内的提示条由前端显示 ——
+     * 系统 Toast 只有两行，「允许通过 USB 调试修改权限或模拟点击」会被截断，
+     * 用户看不出该开哪个开关（实测确认）。
+     * 通知留在通知栏，点一下直接跳到开发者选项，重启回来还在。
+     */
+    @JavascriptInterface
+    public void hintinject(int id, String arg) {
+        String title = "开启「USB 调试（安全设置）」";
+        // 🔴 收起状态只会显示 title + contentText 的一小段，所以**动作要放进这两行**；
+        //    完整说明放 bigText，展开才看。之前把长句塞进 contentText，收起时只剩
+        //    「系统…」，实测完全读不出要干什么。
+        String shortText = "允许通过 USB 调试修改权限或模拟点击";
+        String body = "应用查找要靠模拟点击桌面才能遍历。请到「开发者选项」打开"
+                + "「USB 调试（安全设置）」—— 它下面写着「允许通过 USB 调试修改权限或模拟点击」，"
+                + "不要开成上面那个「USB 调试」。打开后重启手机（这个开关必须重启才生效），"
+                + "再回来点「开始」。";
+        try {
+            JSONObject j = new JSONObject(arg == null ? "{}" : arg);
+            String v;
+            v = j.optString("title", "");
+            if (v.length() > 0) title = v;
+            v = j.optString("text", "");
+            if (v.length() > 0) shortText = v;
+            v = j.optString("body", "");
+            if (v.length() > 0) body = v;
+        } catch (Throwable ignored) { }
+
+        notifyInjectHint(title, shortText, body);
+    }
+
+    private void notifyInjectHint(String title, String shortText, String body) {
+        try {
+            android.content.Context ctx = web.getContext();
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) ctx.getSystemService(
+                            android.content.Context.NOTIFICATION_SERVICE);
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                android.app.NotificationChannel ch = new android.app.NotificationChannel(
+                        INJECT_CH, "调试通道提示", android.app.NotificationManager.IMPORTANCE_HIGH);
+                ch.enableVibration(false);
+                ch.setShowBadge(true);
+                nm.createNotificationChannel(ch);
+            }
+            android.content.Intent it = new android.content.Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS);
+            it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            int pf = android.os.Build.VERSION.SDK_INT >= 23
+                    ? android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                      | android.app.PendingIntent.FLAG_IMMUTABLE
+                    : android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+            android.app.PendingIntent pi =
+                    android.app.PendingIntent.getActivity(ctx, 0, it, pf);
+            android.app.Notification.Builder b = (android.os.Build.VERSION.SDK_INT >= 26)
+                    ? new android.app.Notification.Builder(ctx, INJECT_CH)
+                    : new android.app.Notification.Builder(ctx);
+            b.setSmallIcon(android.R.drawable.stat_notify_error)
+                    .setContentTitle(title)
+                    .setContentText(shortText)
+                    .setStyle(new android.app.Notification.BigTextStyle().bigText(body))
+                    // 单独分组：HyperOS 会把同一 App 的未分组通知自动打包，
+                    // 收起时用最早那条（常驻状态）的正文当组摘要 —— 实测把我们这段
+                    // 说明整段顶掉，只剩「系统…」两个字。
+                    .setGroup(INJECT_CH)
+                    .setContentIntent(pi)
+                    .setAutoCancel(true)
+                    .setOnlyAlertOnce(true)
+                    .setShowWhen(false);
+            nm.notify(INJECT_ID, b.build());
+        } catch (Throwable e) {
+            dbg("notifyInjectHint 失败: " + e);
+        }
+    }
 
     /**
      * 结果提示走 **heads-up 通知**（屏幕顶部横幅）。
