@@ -499,6 +499,11 @@ public class Bridge {
     private static boolean isFolderNode(String tag, String desc) {
         if (desc == null || desc.isEmpty()) return false;
         if (!"true".equals(nodeAttr(tag, "clickable"))) return false;
+        // 🔴 MIUI 的应用图标在无障碍树里也可能是 clickable 的 RelativeLayout，
+        //    但它们的 text 和 content-desc 是同一个应用名；真文件夹 text 为空。
+        //    不加这一条，一页会被识别成十几个「文件夹」，点下去全是启动应用。
+        String txt = nodeAttr(tag, "text");
+        if (txt != null && !txt.isEmpty() && txt.equals(desc)) return false;
         String cls = nodeAttr(tag, "class");
         if (cls != null && cls.endsWith("RelativeLayout")) return true;
         String low = desc.toLowerCase();
@@ -535,6 +540,67 @@ public class Bridge {
      * 每个文件夹一次 dump 约 2.3 秒，桌面有 6 个文件夹就是十几秒，
      * 用户看到的就是「明明建过索引还要从头翻」。
      */
+    /**
+     * 等文件夹真的打开。
+     *
+     * 判据：桌面上的文件夹节点**消失**了。
+     * 桌面 XML 里每个文件夹都有一个 isFolderNode 节点，打开文件夹后这些节点不再出现，
+     * 而文件夹内容里不会有「文件夹」节点 —— 这个特征比「比长度」稳。
+     *
+     * @param pageFolders 打开前该页的文件夹数量
+     * @return 文件夹内容树；超时没打开返回 null
+     */
+    private String waitFolderView(int pageFolders) {
+        if (!A11yService.ready()) {
+            // 经典路径：一次 dump 就要 2~3 秒，轮询没有意义，保持原来的固定等待
+            try { Thread.sleep(450); } catch (InterruptedException ignored) { }
+            return dumpHome(false);
+        }
+        for (int i = 0; i < 6; i++) {
+            try { Thread.sleep(i == 0 ? 220 : 150); } catch (InterruptedException ignored) { }
+            String ax = A11yService.dumpXml();
+            if (ax == null || ax.length() < 800 || !ax.contains("<hierarchy")) continue;
+            if (findFoldersNamed(ax).size() < pageFolders) {
+                // 兜底：如果点开后前台不是桌面，说明点中的是应用图标（启动器把图标
+                // 也暴露成 clickable RelativeLayout），这种不能当文件夹索引，退回去跳过。
+                String pkg = firstPackage(ax), lp = launcherPkg();
+                if (pkg != null && lp != null && !pkg.equals(lp)) {
+                    dbg("点开的是应用 " + pkg + "，不是文件夹，跳过");
+                    doBack();
+                    waitBackToLauncher(pageFolders);
+                    return null;
+                }
+                return ax;
+            }
+        }
+        return null;
+    }
+
+    /** 取 XML 里第一个带 package 属性的节点值 */
+    private static String firstPackage(String xml) {
+        if (xml == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("<node\\b[^>]*package=\"([^\"]+)\"").matcher(xml);
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** 等 BACK 把文件夹关掉、桌面重新回到前台，避免下一次点击落空 */
+    private void waitBackToLauncher(int pageFolders) {
+        if (!A11yService.ready()) {
+            try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+            return;
+        }
+        for (int i = 0; i < 6; i++) {
+            try { Thread.sleep(120); } catch (InterruptedException ignored) { }
+            String ax = A11yService.dumpXml();
+            if (ax == null) continue;
+            if (findFoldersNamed(ax).size() >= pageFolders) return;
+        }
+    }
+
+    /** 当前屏幕尺寸，用来过滤掉「相邻页面」的节点（见 findFoldersNamed 的注释） */
+    private static int SW = 0, SH = 0;
+
     private static java.util.List<Object[]> findFoldersNamed(String xml) {
         java.util.List<Object[]> out = new java.util.ArrayList<Object[]>();
         java.util.regex.Matcher m = java.util.regex.Pattern
@@ -551,7 +617,14 @@ public class Bridge {
             if (!b.find()) continue;
             int x1 = Integer.parseInt(b.group(1)), y1 = Integer.parseInt(b.group(2));
             int x2 = Integer.parseInt(b.group(3)), y2 = Integer.parseInt(b.group(4));
-            out.add(new Object[]{(x1 + x2) / 2, (y1 + y2) / 2, desc});
+            int cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+            // 🔴 无障碍树会把**相邻页面**的节点一起返回，它们的 x 会超过屏宽
+            //    （实测下一页的文件夹在 x=1096、1197，屏幕只有 1080 宽）。
+            //    不过滤的话，一页被算成 17 个「文件夹」，其中大部分点在屏幕外，
+            //    表现为「点了没反应」，还会把 pageFolders 计数抬高导致判断失真。
+            if (SW > 0 && (cx < 0 || cx >= SW || cy < 0 || cy >= SH)) continue;
+            out.add(new Object[]{cx, cy, desc,
+                    nodeAttr(tag, "class"), nodeAttr(tag, "text")});
         }
         return out;
     }
@@ -1678,6 +1751,9 @@ public class Bridge {
 
                     doHome();
                     try { Thread.sleep(900); } catch (InterruptedException ignored) { }
+                    android.util.DisplayMetrics dm = web.getContext().getResources().getDisplayMetrics();
+                    SW = dm.widthPixels;
+                    SH = dm.heightPixels;
                     // 用户已经切走了就别再 dump 三次（每次 2.3 秒，白等 7 秒）
                     if (userLeft()) return o.toString();
                     // 开触摸监听：建索引全程「碰屏幕就停」（以前只有定位有，索引只能靠切应用，
@@ -1753,9 +1829,22 @@ public class Bridge {
                             if (idxStop || touchHit || !isLauncherFront()) break;
                             Object[] f = folders.get(i);
                             String fname = useFolderIndex ? ("#" + i) : (String) f[2];
-                            doTap(f[0], f[1]);
-                            try { Thread.sleep(450); } catch (InterruptedException ignored) { }
-                            added += indexPage(index, dumpHome(false), page, fname);
+                            // 🔴 不能「点完就 dump」：MIUI 会丢掉部分快速手势，
+                            //    实测 31 个文件夹里有 14 个没打开，每次白等约 1 秒。
+                            //    改成「确认读到文件夹内容才算数」，读不到重试一次，仍不行跳过。
+                            String fx = null;
+                            for (int attempt = 0; attempt < 2 && fx == null; attempt++) {
+                                doTap(f[0], f[1]);
+                                fx = waitFolderView(folders.size());
+                                if (fx == null) {
+                                    dbg("文件夹没打开（第 " + (attempt + 1) + " 次）: " + fname);
+                                }
+                            }
+                            if (fx != null) {
+                                added += indexPage(index, fx, page, fname);
+                            } else {
+                                dbg("文件夹跳过（点不开）: " + fname);
+                            }
                             // 🔴 用 BACK 关文件夹，不要用 HOME。
                             //    HOME 一定会跳回桌面**第 1 页**（实测「第 1 页共 3 页」），
                             //    之后为了接着索引当前页的文件夹，又得从第 1 页滑回来 ——
@@ -1763,7 +1852,8 @@ public class Bridge {
                             //    每处理一个文件夹折腾一遍（实测被投诉）。
                             //    BACK 只是关掉文件夹，页面停在原处，一下都不用滑。
                             doBack();
-                            try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+                            // 等桌面真的回来再点下一个，否则下一次点击会落在还没关掉的文件夹上
+                            waitBackToLauncher(folders.size());
                         }
                         // 每页文件夹处理完，确认还停在本页（BACK 万一没关掉文件夹、或用户手动滑过）。
                         // 顺便把 pager 换成实测值：下一轮 jumpToPage 靠 pager[0] 算差值，
