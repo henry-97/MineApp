@@ -1033,9 +1033,13 @@ public class Bridge {
                 String ax = A11yService.dumpXml();
                 if (ax != null && ax.length() > 1000 && ax.contains("<hierarchy")) {
                     last = ax;
-                    boolean hasP = ax.contains("页共");
+                    // 用 parsePager 判断，而不是死盯「页共」两个字：
+                    // 别的桌面可能是「第 1/3 屏」「Page 1 of 3」「1/3」甚至只有圆点，
+                    // 只认「页共」会让它们每次都白重试 3 轮（3×400ms，白等 1 秒多）。
+                    int[] pg = parsePager(ax);
+                    boolean hasP = pg != null && pg.length > 1 && pg[1] > 0;
                     if (!needPager || hasP) {
-                        dbg("dumpHome 无障碍: 长度=" + ax.length() + " 有页共=" + hasP);
+                        dbg("dumpHome 无障碍: 长度=" + ax.length() + " 有页码=" + hasP);
                         return ax;
                     }
                 }
@@ -1611,22 +1615,39 @@ public class Bridge {
                 // root 直读桌面库：不发一个手势、不翻一页，几百毫秒出结果。
                 // 放在注入检查之前 —— 这条路径压根不需要注入权限。
                 dbg("buildindex 开始执行");   // 探针 B：任务是否真的跑起来
+                long tRoot = System.currentTimeMillis();
                 JSONObject fast = rootIndex();
                 if (fast != null) {
-                    dbg("root 直读索引完成：" + fast.optInt("count") + " 个应用");
+                    // 带上耗时：root 路径正常几百毫秒，若这里出现 3~4 秒，
+                    // 基本就是首次 su 授权框在等人点「允许」，或者 heavy 队列在排队
+                    dbg("root 直读索引完成：" + fast.optInt("count") + " 个应用，耗时 "
+                            + (System.currentTimeMillis() - tRoot) + "ms");
                     stopLocateNotice("索引完成（root 直读桌面库）："
                             + fast.optInt("count") + " 个应用");
                     return fast.toString();
                 }
                 JSONObject o = new JSONObject();
-                // 注入被系统拒绝时，后面每一步（HOME / 滑动 / 点击）都做不了。
-                // 以前这种情况会在 1 秒后报「已停止（你切换了应用）」，把系统限制
-                // 说成了用户操作（issue #3）。入口处先拦一道，让前端弹可操作的提示。
-                Boolean canInject = injectAllowed();
-                if (canInject != null && !canInject) {
-                    dbg("注入被拒：中止（needInject）");
-                    return "{\"ok\":false,\"needInject\":true}";
+                // 无障碍是首选路径。没开时不再直接失败，也不擅自跳设置页，
+                // 而是交回前端让用户二选一：经典查找 / 去开启无障碍。
+                // 多通道版若已拿到 root，上面 rootIndex() 已经返回，走不到这里。
+                boolean forceClassic = "classic".equals(arg == null ? "" : arg.trim());
+                boolean a11y = A11yService.ready();
+                if (!a11y && !forceClassic) {
+                    // 顺便探测注入，告诉前端「经典」这条路是否真的可行
+                    boolean canClassic = !Boolean.FALSE.equals(injectAllowed());
+                    dbg("无无障碍，等用户选择（needA11y, canClassic=" + canClassic + "）");
+                    return "{\"ok\":false,\"needA11y\":true,\"canClassic\":"
+                            + canClassic + "}";
                 }
+                if (!a11y) {
+                    // 用户已明确选「经典查找」：注入被拒就真的没别的路了
+                    Boolean canInject = injectAllowed();
+                    if (canInject != null && !canInject) {
+                        dbg("经典查找：注入被拒（needInject）");
+                        return "{\"ok\":false,\"needInject\":true}";
+                    }
+                }
+                dbg(a11y ? "路径：无障碍读取" : "路径：经典（模拟操作 + dump）");
                 idxStop = false;
                 locStop = false;          // 静态标志：上次定位按过「停止」不能把索引一起带停
                 locDeadline = 0;          // 建索引不看定位的超时判据
@@ -1748,7 +1769,8 @@ public class Bridge {
                         // 顺便把 pager 换成实测值：下一轮 jumpToPage 靠 pager[0] 算差值，
                         // 用开局那份旧的会导致「多滑一页再修正」。
                         // 滑动模式下没有页码可测，这一步纯属白等 3 秒（实测每页多花 9 秒），跳过
-                        if (!sweepMode) {
+                        // 没开过文件夹就没必要再读一遍：那一 dump 纯粹是白等
+                        if (!sweepMode && !folders.isEmpty()) {
                             int[] nowP = parsePager(dumpHome(true));
                             if (nowP[0] > 0) {
                                 pager = nowP;
@@ -2757,19 +2779,6 @@ public class Bridge {
         });
     }
 
-    @JavascriptInterface
-    public void a11ystate(int id, String arg) {
-        dispatch(id, new Task() {
-            @Override public String run() {
-                JSONObject o = new JSONObject();
-                try {
-                    o.put("ok", true);
-                    o.put("ready", A11yService.ready());
-                } catch (Exception ignored) { }
-                return o.toString();
-            }
-        });
-    }
 
     /** 跳到系统的无障碍设置页，让用户手动开启本服务。 */
     @JavascriptInterface

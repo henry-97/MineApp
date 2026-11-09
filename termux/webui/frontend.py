@@ -505,7 +505,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </div>
     </div>
     <div class="info-note" style="border-top:0;padding-top:0;margin-top:2px">
-      <span data-t="battDesignNote" data-html="1">部分机型可能不支持自动读取容量，建议&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。</span>
+      <span data-t="battDesignNote" data-html="1">部分机型无法读取，建议&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动填写，默认值 5000。</span>
     </div>
     <div class="setrow" style="margin-bottom:0;gap:8px">
       <span class="setrow-lb" data-t="keepCard">显示后台卡片</span>
@@ -527,14 +527,8 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <div class="setrow-lb" data-t="idxTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">初始化应用查找功能</div>
       <button class="edit" id="idxBtn" data-t="idxStart" style="padding:0 14px;flex:none">开始</button>
     </div>
-    <div class="idx-note" data-t="idxNote" data-html="1" style="margin:4px 0 0">遍历桌面所有页和文件夹，建立应用位置索引。过程中可以随时操作手机打断，下次点「开始」会接着来。应用较多时约需数分钟，完成后查找会快很多。</div>
+    <div class="idx-note" data-t="idxNote" data-html="1" style="margin:4px 0 0">遍历桌面建立应用位置索引，用于应用查找，可随时打断、续建。推荐无障碍路径，速度更快。</div>
 
-    <div class="setrow" style="gap:12px;margin:14px 0 0;align-items:center">
-      <div class="setrow-lb" data-t="a11yTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">无障碍加速读取</div>
-      <span id="a11yState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
-      <button class="edit" id="a11yBtn" data-t="a11yOpen" style="padding:0 14px;flex:none;margin-left:8px">去开启</button>
-    </div>
-    <div class="idx-note" data-t="a11yNote" data-html="1" style="margin:4px 0 0">开启后改为直接读取屏幕控件，不再用截图式 dump —— 建索引和定位都会快很多（一次读取从 1.5~3 秒降到几十毫秒）。只读当前屏幕，不收集、不上传任何内容。</div>
 
     <div class="setrow" id="chanRow" style="gap:12px;margin:14px 0 0;align-items:center;display:none">
       <div class="setrow-lb" data-t="chanTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">执行通道</div>
@@ -700,7 +694,7 @@ var I18N = {
     battLevel: '当前电量', battSys: '系统状态',
     battMax: '历史最高', battLast: '最近一次学习', battMin: '历史最低（采用值）',
     battDesign: '电池设计容量',
-    battDesignNote: '部分机型可能不支持自动读取容量，建议&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动输入。',
+    battDesignNote: '部分机型无法读取，建议&nbsp;&nbsp;<a href="#" id="lnkBattSet">查看</a>&nbsp;&nbsp;后手动填写，默认值 5000。',
     battDesignSaved: '已保存：{n} mAh',
     battDesignCleared: '已清空，回到自动估算',
     battDesignBad: '请填 1000~30000 之间的数值',
@@ -750,7 +744,7 @@ var I18N = {
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
     secTip: '显示界面提示', tipHelp: '控制界面上那些 ⓘ 提示要不要显示。', tipShow: '显示', tipHide: '隐藏',
     keepCard: '显示后台卡片',
-    keepNote: '显示后台卡片易导致被误杀，默认不显示，可按需开启。后台只做少量 shell 查询，能耗极低，可放心常驻。建议手动允许本 App 的&nbsp;&nbsp;<a href="#" id="lnkNotif">通知</a>&nbsp;&nbsp;和&nbsp;&nbsp;<a href="#" id="lnkAuto">自启动</a>&nbsp;&nbsp;，及&nbsp;&nbsp;<a href="#" id="lnkPower">电源管理设置无限制</a>&nbsp;&nbsp;，可进一步防止被误杀。',
+    keepNote: '本App实测后台能耗低到测不出，而显示卡片易被误杀，按需开启。建议允许&nbsp;&nbsp;<a href="#" id="lnkNotif">通知</a>&nbsp;&nbsp;和&nbsp;&nbsp;<a href="#" id="lnkAuto">自启动</a>&nbsp;&nbsp;，并将&nbsp;&nbsp;<a href="#" id="lnkPower">电源管理设为无限制</a>&nbsp;&nbsp;，以免被杀。',
     keepHidden: '已隐藏后台卡片', keepShown: '已显示后台卡片',
     keepFail: '系统没接受这个设置',
     extRepo: 'GitHub GPL-3.0 开源', extFund: '打赏',
@@ -764,7 +758,7 @@ var I18N = {
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
     updAuto: '每 24 小时自动检查并更新',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
-    extLicense: '本项目(GPL-3.0)禁止自行闭源分发，如需商务合作，可提 Issue。',
+    extLicense: '本项目(GPL-3.0)禁止自行闭源分发；需商务合作请提 Issue。',
     riskTitle: '使用前请留意',
     riskBody: '本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电等。',
     riskLink: '查看完整「使用须知」→',
@@ -774,15 +768,18 @@ var I18N = {
     secAgo: ' 秒前', minAgo: ' 分钟前', locating: '正在寻找应用（碰屏幕可停止）',
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
-    a11yTitle: '无障碍加速读取', a11yOn: '已开启', a11yOff: '未开启', a11yOpen: '去开启',
     chanTitle: '执行通道', chanAuto: '自动',
     chanNote: '仅多通道版提供。选择 Shizuku / ADB 时不会申请 root。',
-    a11yNote: '开启后改为直接读取屏幕控件，不再用截图式 dump —— 建索引和定位都会快很多（一次读取从 1.5~3 秒降到几十毫秒）。只读当前屏幕，不收集、不上传任何内容。',
     idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
     idxHintOff: '不再提示',
     idxUnsupported: '检测到应用查找暂不支持本系统，建议反馈 issue，以便持续更新',
     idxNeedA11y: '请先开启无障碍：设置 → 已下载的应用 → MineApp应用查找（即将带你过去）',
     idxBridgeErr: '接口未注册：{m}（应用装的是旧版或构建异常，请反馈 issue）',
+    idxA11yTitle: '未开启无障碍读取',
+    idxA11yBody: '无障碍是最快的查找方式：直接读取屏幕控件，一次读取从 3 秒降到 0.3 秒。也可以先用经典方式（模拟操作 + 截图解析）建索引，速度会慢不少。',
+    idxClassic: '经典查找',
+    idxOpenA11y: '去开启无障碍',
+    idxClassicOff: '经典查找不可用：当前系统不允许模拟点击',
     injectTitle: '开启「USB 调试（安全设置）」',
     injectText: '允许通过 USB 调试修改权限或模拟点击',
     injectBody: '系统拦截了模拟点击，应用查找无法继续。请到「开发者选项」打开「USB 调试（安全设置）」—— 它下面写着「允许通过 USB 调试修改权限或模拟点击」，不要开成上面那个「USB 调试」。打开后重启手机（这个开关必须重启才生效），再回来点「开始」。',
@@ -794,7 +791,7 @@ var I18N = {
     locStaleBody: '桌面变动之后，之前建的位置索引可能已经不准，定位会退化成逐页翻找，可能要几十秒。\n建议重建一次（几分钟），之后查找几秒内就能出结果。',
     locSlowTip: '没有可用索引，正在逐页查找，可能要几十秒。建议先到设置页「初始化应用查找功能」',
     locWaitRefresh: '正在刷新列表，完成后自动定位',
-    idxNote: '遍历桌面所有页和文件夹，建立应用位置索引。过程中可以随时操作手机打断，下次点「开始」会接着来。应用较多时约需数分钟，完成后查找会快很多。 <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
+    idxNote: '遍历桌面建立应用位置索引，用于应用查找，可随时打断、续建。推荐无障碍路径，速度更快。 <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
     idxAgeMin: '上次完成：{n} 分钟前', idxAgeHour: '上次完成：{n} 小时前', idxAgeDay: '上次完成：{n} 天前',
     idxDone: '索引完成，共 {n} 个应用', idxPaused: '已暂停，下次点「开始」接着来', idxFail: '索引构建失败，建议反馈 issue（附机型与桌面信息），以便持续更新',
     perfPausedTitle: '系统频繁关闭性能模式',
@@ -863,7 +860,7 @@ var I18N = {
     battLevel: 'Level', battSys: 'System status',
     battMax: 'All-time high', battLast: 'Latest learned', battMin: 'All-time low (used)',
     battDesign: 'Design capacity',
-    battDesignNote: 'Some models cannot read it automatically — it is best to <a href="#" id="lnkBattSet">check here</a> and then enter it manually.',
+    battDesignNote: 'Some models cannot read it — <a href="#" id="lnkBattSet">check here</a> and enter it manually; default 5000.',
     battDesignSaved: 'Saved: {n} mAh',
     battDesignCleared: 'Cleared — back to auto',
     battDesignBad: 'Enter a value between 1000 and 30000',
@@ -910,7 +907,7 @@ var I18N = {
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
     secTip: 'Show hints', tipHelp: 'Controls whether the little ⓘ hints are shown in the UI.', tipShow: 'Show', tipHide: 'Hide',
     keepCard: 'Recents card',
-    keepNote: 'Showing the recents card makes the app easier to kill by accident — it is hidden by default; enable it only if you need it. In the background it only runs a few shell queries, so the power cost is negligible and it is safe to keep resident. We recommend granting the <a href="#" id="lnkNotif">notifications</a> of this app and <a href="#" id="lnkAuto">autostart</a> manually, and setting <a href="#" id="lnkPower">battery saver to "no restrictions"</a>, to help prevent the app from being killed.',
+    keepNote: 'Measured background power use is too low to register, while the recents card makes the app easier to kill — enable it only if needed. We recommend allowing <a href="#" id="lnkNotif">notifications</a> and <a href="#" id="lnkAuto">autostart</a>, and setting <a href="#" id="lnkPower">battery saver to "no restrictions"</a> so the app is not killed.',
     keepHidden: 'Recents card hidden', keepShown: 'Recents card shown',
     keepFail: 'The system refused this setting',
     extRepo: 'GitHub · GPL-3.0', extFund: 'Sponsor',
@@ -925,7 +922,7 @@ var I18N = {
     updFail: 'Check failed — network problem?',
     updAuto: 'Auto-check daily',
     updAutoOn: 'Auto-check enabled', updAutoOff: 'Auto-check disabled',
-    extLicense: 'Licensed under GPL-3.0 — closed-source redistribution is not permitted. For commercial licensing, open an issue.',
+    extLicense: 'GPL-3.0 — closed-source redistribution is prohibited. For commercial licensing, open an issue.',
     riskTitle: 'Before you start',
     riskBody: 'This app drives system commands directly through ADB and is genuinely powerful. Do not freeze or restrict components the system depends on (Clock, launcher, keyboard, …) — alarms, the home screen and incoming calls can break, among other things.',
     riskLink: 'Read the full usage notes →',
@@ -935,15 +932,18 @@ var I18N = {
     secAgo: 's ago', minAgo: 'm ago', locating: 'Looking for app (tap to stop)',
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
-    a11yTitle: 'Accessibility boost', a11yOn: 'On', a11yOff: 'Off', a11yOpen: 'Enable',
     chanTitle: 'Execution channel', chanAuto: 'Auto',
     chanNote: 'Multi-channel edition only. Choosing Shizuku or ADB means root is never requested.',
-    a11yNote: 'Reads the on-screen view tree directly instead of a screenshot-style dump — indexing and locating get much faster (from 1.5–3 s per read down to tens of ms). Current screen only; nothing is collected or uploaded.',
     idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
     idxHintOff: 'Don\'t show again',
     idxUnsupported: 'App lookup is not supported on this launcher yet — please open an issue so we can add it',
     idxNeedA11y: 'Enable accessibility first: Settings → Downloaded apps → MineApp应用查找 (taking you there)',
     idxBridgeErr: 'Bridge method not exposed: {m} (stale or broken build — please open an issue)',
+    idxA11yTitle: 'Accessibility is off',
+    idxA11yBody: 'Accessibility is the fast path: it reads the view tree directly, cutting each read from ~3 s to 0.3 s. You can also build the index the classic way (synthetic input + dump parsing), which is much slower.',
+    idxClassic: 'Classic mode',
+    idxOpenA11y: 'Enable accessibility',
+    idxClassicOff: 'Classic mode unavailable: this system blocks synthetic input',
     injectTitle: 'Enable "USB debugging (Security settings)"',
     injectText: 'Allow modifying permissions or simulating taps over USB',
     injectBody: 'The system blocked simulated taps, so app lookup cannot continue. In Developer options, enable "USB debugging (Security settings)" — its description reads "allow modifying permissions or simulating taps over USB"; do not confuse it with the plain "USB debugging" above it. Reboot the phone (the switch only takes effect after a reboot), then tap Start again.',
@@ -955,7 +955,7 @@ var I18N = {
     locStaleBody: 'The desktop changed since the index was built, so a lookup may fall back to walking every page — that can take tens of seconds.\nRebuilding takes a few minutes and makes later lookups near-instant.',
     locSlowTip: 'No usable index — walking every page, this may take tens of seconds. Build the index in Settings for faster lookups.',
     locWaitRefresh: 'Refreshing the list — locating right after',
-    idxNote: 'Walks every home-screen page and folder to index where each app lives. You can interrupt it any time by using the phone — tapping Start again resumes. Takes a few minutes on a full phone, and makes later lookups much faster. <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
+    idxNote: 'Indexes where each app lives on your home screen for app lookup — interrupt any time and resume later. The accessibility path is faster. <b id="idxAt" style="color:var(--ink2);font-weight:600"></b>',
     idxAgeMin: 'Last built {n} min ago', idxAgeHour: 'Last built {n} h ago', idxAgeDay: 'Last built {n} days ago',
     idxDone: 'Index complete — {n} apps', idxPaused: 'Paused — tap Start to resume', idxFail: 'Failed to build the index — please open an issue with your device and launcher',
     perfPausedTitle: 'The system keeps turning performance mode off',
@@ -1160,22 +1160,6 @@ function renderChan(){
     .catch(function(){});
 }
 
-function refreshA11y(){
-  renderChan();
-  var st = document.getElementById('a11yState');
-  if (!st) return;
-  fetch('/api/a11ystate', {method:'POST'})
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      var on = !!(d && d.ready);
-      st.textContent = on ? T('a11yOn') : T('a11yOff');
-      st.style.color = on ? 'var(--green)' : 'var(--ink3)';
-      var b = document.getElementById('a11yBtn');
-      if (b) b.style.display = on ? 'none' : '';
-    })
-    .catch(function(){});
-}
-
 function renderSettings(){
   var din = document.getElementById('battDesignIn');
   if (din && lastBattery && lastBattery.design_mah > 0){
@@ -1197,7 +1181,7 @@ function renderSettings(){
   var tc = document.getElementById('tipChk');
   if (tc) tc.checked = showTip;
   renderIcons();
-  refreshA11y();
+  renderChan();
 }
 
 /* 切换语言后刷新所有动态内容 */
@@ -1258,6 +1242,8 @@ function askConfirm(msg, onOk, opt){
   var ok = document.getElementById('modal-ok');
   var box = document.getElementById('modal-opt');
   var cb = document.getElementById('modal-opt-cb');
+  // askA11yChoice 会把取消键临时改成「经典查找」，这里复位，避免串到别的弹窗
+  cancel.textContent = T('cancel');
   // opt = {text, key}：带「下次不再提示」复选框
   if (opt){
     document.getElementById('modal-opt-tx').textContent = opt.text;
@@ -1284,6 +1270,7 @@ function askInfo(html){
   var m = document.getElementById('modal');
   document.getElementById('modal-msg').innerHTML = html;
   document.getElementById('modal-cancel').style.display = 'none';
+  document.getElementById('modal-cancel').textContent = T('cancel');
   var ok = document.getElementById('modal-ok');
   ok.textContent = T('ok');
   m.classList.add('show');
@@ -2380,18 +2367,57 @@ document.addEventListener('click', function(e){
 console.log('tune-ready');
 /* 初始化应用查找功能：全量遍历桌面建索引，可中断可续传 */
 var idxRunning = false;
-document.getElementById('idxBtn').onclick = function(){
+
+/* 无障碍未开启时的二选一：经典查找 / 去开启无障碍。
+   经典 = 模拟操作 + 截图式解析，慢但兼容；无障碍 = 直读控件树，快很多。 */
+function askA11yChoice(canClassic, onClassic){
+  var m = document.getElementById('modal');
+  document.getElementById('modal-msg').innerHTML =
+      '<div class="info-title">' + T('idxA11yTitle') + '</div>'
+    + '<div class="info-note">' + T('idxA11yBody') + '</div>'
+    + (canClassic ? '' : '<div class="info-note" style="color:var(--red)">'
+                      + T('idxClassicOff') + '</div>');
+  document.getElementById('modal-opt').style.display = 'none';
+  var cancel = document.getElementById('modal-cancel');
+  var ok = document.getElementById('modal-ok');
+  ok.textContent = T('idxOpenA11y');
+  if (canClassic){
+    cancel.style.display = '';
+    cancel.textContent = T('idxClassic');
+  } else {
+    cancel.style.display = 'none';
+  }
+  m.classList.add('show');
+  ok.onclick = function(){
+    m.classList.remove('show');
+    fetch('/api/a11ysettings', {method:'POST'});
+  };
+  cancel.onclick = function(){
+    m.classList.remove('show');
+    onClassic();
+  };
+}
+
+/* classic=true 表示用户已经明确选了「经典查找」，后端不再弹无障碍提示 */
+function runBuild(classic){
   if (idxRunning) return;
   idxRunning = true;
-  var btn = this;
+  var btn = document.getElementById('idxBtn');
   btn.disabled = true;
   btn.textContent = T('idxRunning');
   toast(T('idxRunning'));
-  fetch('/api/buildindex', {method:'POST'}).then(function(r){ return r.json(); })
+  fetch('/api/buildindex', {method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({classic: classic ? 1 : 0})})
+    .then(function(r){ return r.json(); })
     .then(function(d){
       idxRunning = false;
       btn.disabled = false;
       btn.textContent = T('idxStart');
+      if (d && d.bridgeError){ toast(T2('idxBridgeErr', {m: d.bridgeError}), 6000); return; }
+      if (d && d.needA11y){
+        askA11yChoice(d.canClassic !== false, function(){ runBuild(true); });
+        return;
+      }
       if (d && d.needInject){ hintInjectBlocked(); return; }
       if (d && d.unsupported){
         // 这台设备的桌面不支持 → 引导条再挂着也没意义，直接自动隐藏
@@ -2416,7 +2442,9 @@ document.getElementById('idxBtn').onclick = function(){
       btn.textContent = T('idxStart');
       toast(T('idxFail'));
     });
-};
+}
+
+document.getElementById('idxBtn').onclick = function(){ runBuild(false); };
 
 document.getElementById('alertClose').onclick = function(){
   document.getElementById('alert').classList.remove('show');
@@ -2899,10 +2927,6 @@ function fallbackDownload(){
   toast(T('updInstallFail'));
   if (updUrl) openExtUrl(updUrl);
 }
-
-document.getElementById('a11yBtn').addEventListener('click', function(){
-  fetch('/api/a11ysettings', {method:'POST'});   // 跳系统无障碍设置页，开关本身必须用户自己点
-});
 
 document.getElementById('updBtn').addEventListener('click', function(){
   if (updApk){ installUpdate(); return; }      // 有安装包 → 应用内装
