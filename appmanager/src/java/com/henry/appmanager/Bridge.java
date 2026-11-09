@@ -1445,6 +1445,10 @@ public class Bridge {
      * 所以这是一条纯加速路径，失败不影响功能。
      */
     private JSONObject rootIndex() {
+        // root 直读是多通道版的专有能力：普通版只走「无障碍 + 逐页遍历」。
+        // 两个版本编译的是同一份源码，只能靠包名区分。
+        String pn = web.getContext().getPackageName();
+        if (pn == null || !pn.endsWith(".multi")) return null;
         String dst = null;
         try {
             android.content.Context ctx = web.getContext();
