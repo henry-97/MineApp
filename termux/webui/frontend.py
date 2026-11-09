@@ -529,6 +529,13 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     </div>
     <div class="idx-note" data-t="idxNote" data-html="1" style="margin:4px 0 0">遍历桌面所有页和文件夹，建立应用位置索引。过程中可以随时操作手机打断，下次点「开始」会接着来。应用较多时约需数分钟，完成后查找会快很多。</div>
 
+    <div class="setrow" style="gap:12px;margin:14px 0 0;align-items:center">
+      <div class="setrow-lb" data-t="a11yTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">无障碍加速读取</div>
+      <span id="a11yState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
+      <button class="edit" id="a11yBtn" data-t="a11yOpen" style="padding:0 14px;flex:none;margin-left:8px">去开启</button>
+    </div>
+    <div class="idx-note" data-t="a11yNote" data-html="1" style="margin:4px 0 0">开启后改为直接读取屏幕控件，不再用截图式 dump —— 建索引和定位都会快很多（一次读取从 1.5~3 秒降到几十毫秒）。只读当前屏幕，不收集、不上传任何内容。</div>
+
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
       <span class="setrow-lb" id="updLabel" data-ver="__APP_VERSION__">v —</span>
       <button class="edit" id="updBtn" data-t="updCheck" style="padding:0 12px">检查</button>
@@ -760,6 +767,8 @@ var I18N = {
     secAgo: ' 秒前', minAgo: ' 分钟前', locating: '正在寻找应用（碰屏幕可停止）',
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
+    a11yTitle: '无障碍加速读取', a11yOn: '已开启', a11yOff: '未开启', a11yOpen: '去开启',
+    a11yNote: '开启后改为直接读取屏幕控件，不再用截图式 dump —— 建索引和定位都会快很多（一次读取从 1.5~3 秒降到几十毫秒）。只读当前屏幕，不收集、不上传任何内容。',
     idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
     idxHintOff: '不再提示',
     idxUnsupported: '检测到应用查找暂不支持本系统，建议反馈 issue，以便持续更新',
@@ -915,6 +924,8 @@ var I18N = {
     secAgo: 's ago', minAgo: 'm ago', locating: 'Looking for app (tap to stop)',
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
+    a11yTitle: 'Accessibility boost', a11yOn: 'On', a11yOff: 'Off', a11yOpen: 'Enable',
+    a11yNote: 'Reads the on-screen view tree directly instead of a screenshot-style dump — indexing and locating get much faster (from 1.5–3 s per read down to tens of ms). Current screen only; nothing is collected or uploaded.',
     idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
     idxHintOff: 'Don\'t show again',
     idxUnsupported: 'App lookup is not supported on this launcher yet — please open an issue so we can add it',
@@ -1093,6 +1104,22 @@ function applyTheme(){
   document.documentElement.classList.toggle('dark', dark);
 }
 
+/* 无障碍读取通道：只显示状态 + 一个跳转按钮，开关本身必须用户去系统设置里打开 */
+function refreshA11y(){
+  var st = document.getElementById('a11yState');
+  if (!st) return;
+  fetch('/api/a11ystate', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var on = !!(d && d.ready);
+      st.textContent = on ? T('a11yOn') : T('a11yOff');
+      st.style.color = on ? 'var(--green)' : 'var(--ink3)';
+      var b = document.getElementById('a11yBtn');
+      if (b) b.style.display = on ? 'none' : '';
+    })
+    .catch(function(){});
+}
+
 function renderSettings(){
   var din = document.getElementById('battDesignIn');
   if (din && lastBattery && lastBattery.design_mah > 0){
@@ -1114,6 +1141,7 @@ function renderSettings(){
   var tc = document.getElementById('tipChk');
   if (tc) tc.checked = showTip;
   renderIcons();
+  refreshA11y();
 }
 
 /* 切换语言后刷新所有动态内容 */
@@ -2088,7 +2116,8 @@ function doLocate(pkg, label, force, c, now){
   fetch('/api/locate', {method:'POST', headers:{'Content-Type':'application/json'},
                         body: JSON.stringify({label: label, hint: T('locating'),
                                               page: (c && c.page) || -1,
-                                              found: T('locFound'), nf: T('locNotFound')})})
+                                              found: T('locFound'), nf: T('locNotFound'),
+                                              pkg: pkg || ''})})
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (slowTip) clearTimeout(slowTip);
@@ -2714,7 +2743,9 @@ function checkUpdate(silent){
         if (!silent) toast(T('updFail'));
         return;
       }
-      var latest = String(d.tag || '').replace(/^v/i, '');
+      // 用后端清洗过的 ver：多通道版的 tag 是 multi-v3.9.0，
+      // 直接拿 tag 比大小会 parseInt('multi-v3') = NaN → 永远判成「已是最新」
+      var latest = String(d.ver || d.tag || '').replace(/^v/i, '');
       if (cmpVer(latest, curVer()) > 0){
         updUrl = d.url || '';
         updApk = d.apk || '';                 // 有资产地址就走应用内静默安装
@@ -2809,6 +2840,10 @@ function fallbackDownload(){
   toast(T('updInstallFail'));
   if (updUrl) openExtUrl(updUrl);
 }
+
+document.getElementById('a11yBtn').addEventListener('click', function(){
+  fetch('/api/a11ysettings', {method:'POST'});   // 跳系统无障碍设置页，开关本身必须用户自己点
+});
 
 document.getElementById('updBtn').addEventListener('click', function(){
   if (updApk){ installUpdate(); return; }      // 有安装包 → 应用内装

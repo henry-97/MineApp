@@ -14,7 +14,7 @@ appmanager/local.env
 *.pk8
 *.blob
 
-# 由 build.sh 从 termux/webui/server.py 提取生成
+# 由 build.sh 从 termux/webui/frontend.py 提取生成（旧名 server.py）
 appmanager/assets/index.html
 
 # Python

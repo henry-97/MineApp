@@ -12,6 +12,17 @@
 # 也可以把上面这些写进 appmanager/local.env（该文件不进仓库）。
 set -euo pipefail
 
+# 发行版本：main（默认）/ multi（多通道版）
+#   bash build.sh          → out/app-manager.apk          com.henry.appmanager
+#   bash build.sh multi    → out/app-manager-multi.apk    com.henry.appmanager.multi
+# 两个包名不同，可以同时安装、各自独立更新。
+EDITION="${1:-${EDITION:-main}}"
+case "$EDITION" in
+  main)  RENAME_PKG=""                        ; APK_NAME="app-manager.apk" ;;
+  multi) RENAME_PKG="com.henry.appmanager.multi" ; APK_NAME="app-manager-multi.apk" ;;
+  *) echo "未知版本：$EDITION（可用 main / multi）"; exit 1 ;;
+esac
+
 BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Git Bash 下 pwd 给的是 /d/xxx 形式，原生 Windows 工具（javac/aapt2）认不了，
 # 换成 D:/xxx；Linux/macOS 上没有 cygpath，保持原样。
@@ -67,12 +78,20 @@ echo "== 1. aapt2 compile =="
 "$BT/aapt2" compile --dir "$BASE/res" -o "$BUILD/res.zip"
 
 echo "== 2. aapt2 link =="
+LINK_EXTRA=()
+if [ -n "$RENAME_PKG" ]; then
+  # 等价于 Gradle 的 applicationId：只改最终 manifest 的包名，
+  # Java 类包名和 R.java 都不变（组件名已在 gen_manifest 里写成全限定）。
+  LINK_EXTRA=(--rename-manifest-package "$RENAME_PKG")
+fi
+
 "$BT/aapt2" link -o "$BUILD/base.apk" \
   -I "$PLATFORM" \
   --manifest "$BASE/src/AndroidManifest.xml" \
   -R "$BUILD/res.zip" \
   -A "$BASE/assets" \
   --java "$BUILD/gen" \
+  ${LINK_EXTRA[@]+"${LINK_EXTRA[@]}"} \
   --auto-add-overlay
 
 echo "== 3. javac =="
@@ -101,9 +120,9 @@ echo "== 7. sign =="
 "$JAVA" -jar "$BT/lib/apksigner.jar" sign \
   --ks "$KEYSTORE" --ks-pass "pass:$KS_PASS" \
   --key-pass "pass:$KEY_PASS" --ks-key-alias "$KEY_ALIAS" \
-  --out "$OUT/app-manager.apk" "$BUILD/aligned.apk"
+  --out "$OUT/$APK_NAME" "$BUILD/aligned.apk"
 
-"$JAVA" -jar "$BT/lib/apksigner.jar" verify "$OUT/app-manager.apk"
+"$JAVA" -jar "$BT/lib/apksigner.jar" verify "$OUT/$APK_NAME"
 
-echo "OK: $OUT/app-manager.apk"
-ls -lh "$OUT/app-manager.apk"
+echo "OK: $OUT/$APK_NAME  (edition=$EDITION)"
+ls -lh "$OUT/$APK_NAME"

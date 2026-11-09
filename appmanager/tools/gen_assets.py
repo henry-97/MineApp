@@ -59,13 +59,15 @@ SHIM = r"""
     else if (url.indexOf('/api/locate') === 0) p = call('locate',
         (body.label || '') + '|' + (body.hint || '') + '|' +
         (body.page == null ? -1 : body.page) + '|' +
-        (body.found || '') + '|' + (body.nf || ''));
+        (body.found || '') + '|' + (body.nf || '') + '|' + (body.pkg || ''));
     else if (url.indexOf('/api/buildindex') === 0) p = call('buildindex', '');
     // 🔴 aotsync 必须排在 aot 前面：'/api/aotsync'.indexOf('/api/aot') === 0，
     // 顺序反了会被当成 aot 接口（编译），拿到的是 ok/aot/skipped/status/msg
     else if (url.indexOf('/api/aotsync') === 0) p = call('aotsync', '');
     else if (url.indexOf('/api/aot') === 0) p = call('aot', (body.pkg || '') + '|' + (body.on ? '1' : '0'));
     else if (url.indexOf('/api/setport') === 0) p = call('setport', String(body.port == null ? '' : body.port));
+    else if (url.indexOf('/api/a11ystate') === 0) p = call('a11ystate', '');
+    else if (url.indexOf('/api/a11ysettings') === 0) p = call('a11ysettings', '');
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
     else if (url.indexOf('/api/opensetting') === 0) p = call('opensetting', String(body.k || ''));

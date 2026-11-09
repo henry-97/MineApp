@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Shizuku 服务端只把 binder 推给声明了这条权限的应用；本 App 只是代 Mine App 接一下 -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+
+    <queries>
+        <package android:name="com.henry.appmanager" />
+    </queries>
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:description="@string/module_desc"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.DeviceDefault">
+
+        <!-- 从 LSPosed 模块列表进入（MODULE_SETTINGS），桌面图标走下面的 alias -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
+            </intent-filter>
+        </activity>
+
+        <!-- 默认 disabled：见 MainActivity 注释（Android 10+ 的占位图标规则） -->
+        <activity-alias
+            android:name=".Launcher"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Mine App 来要 Shizuku binder；call() 内校验调用方 uid -->
+        <provider
+            android:name=".BinderProvider"
+            android:authorities="${applicationId}.binder"
+            android:exported="true" />
+
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+    </application>
+</manifest>

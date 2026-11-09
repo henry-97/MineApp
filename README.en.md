@@ -9,7 +9,7 @@
 <h1 align="center">Mine App · App Manager</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-3.8.6-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-3.9.0-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-553%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -362,6 +362,7 @@ MineApp/
 │       └── gen_manifest.py       Generates the 12 activity-aliases
 ├── termux/webui/
 │   └── frontend.py               Single source of truth for the UI (HTML/CSS/JS inlined)
+├── ext-lsposed/                  LSPosed module source (community, MIT, not part of this build)
 ├── docs/                         Per-release notes, icons and screenshots
 └── dist/                         Build output (APK)
 ```
@@ -370,6 +371,34 @@ MineApp/
 > This project does not require Termux. The `termux/` folder name is historical: an early
 > distribution ran the app as a Termux + Python script without root. It now only holds the
 > front-end source and is no longer shipped.
+
+## Extension: Root / Shizuku channels
+
+`ext-lsposed/` holds the source of an **LSPosed module** by the GitHub developer
+[MiaoluoYuanlina](https://github.com/MiaoluoYuanlina),
+released under **MIT** (see `ext-lsposed/LICENSE`). It is kept here for reference and future maintenance.
+
+It does **not** modify this app's APK or its signature. Install the module, enable it in LSPosed with this
+app as its scope, and "Settings → Execution channel" gains two more options:
+
+| Option | What it does |
+|---|---|
+| ADB | The original behaviour |
+| Root | The app asks for `su`; the Magisk / KernelSU prompt shows this app's name |
+| Shizuku | The app requests Shizuku authorisation as itself |
+
+Either channel removes the need for `adb tcpip 5555`, and it survives a reboot.
+
+Notes:
+
+- This repository only **hosts the source**; it is not part of `appmanager/build.sh` — the module is a
+  Gradle project and needs its own toolchain to build
+- Upstream: <https://github.com/MiaoluoYuanlina/MineApp-LSPosed>
+- A planned **multi-channel edition** (`com.henry.appmanager.multi`) will build these channels in
+  directly — use one or the other
+- **Licensing**: this repository as a whole is **GPL-3.0** (see the root `LICENSE`); `ext-lsposed/` is an
+  independent work by its author and **keeps its original MIT licence**; use of it is subject to that
+  licence. See `THIRD-PARTY-NOTICES.md` for the third-party inventory.
 
 ## Known limitations
 

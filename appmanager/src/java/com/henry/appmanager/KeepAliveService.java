@@ -227,7 +227,7 @@ public class KeepAliveService extends Service {
             String key = getSharedPreferences("app", MODE_PRIVATE)
                     .getString("icon_key", "sq_g");
             android.content.ComponentName a = new android.content.ComponentName(
-                    pkg, pkg + "." + Bridge.aliasName(mode, key));
+                    pkg, Bridge.COMP_NS + Bridge.aliasName(mode, key));
             CharSequence l = pm.getActivityInfo(a, 0).loadLabel(pm);
             if (l != null && l.length() > 0) return l.toString();
         } catch (Exception ignored) { }

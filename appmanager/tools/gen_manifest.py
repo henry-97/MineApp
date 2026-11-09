@@ -5,6 +5,10 @@
 Android 无法在运行时改 label / icon，只能靠切换 alias 实现「App 内换名、换图标」。
 alias 名规律：Alias<Mine|Mgr><Sq|Cl><G|Y|K>，例如 AliasMineSqG、AliasMgrClK。
 
+🔴 组件名必须写**全限定类名**（com.henry.appmanager.MainActivity），不能用 ".MainActivity"。
+   多通道版靠 aapt2 的 --rename-manifest-package 改 applicationId，相对写法会
+   解析成 <新包名>.MainActivity —— 那个类不存在，装上就是点不开。
+
 改图标清单时同步改这里和 tools/gen_icon.py 的 SHAPES / COLORS。
 """
 import os
@@ -20,8 +24,8 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="151"
-    android:versionName="3.8.6">
+    android:versionCode="152"
+    android:versionName="3.9.0">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -42,7 +46,7 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
         android:allowBackup="false">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
@@ -51,7 +55,7 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 
 ALIAS = '''        <activity-alias
             android:name=".%s"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="%s"
             android:label="%s"
@@ -66,12 +70,27 @@ ALIAS = '''        <activity-alias
 
 TAIL = '''
         <service
-            android:name=".KeepAliveService"
+            android:name="com.henry.appmanager.KeepAliveService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="显示电池与应用状态并保持用户选择的性能模式" />
+        </service>
+
+        <!-- 无障碍服务：只为「读取桌面控件树」而存在，不订阅事件内容。
+             作用是把 uiautomator dump（1.5~3 秒/次）换成直接读节点树（几十毫秒/次）。 -->
+        <service
+            android:name="com.henry.appmanager.A11yService"
+            android:exported="true"
+            android:label="@string/a11y_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/a11y_service" />
         </service>
     </application>
 </manifest>

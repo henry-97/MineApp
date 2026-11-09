@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mine App 扩展</string>
+    <string name="module_desc">为 Mine App（应用管理器）增加 Root / Shizuku 执行通道，无需 adb tcpip。</string>
+</resources>

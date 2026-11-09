@@ -2,8 +2,8 @@
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="151"
-    android:versionName="3.8.6">
+    android:versionCode="152"
+    android:versionName="3.9.0">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -24,14 +24,14 @@
         android:allowBackup="false">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- 12 个桌面入口：名称 × 图标，同一时间只启用一个 -->
         <activity-alias
             android:name=".AliasMineSqG"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="true"
             android:label="Mine App"
@@ -44,7 +44,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMineSqY"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="Mine App"
@@ -57,7 +57,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMineSqK"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="Mine App"
@@ -70,7 +70,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMineClG"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="Mine App"
@@ -83,7 +83,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMineClY"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="Mine App"
@@ -96,7 +96,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMineClK"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="Mine App"
@@ -109,7 +109,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMgrSqG"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="应用管理器"
@@ -122,7 +122,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMgrSqY"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="应用管理器"
@@ -135,7 +135,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMgrSqK"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="应用管理器"
@@ -148,7 +148,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMgrClG"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="应用管理器"
@@ -161,7 +161,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMgrClY"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="应用管理器"
@@ -174,7 +174,7 @@
         </activity-alias>
         <activity-alias
             android:name=".AliasMgrClK"
-            android:targetActivity=".MainActivity"
+            android:targetActivity="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:enabled="false"
             android:label="应用管理器"
@@ -187,12 +187,27 @@
         </activity-alias>
 
         <service
-            android:name=".KeepAliveService"
+            android:name="com.henry.appmanager.KeepAliveService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="显示电池与应用状态并保持用户选择的性能模式" />
+        </service>
+
+        <!-- 无障碍服务：只为「读取桌面控件树」而存在，不订阅事件内容。
+             作用是把 uiautomator dump（1.5~3 秒/次）换成直接读节点树（几十毫秒/次）。 -->
+        <service
+            android:name="com.henry.appmanager.A11yService"
+            android:exported="true"
+            android:label="@string/a11y_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/a11y_service" />
         </service>
     </application>
 </manifest>

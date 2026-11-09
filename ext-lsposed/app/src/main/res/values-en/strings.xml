@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mine App Extension</string>
+    <string name="module_desc">Adds Root / Shizuku shell backends to Mine App, no adb tcpip needed.</string>
+</resources>

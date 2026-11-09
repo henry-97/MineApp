@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Mine App</string>
+    <string name="a11y_label">应用查找加速</string>
+    <string name="a11y_desc">只读取当前屏幕的控件树，用来判断应用图标在桌面的哪一页；不收集、不上传任何内容。</string>
 </resources>

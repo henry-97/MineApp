@@ -9,7 +9,7 @@
 <h1 align="center">Mine App · 应用管理器</h1>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-3.8.6-0F6E56">
+  <img alt="version" src="https://img.shields.io/badge/version-3.9.0-0F6E56">
   <img alt="APK" src="https://img.shields.io/badge/APK-553%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
@@ -341,6 +341,7 @@ MineApp/
 │       └── gen_manifest.py       生成 12 个 activity-alias
 ├── termux/webui/
 │   └── frontend.py               前端唯一真源（内嵌整个 HTML/CSS/JS）
+├── ext-lsposed/                  LSPosed 模块源码（社区贡献，MIT，不参与本工程构建）
 ├── docs/                         各版本发布说明、图标与截图
 └── dist/                         构建产物（APK）
 ```
@@ -348,6 +349,30 @@ MineApp/
 
 > 本项目不需要提前装 Termux。`termux/` 这个目录名是历史遗留：早期提供过「Termux + Python 脚本免 root」的分发形态，
 > 现在只作为前端源码的存放位置，不再随项目分发。
+
+## 扩展：Root / Shizuku 通道
+
+`ext-lsposed/` 是 GitHub 开发者 [MiaoluoYuanlina](https://github.com/MiaoluoYuanlina) 写的 **LSPosed 模块**源码，
+采用 **MIT** 协议（见 `ext-lsposed/LICENSE`），这里只作存档与后续维护的参考。
+
+它**不修改本应用的 APK，也不改签名**。装上模块、在 LSPosed 里把作用域勾上本应用之后，
+「设置 → 执行通道」会多出两个选项：
+
+| 选项 | 说明 |
+|---|---|
+| ADB | 原版行为 |
+| Root | 本应用申请 `su`，Magisk / KernelSU 的授权框里显示的是本应用 |
+| Shizuku | 本应用以自己的身份申请 Shizuku 授权 |
+
+走这两个通道就不必再执行 `adb tcpip 5555`，重启手机后也不会失效。
+
+几点说明：
+
+- 本仓库**只托管源码**，不参与 `appmanager/build.sh` 的构建 —— 它是 Gradle 工程，编译需要另外的工具链
+- 上游仓库：<https://github.com/MiaoluoYuanlina/MineApp-LSPosed>
+- 规划中的**多通道版**（`com.henry.appmanager.multi`）会把这类通道直接内置，与装模块二选一即可
+- **授权说明**：本仓库整体采用 **GPL-3.0**（见根目录 `LICENSE`）；`ext-lsposed/` 是其作者的**独立作品**，
+  **保留原始 MIT 授权**，使用它请遵守其原始授权条款。第三方组件清单见 `THIRD-PARTY-NOTICES.md`
 
 ## 已知限制
 

@@ -364,7 +364,7 @@ public class Bridge {
                             + "done; "
                             // 第 2 段：进程没了再拉，拉到前台才退出
                             + "for i in $(seq 1 20); do "
-                            + "am start --activity-single-top -n " + pkg + "/.MainActivity >> "
+                            + "am start --activity-single-top -n " + pkg + "/" + MAIN_ACT_CLASS + " >> "
                             + log + " 2>&1; "
                             + "sleep 0.3; "
                             + "dumpsys activity activities 2>/dev/null "
@@ -579,7 +579,7 @@ public class Bridge {
 
     /** 长按坐标：必须带 2~4px 位移，零距离会被当成点击直接打开应用 */
     private void longPress(int x, int y) {
-        service.shellLong("input swipe " + x + " " + y + " " + (x + 4) + " " + y + " 1500");
+        doLongPress(x, y);
     }
 
     /**
@@ -724,7 +724,7 @@ public class Bridge {
         int idx = 2 + (page - 1) * 2;
         if (idx + 1 < pager.length) {
             // 有圆点：直接点
-            service.shellLong("input tap " + pager[idx] + " " + pager[idx + 1]);
+            doTap(pager[idx], pager[idx + 1]);
             try { Thread.sleep(400); } catch (InterruptedException ignored) { }
             return true;
         }
@@ -742,7 +742,7 @@ public class Bridge {
             //    那样 diff 会一次比一次大，滑动次数累加，表现是「在最后一页疯狂右滑、
             //    反复遍历同一页」（2026-10-29 实测被投诉）。先 HOME 回默认页再算。
             dbg("页号解析失败，先回默认页再跳");
-            service.shellLong("input keyevent 3");
+            doHome();
             try { Thread.sleep(400); } catch (InterruptedException ignored) { }
             cur = 1;
         }
@@ -760,7 +760,7 @@ public class Bridge {
                 dbg("跳页被打断（用户操作），停止滑动");
                 return false;
             }
-            service.shellLong("input swipe " + fx + " 1200 " + tx + " 1200 260");
+            doSwipe(fx, 1200, tx, 1200, 260);
             try { Thread.sleep(320); } catch (InterruptedException ignored) { }
         }
         // 🔴 滑完必须验证真的到了目标页：没到就**逐页修正**，不要放弃也不要继续瞎滑。
@@ -780,7 +780,7 @@ public class Bridge {
                         dbg("逐页修正被打断（用户操作）");
                         return false;
                     }
-                    service.shellLong("input swipe " + ffx + " 1200 " + ftx + " 1200 260");
+                    doSwipe(ffx, 1200, ftx, 1200, 260);
                     try { Thread.sleep(320); } catch (InterruptedException ignored) { }
                 }
                 if (interrupted()) return false;
@@ -807,7 +807,7 @@ public class Bridge {
      */
     private int probeSweep() {
         final int MAX = 10;             // 超过 10 页就不再往下数，够用了
-        service.shellLong("input keyevent 3");
+        doHome();
         try { Thread.sleep(700); } catch (InterruptedException ignored) { }
         String prev = pageSignature(dumpHome(false));
         if (prev.isEmpty()) {
@@ -908,7 +908,7 @@ public class Bridge {
      */
     private int[] sweepScan(String label, int[] pageOut) {
         final int MAX = 10;
-        service.shellLong("input keyevent 3");
+        doHome();
         try { Thread.sleep(500); } catch (InterruptedException ignored) { }
         java.util.Set<String> seen = new java.util.HashSet<String>();
         for (int pg = 1; pg <= MAX; pg++) {
@@ -927,7 +927,7 @@ public class Bridge {
             java.util.List<int[]> folders = findFolders(px);
             for (int i = 0; i < folders.size() && i < 12; i++) {
                 if (userLeft()) return null;
-                service.shellLong("input tap " + folders.get(i)[0] + " " + folders.get(i)[1]);
+                doTap(folders.get(i)[0], folders.get(i)[1]);
                 try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                 String fx = dumpHome(false);
                 if (fx.isEmpty()) return null;
@@ -938,7 +938,7 @@ public class Bridge {
                     dbg("滑动扫描命中: " + label + " → 第 " + pg + " 页（文件夹内）");
                     return hit;
                 }
-                service.shellLong("input keyevent 4");
+                doBack();
                 try { Thread.sleep(280); } catch (InterruptedException ignored) { }
             }
             if (pg < MAX) swipePage(true);
@@ -958,8 +958,59 @@ public class Bridge {
     private void swipePage(boolean toNext) {
         int fx = toNext ? 950 : 200;
         int tx = toNext ? 200 : 950;
-        service.shellLong("input swipe " + fx + " 1200 " + tx + " 1200 260");
+        doSwipe(fx, 1200, tx, 1200, 260);
         try { Thread.sleep(320); } catch (InterruptedException ignored) { }
+    }
+
+    // ==================== 输入通道：无障碍优先，退回 shell 注入 ====================
+    //
+    // 无障碍可用时，HOME / 返回 / 点击 / 长按 / 滑动全部走 AccessibilityService：
+    //   · 不需要 adb 授权，重启后也不用补
+    //   · 不会被小米的「USB 调试（安全设置）」拦住（issue #3 的根因）
+    // 拿不到服务（用户没开、或被系统关掉）就原样退回 `input`，行为不变。
+
+    /** 输入退回 shell 注入时只记一次 —— 用来区分「真走了无障碍」还是「悄悄退回了」。 */
+    private static boolean inputFallbackLogged;
+
+    private void noteInputFallback(String what) {
+        if (inputFallbackLogged) return;
+        inputFallbackLogged = true;
+        dbg("输入退回 shell 注入（首个）: " + what);
+    }
+
+    private void doHome() {
+        if (A11yService.home()) return;
+        noteInputFallback("home");
+        service.shellLong("input keyevent 3");
+    }
+
+    private void doBack() {
+        if (A11yService.back()) return;
+        noteInputFallback("back");
+        service.shellLong("input keyevent 4");
+    }
+
+    /** 起止同点 + 短时长 = 点击；长时长 = 长按。 */
+    private void doTap(Object ox, Object oy) {
+        int x = parseIntSafe(String.valueOf(ox), -1);
+        int y = parseIntSafe(String.valueOf(oy), -1);
+        if (x < 0 || y < 0) return;
+        if (A11yService.gesture(x, y, x, y, 60)) return;
+        noteInputFallback("tap");
+        service.shellLong("input tap " + x + " " + y);
+    }
+
+    private void doLongPress(int x, int y) {
+        // 长按时长沿用原来的 1500ms：部分 ROM 对 500ms 的长按判定不稳
+        if (A11yService.gesture(x, y, x, y, 1500)) return;
+        noteInputFallback("longpress");
+        service.shellLong("input swipe " + x + " " + y + " " + (x + 4) + " " + y + " 1500");
+    }
+
+    private void doSwipe(int x1, int y1, int x2, int y2, int ms) {
+        if (A11yService.gesture(x1, y1, x2, y2, ms)) return;
+        noteInputFallback("swipe");
+        service.shellLong("input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + ms);
     }
 
     private String dumpHome(boolean needPager) {
@@ -973,6 +1024,34 @@ public class Bridge {
         //
         // --compressed 会跳过 idle 等待（实测同一时刻普通 dump 失败、compressed 成功），
         // 代价是 XML 里少了页码小圆点节点（所以 jumpToPageSaved 用不上，只能滑动跳页）。
+        // 🔴 无障碍可用时优先走它：读一次是几十毫秒，uiautomator dump 要 1.5~3 秒。
+        //    拿不到页号、或树太短，就当没读到，继续走下面的 dump 兜底 ——
+        //    两条路径的 XML 格式完全一致，下游解析一行都不用改。
+        if (A11yService.ready()) {
+            String last = null;
+            for (int i = 0; i < 3; i++) {
+                String ax = A11yService.dumpXml();
+                if (ax != null && ax.length() > 1000 && ax.contains("<hierarchy")) {
+                    last = ax;
+                    boolean hasP = ax.contains("页共");
+                    if (!needPager || hasP) {
+                        dbg("dumpHome 无障碍: 长度=" + ax.length() + " 有页共=" + hasP);
+                        return ax;
+                    }
+                }
+                try { Thread.sleep(400); } catch (InterruptedException ignored) { }
+            }
+            if (last != null) {
+                // 连读三次都没有「页共」= 这个桌面本身就不暴露页码（Pixel / AOSP）。
+                // 直接把最后一份有效树交回去，让上层走滑动探测。
+                // 🔴 别退回 uiautomator 再试三遍：它读的是同一个无障碍树，结果一样，
+                //    只是每次要多花 2.8 秒 —— 实测定位白白多等 9 秒。
+                dbg("dumpHome 无障碍：桌面无页码，交给滑动探测 长度=" + last.length());
+                return last;
+            }
+            dbg("dumpHome 无障碍读不到窗口，退回 uiautomator");
+        }
+
         for (int i = 0; i < 3; i++) {
             // 重试期间用户可能已经切走了 —— 立刻停，别对着「设置」界面白 dump 三次
             if (i > 0 && needPager && userLeft()) return "";
@@ -999,7 +1078,7 @@ public class Bridge {
             //    按一次 HOME 退回桌面根，再给一次机会。
             if (i == 2 && needPager && isLauncherFront()) {
                 dbg("需要页号但拿不到，可能还在文件夹里 → 按 HOME 退回桌面再试");
-                service.shellLong("input keyevent 3");
+                doHome();
                 try { Thread.sleep(600); } catch (InterruptedException ignored) { }
                 service.shellLong("uiautomator dump --compressed /sdcard/mineapp_loc.xml");
                 String x2 = service.shellLong("cat /sdcard/mineapp_loc.xml");
@@ -1041,6 +1120,9 @@ public class Bridge {
                 // 参数 "应用名|提示文案|缓存页号"：页号 -1 或省略表示不确定，需要逐页找
                 String[] parts = raw.split("\\|", -1);
                 String label = parts.length > 0 ? parts[0].trim() : "";
+                // 第 6 段是包名：桌面的 title 是「拖图标那一刻」的语言快照，切过语言就和
+                // 应用列表对不上（索引里是 微信、列表里是 WeChat），查不到时用它兜底。
+                String pkgArg = parts.length > 5 ? parts[5].trim() : "";
                 String hint = parts.length > 1 ? parts[1].trim() : "";
                 int wantPage = parts.length > 2 ? parseIntSafe(parts[2], -1) : -1;
                 // 结束时的文案模板，{n} 会被替换成应用名（前端按当前语言给）
@@ -1071,7 +1153,7 @@ public class Bridge {
                     // 已经在桌面就不用按 HOME：HOME 会把页面拉回默认页（第 1 页），
                     // 紧接着再跳到索引页，视觉上就是「建了索引还从头翻」。
                     if (!isLauncherFront()){
-                        service.shellLong("input keyevent 3");
+                        doHome();
                         // 🔴 等桌面真正渲染完再 dump：0.4 秒时 dump 常常拿不到
                         //    「第 N 页共 M 页」节点，parsePager 返回 -1，
                         //    跳页就会退化成盲滑（实测跳到第 3 页而不是第 2 页）。
@@ -1105,6 +1187,7 @@ public class Bridge {
                                     sp.getString("locIndex", "{}"));
                             indexHasData = idxObj.length() > 0;
                             org.json.JSONArray v = idxObj.optJSONArray(label);
+                            if (v == null && pkgArg.length() > 0) v = idxObj.optJSONArray(pkgArg);
                             if (v != null && v.length() >= 1) {
                                 ipg = v.getInt(0);
                                 if (v.length() >= 2) idxFolder = v.optString(1, "");
@@ -1167,7 +1250,7 @@ public class Bridge {
                                         } else if (!idxFolder.equals(f[2])) {
                                             continue;
                                         }
-                                        service.shellLong("input tap " + f[0] + " " + f[1]);
+                                        doTap(f[0], f[1]);
                                         try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                                         String fx = dumpHome(false);
                                         real = findNode(fx, label, false);
@@ -1177,12 +1260,12 @@ public class Bridge {
                                         // （HOME 会跳回默认页，后面再点就点到别的图标上了）
                                         // 关之前先看用户有没有自己点了东西，别把他的应用一起关掉
                                         if (userLeft()) return o.toString();
-                                        service.shellLong("input keyevent 4");
+                                        doBack();
                                         try { Thread.sleep(300); } catch (InterruptedException ignored) { }
                                         String bx = dumpHome(false);
                                         if (bx.isEmpty()) return o.toString();   // 用户切走了
                                         if (parsePager(bx)[0] <= 0) {           // 还在文件夹里（编辑态）
-                                            service.shellLong("input keyevent 4");
+                                            doBack();
                                             try { Thread.sleep(250); } catch (InterruptedException ignored) { }
                                         }
                                     }
@@ -1194,14 +1277,14 @@ public class Bridge {
                                     for (int i = 0; i < fs.size() && i < 12; i++) {
                                         if (userLeft()) return o.toString();
                                         int[] f = fs.get(i);
-                                        service.shellLong("input tap " + f[0] + " " + f[1]);
+                                        doTap(f[0], f[1]);
                                         try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                                         real = findNode(dumpHome(false), label, false);
                                         if (real != null) break;
                                         // 🔴 先看用户有没有自己点了东西：他打开的应用不要被我们按 HOME 顶掉，
                                         //    否则「点哪里都打断不了」（实测投诉）。
                                         if (userLeft()) return o.toString();
-                                        service.shellLong("input keyevent 3");
+                                        doHome();
                                         try { Thread.sleep(250); } catch (InterruptedException ignored) { }
                                     }
                                 }
@@ -1282,7 +1365,7 @@ public class Bridge {
                             for (int i = 0; i < folders.size() && i < 12; i++) {
                                 if (userLeft()) return o.toString();
                                 int[] f = folders.get(i);
-                                service.shellLong("input tap " + f[0] + " " + f[1]);
+                                doTap(f[0], f[1]);
                                 try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                                 String fx = dumpHome(false);
                                 if (fx.isEmpty()) return o.toString();
@@ -1290,12 +1373,12 @@ public class Bridge {
                                 if (hit != null) { hitPage = pg; break; }
                                 // 用 BACK 关文件夹：保留当前页，否则后面的页号判断全错
                                 if (userLeft()) return o.toString();
-                                service.shellLong("input keyevent 4");
+                                doBack();
                                 try { Thread.sleep(280); } catch (InterruptedException ignored) { }
                                 String bx = dumpHome(false);
                                 if (bx.isEmpty()) return o.toString();
                                 if (parsePager(bx)[0] <= 0) {          // 还在文件夹里（编辑态）
-                                    service.shellLong("input keyevent 4");
+                                    doBack();
                                     try { Thread.sleep(250); } catch (InterruptedException ignored) { }
                                 }
                             }
@@ -1355,10 +1438,165 @@ public class Bridge {
      * 中断判定：每步之前看一眼前台是不是桌面 —— 用户切去别的应用就立刻停。
      */
     @JavascriptInterface
+    /**
+     * root 直读桌面数据库：一次全表扫描，换掉「翻页 + dump + 点开每个文件夹」。
+     *
+     * 拿不到 root、桌面不是 Launcher3 系、解析失败都返回 null —— 调用方退回无障碍遍历。
+     * 所以这是一条纯加速路径，失败不影响功能。
+     */
+    private JSONObject rootIndex() {
+        String dst = null;
+        try {
+            android.content.Context ctx = web.getContext();
+            String pre = "";
+            if (!"0".equals(service.shellQuick("id -u", 4000).trim())) {
+                if (!"0".equals(service.shellQuick("su -c id", 4000).trim())) return null;
+                pre = "su -c \"";               // Magisk 机型：adb shell 是 2000，得走 su
+            }
+            String home = service.shellQuick("cmd package resolve-activity --brief "
+                    + "-a android.intent.action.MAIN -c android.intent.category.HOME | tail -1", 8000).trim();
+            int slash = home.indexOf('/');
+            if (slash <= 0) return null;
+            String db = "/data/data/" + home.substring(0, slash) + "/databases/launcher.db";
+            java.io.File dir = ctx.getExternalFilesDir(null);
+            if (dir == null) return null;
+            dir.mkdirs();
+            dst = dir.getAbsolutePath() + "/ldb.sqlite";
+            // 拷到应用自己的外部目录：不用跟 SELinux context 较劲，应用直接读得到
+            service.shellQuick(pre + "cp " + db + " " + dst + " && chmod 666 " + dst
+                    + (pre.isEmpty() ? "" : "\""), 20000);
+
+            MiniSqlite sql = new MiniSqlite(new java.io.File(dst));
+            String[] cols = sql.columns("favorites");
+            if (cols == null) return null;
+            int iIntent = colIdx(cols, "intent"), iTitle = colIdx(cols, "title");
+            int iCont = colIdx(cols, "container"), iScreen = colIdx(cols, "screen");
+            int iCx = colIdx(cols, "cellX"), iCy = colIdx(cols, "cellY");
+            if (iIntent < 0 || iCont < 0 || iScreen < 0) return null;
+            java.util.List<String[]> rows = sql.rows("favorites");
+            if (rows == null || rows.isEmpty()) return null;
+
+            // 先把每行登记成「潜在文件夹」：别的行的 container 指向它的 _id
+            java.util.HashMap<String, String[]> byId = new java.util.HashMap<String, String[]>();
+            java.util.HashSet<String> used = new java.util.HashSet<String>();
+            for (int i = 0; i < rows.size(); i++) {
+                String[] r = rows.get(i);
+                if (r[0] != null) byId.put(r[0], r);
+                used.add(cell(r, iCont));
+            }
+
+            // 没名字的文件夹（Pixel 的 Dock 文件夹就是）只能按「本页第几个」标识，
+            // 与无障碍路径的 "#0/#1" 约定一致 —— 定位侧本来就支持这种写法。
+            java.util.HashMap<String, String> anon = new java.util.HashMap<String, String>();
+            java.util.HashMap<String, java.util.List<String[]>> grp =
+                    new java.util.HashMap<String, java.util.List<String[]>>();
+            for (int i = 0; i < rows.size(); i++) {
+                String[] r = rows.get(i);
+                if (!cell(r, iTitle).isEmpty() || !used.contains(r[0])) continue;
+                String pg = cell(r, iScreen);
+                java.util.List<String[]> l = grp.get(pg);
+                if (l == null) grp.put(pg, l = new java.util.ArrayList<String[]>());
+                l.add(r);
+            }
+            for (java.util.List<String[]> l : grp.values()) {
+                java.util.Collections.sort(l, new java.util.Comparator<String[]>() {
+                    @Override public int compare(String[] a, String[] b) {
+                        int d = num(cell(a, iCy)) - num(cell(b, iCy));
+                        return d != 0 ? d : num(cell(a, iCx)) - num(cell(b, iCx));
+                    }
+                });
+                for (int i = 0; i < l.size(); i++) anon.put(l.get(i)[0], "#" + i);
+            }
+
+            JSONObject index = new JSONObject();
+            for (int i = 0; i < rows.size(); i++) {
+                String[] r = rows.get(i);
+                String intent = cell(r, iIntent);
+                int cp = intent.indexOf("component=");
+                if (cp < 0) continue;
+                String comp = intent.substring(cp + 10);
+                int semi = comp.indexOf(';');
+                if (semi > 0) comp = comp.substring(0, semi);
+                if (comp.indexOf('/') <= 0) continue;
+                String name = cell(r, iTitle);
+                if (name.isEmpty()) name = comp.substring(0, comp.indexOf('/'));
+                if (index.has(name)) continue;
+                int cont, screen;
+                try {
+                    cont = Integer.parseInt(cell(r, iCont).trim());
+                    screen = Integer.parseInt(cell(r, iScreen).trim());
+                } catch (NumberFormatException e) { continue; }
+                int page;
+                String folder = "";
+                if (cont == -101) {
+                    page = screen + 1;                                  // 桌面
+                } else if (cont == -100) {
+                    page = 1;                                           // Dock 每页都在，记到第 1 页
+                } else if (cont > 0) {
+                    String[] f = byId.get(Integer.toString(cont));       // 文件夹内
+                    if (f == null) continue;
+                    page = num(cell(f, iScreen)) + 1;
+                    folder = cell(f, iTitle);
+                    if (folder.isEmpty()) folder = anon.containsKey(f[0]) ? anon.get(f[0]) : "";
+                } else {
+                    continue;                                           // 小部件 / 搜索框之类
+                }
+                org.json.JSONArray v = new org.json.JSONArray();
+                v.put(page);
+                v.put(folder);
+                index.put(name, v);
+                // 桌面的 title 是「拖图标那一刻」的语言快照，系统切过语言就和应用列表对不上
+                // （索引里是 微信、列表里是 WeChat）。包名与语言无关，同时写一份做兜底键。
+                String pkg = comp.substring(0, comp.indexOf('/'));
+                if (!index.has(pkg)) index.put(pkg, v);
+            }
+            if (index.length() == 0) return null;
+
+            ctx.getSharedPreferences("app", 0).edit()
+                    .putString("locIndex", index.toString())
+                    .putInt("locIndexPage", 1)
+                    .putLong("locIndexAt", System.currentTimeMillis()).apply();
+            JSONObject o = new JSONObject();
+            o.put("ok", true);
+            o.put("done", true);
+            o.put("root", true);
+            o.put("count", index.length());
+            o.put("added", index.length());
+            return o;
+        } catch (Throwable e) {
+            android.util.Log.w("Bridge", "rootIndex 失败: " + e);
+            return null;
+        } finally {
+            if (dst != null) new java.io.File(dst).delete();   // 桌面布局是隐私，用完即删
+        }
+    }
+
+    private static int colIdx(String[] cols, String name) {
+        for (int i = 0; i < cols.length; i++) if (name.equalsIgnoreCase(cols[i])) return i;
+        return -1;
+    }
+
+    private static String cell(String[] r, int i) {
+        return i >= 0 && i < r.length && r[i] != null ? r[i] : "";
+    }
+
+    private static int num(String s) {
+        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return 0; }
+    }
+
     public void buildindex(int id, String arg) {
         dispatchHeavy(id, new Task() {
             @Override
             public String run() {
+                // root 直读桌面库：不发一个手势、不翻一页，几百毫秒出结果。
+                // 放在注入检查之前 —— 这条路径压根不需要注入权限。
+                JSONObject fast = rootIndex();
+                if (fast != null) {
+                    dbg("root 直读索引完成：" + fast.optInt("count") + " 个应用");
+                    stopLocateNotice("索引完成（root 直读桌面库）："
+                            + fast.optInt("count") + " 个应用");
+                    return fast.toString();
+                }
                 JSONObject o = new JSONObject();
                 // 注入被系统拒绝时，后面每一步（HOME / 滑动 / 点击）都做不了。
                 // 以前这种情况会在 1 秒后报「已停止（你切换了应用）」，把系统限制
@@ -1396,7 +1634,7 @@ public class Bridge {
                         dbg(rebuild ? "重建索引：清空旧数据" : "索引已过期，从头重建");
                     }
 
-                    service.shellLong("input keyevent 3");
+                    doHome();
                     try { Thread.sleep(900); } catch (InterruptedException ignored) { }
                     // 用户已经切走了就别再 dump 三次（每次 2.3 秒，白等 7 秒）
                     if (userLeft()) return o.toString();
@@ -1473,7 +1711,7 @@ public class Bridge {
                             if (idxStop || touchHit || !isLauncherFront()) break;
                             Object[] f = folders.get(i);
                             String fname = useFolderIndex ? ("#" + i) : (String) f[2];
-                            service.shellLong("input tap " + ((Integer) f[0]) + " " + ((Integer) f[1]));
+                            doTap(f[0], f[1]);
                             try { Thread.sleep(450); } catch (InterruptedException ignored) { }
                             added += indexPage(index, dumpHome(false), page, fname);
                             // 🔴 用 BACK 关文件夹，不要用 HOME。
@@ -1482,7 +1720,7 @@ public class Bridge {
                             //    用户看到的就是「打开文件夹 → 滑回去 → 左滑两下 → 再打开」
                             //    每处理一个文件夹折腾一遍（实测被投诉）。
                             //    BACK 只是关掉文件夹，页面停在原处，一下都不用滑。
-                            service.shellLong("input keyevent 4");
+                            doBack();
                             try { Thread.sleep(300); } catch (InterruptedException ignored) { }
                         }
                         // 每页文件夹处理完，确认还停在本页（BACK 万一没关掉文件夹、或用户手动滑过）。
@@ -1589,7 +1827,7 @@ public class Bridge {
      */
     private boolean jumpToPageBySwipe(int page) {
         if (page < 1) return false;
-        service.shellLong("input keyevent 3");
+        doHome();
         try { Thread.sleep(500); } catch (InterruptedException ignored) { }
         for (int i = 1; i < page; i++) {
             if (interrupted()) {
@@ -1610,7 +1848,7 @@ public class Bridge {
             String[] arr = dots.split(";");
             if (page < 1 || page > arr.length) return false;
             String[] xy = arr[page - 1].split(",");
-            service.shellLong("input tap " + xy[0] + " " + xy[1]);
+            doTap(xy[0], xy[1]);
             try { Thread.sleep(350); } catch (InterruptedException ignored) { }
             return true;
         } catch (Throwable e) {
@@ -1675,7 +1913,7 @@ public class Bridge {
             //    App 自己有 ADB 通道，用 shell 身份 am start 就不受这个限制。
             boolean launched = false;
             try {
-                service.shellLong("am start -n " + ctx.getPackageName() + "/.MainActivity");
+                service.shellLong("am start -n " + ctx.getPackageName() + "/" + MAIN_ACT_CLASS);
                 launched = true;
             } catch (Throwable ignored) { }
             if (!launched) {
@@ -1968,6 +2206,24 @@ public class Bridge {
      * locResultShowing 用来让 finally 别把这条结果提示一并清掉。
      */
     private volatile boolean locResultShowing;
+
+    /**
+     * 主 Activity 的**完整类名**。
+     *
+     * 🔴 多通道版靠 aapt2 --rename-manifest-package 改 applicationId，
+     *    但 Java 类包名不变。所以拼 am start 时不能写 pkg + "/.MainActivity"，
+     *    否则会解析成 <新包名>.MainActivity —— 那个类不存在，拉不回前台。
+     */
+    private static final String MAIN_ACT_CLASS = "com.henry.appmanager.MainActivity";
+    /**
+     * activity-alias 所在的命名空间。
+     *
+     * 🔴 声明写的是相对名 ".AliasMineSqG"，aapt2 会**按原始 package** 展开成
+     *    com.henry.appmanager.AliasMineSqG；--rename-manifest-package 只改 manifest
+     *    的 package 字段，不会重写已展开的组件名。
+     *    所以多通道版的 alias 仍在这个命名空间下，切换时必须用它，而不是 getPackageName()。
+     */
+    static final String COMP_NS = "com.henry.appmanager.";
 
     private static final String LOC_RES_CH = "app_manager_locate_result";
     private static final int LOC_RES_ID = 1003;
@@ -2397,6 +2653,56 @@ public class Bridge {
         });
     }
 
+    /**
+     * 当前发行通道的 tag 前缀。
+     *
+     * 靠**包名**判断，不用编译期开关：多通道版包名以 .multi 结尾，
+     * 以后 build.sh 只改 applicationId，这里自动走对通道，不会出现
+     * 「忘了定义宏，两个版本查到同一个 release」的事故。
+     *
+     *   主版本      com.henry.appmanager        → tag  v3.9.0
+     *   多通道版    com.henry.appmanager.multi  → tag  multi-v3.9.0
+     */
+    private String releasePrefix() {
+        try {
+            String pn = web.getContext().getPackageName();
+            if (pn != null && pn.endsWith(".multi")) return "multi-v";
+        } catch (Throwable ignored) { }
+        return "v";
+    }
+
+    /** 查询无障碍读取通道是否就绪，供设置页显示状态。 */
+    @JavascriptInterface
+    public void a11ystate(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override public String run() {
+                JSONObject o = new JSONObject();
+                try {
+                    o.put("ok", true);
+                    o.put("ready", A11yService.ready());
+                } catch (Exception ignored) { }
+                return o.toString();
+            }
+        });
+    }
+
+    /** 跳到系统的无障碍设置页，让用户手动开启本服务。 */
+    @JavascriptInterface
+    public void a11ysettings(int id, String arg) {
+        main.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    android.content.Intent it = new android.content.Intent(
+                            android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                    it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    web.getContext().startActivity(it);
+                } catch (Throwable e) {
+                    dbg("打开无障碍设置失败: " + e);
+                }
+            }
+        });
+    }
+
     @JavascriptInterface
     public void update(int id, String arg) {
         dispatch(id, new Task() {
@@ -2404,8 +2710,11 @@ public class Bridge {
             public String run() {
                 java.net.HttpURLConnection c = null;
                 try {
+                    // 🔴 不能用 /releases/latest：它只返回一条，两个发行通道没法分开。
+                    //    改成读列表，本地按 tag 前缀各挑各的。
                     java.net.URL u = new java.net.URL(
-                            "https://api.github.com/repos/henry-97/MineApp/releases/latest");
+                            "https://api.github.com/repos/henry-97/MineApp"
+                            + "/releases?per_page=30");
                     c = (java.net.HttpURLConnection) u.openConnection();
                     c.setConnectTimeout(8000);
                     c.setReadTimeout(8000);
@@ -2424,23 +2733,57 @@ public class Bridge {
                     int n;
                     while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
                     in.close();
-                    JSONObject r = new JSONObject(new String(bos.toByteArray(), "UTF-8"));
+                    String prefix = releasePrefix();
+                    boolean multi = prefix.startsWith("multi");
+                    org.json.JSONArray arr = new org.json.JSONArray(
+                            new String(bos.toByteArray(), "UTF-8"));
+
+                    // 按通道挑：主版本只认 v 开头（且跳过 multi- 与预发布），
+                    // 多通道版只认 multi-v 开头（**允许预发布** —— 它本来就该以
+                    // pre-release 发布，这样主版本的 /releases/latest 才不会被抢走）。
+                    JSONObject r = null;
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject x = arr.optJSONObject(i);
+                        if (x == null) continue;
+                        if (x.optBoolean("draft")) continue;
+                        String tg = x.optString("tag_name", "");
+                        if (!tg.startsWith(prefix)) continue;
+                        if (!multi && tg.toLowerCase().startsWith("multi")) continue;
+                        if (!multi && x.optBoolean("prerelease")) continue;
+                        r = x;
+                        break;
+                    }
                     o.put("ok", true);
-                    o.put("tag", r.optString("tag_name"));
+                    if (r == null) {
+                        // 这个通道还没有发布过：当作「已是最新」，不要报错吓人
+                        o.put("tag", "");
+                        o.put("ver", "");
+                        o.put("url", "");
+                        o.put("name", "");
+                        return o.toString();
+                    }
+                    String tag = r.optString("tag_name", "");
+                    o.put("tag", tag);
+                    // 清洗成可比大小的一般版本号：multi-v3.9.0 → 3.9.0，v3.9.0 → 3.9.0
+                    o.put("ver", tag.startsWith(prefix) ? tag.substring(prefix.length()) : tag);
                     o.put("url", r.optString("html_url"));
                     o.put("name", r.optString("name"));
-                    // 找 Release 里第一个 .apk 资产 —— 有它才能做应用内静默安装
+                    // 资产也要分开挑：主版本拿 MineApp-x.y.z.apk，
+                    // 多通道版拿文件名含 Multi 的那个。挑不到就留空，
+                    // 前端会退成「打开下载页」而不是装错包。
                     org.json.JSONArray assets = r.optJSONArray("assets");
                     if (assets != null) {
                         for (int i = 0; i < assets.length(); i++) {
                             org.json.JSONObject a = assets.optJSONObject(i);
                             if (a == null) continue;
                             String nm = a.optString("name");
-                            if (nm != null && nm.toLowerCase().endsWith(".apk")) {
-                                o.put("apk", a.optString("browser_download_url"));
-                                o.put("size", a.optLong("size"));
-                                break;
-                            }
+                            if (nm == null) continue;
+                            String low = nm.toLowerCase();
+                            if (!low.endsWith(".apk")) continue;
+                            if (low.contains("multi") != multi) continue;
+                            o.put("apk", a.optString("browser_download_url"));
+                            o.put("size", a.optLong("size"));
+                            break;
                         }
                     }
                     return o.toString();
@@ -2705,7 +3048,7 @@ public class Bridge {
             // 无条件重设会广播 PACKAGE_CHANGED，桌面重新查组件时可能把图标当新组件重排，
             // 表现就是「更新后图标跑到应用列表末尾」。默认名称/图标的情况下，
             // 覆盖安装后 manifest 里的状态本来就对，这里一次都不用调。
-            android.content.ComponentName on = new android.content.ComponentName(pkg, pkg + "." + target);
+            android.content.ComponentName on = new android.content.ComponentName(pkg, COMP_NS + target);
             if (pm.getComponentEnabledSetting(on) != en) {
                 pm.setComponentEnabledSetting(on, en, flags);
             }
@@ -2713,7 +3056,7 @@ public class Bridge {
             for (int i = 0; i < all.length; i++) {
                 if (all[i].equals(target)) continue;
                 android.content.ComponentName off =
-                        new android.content.ComponentName(pkg, pkg + "." + all[i]);
+                        new android.content.ComponentName(pkg, COMP_NS + all[i]);
                 if (pm.getComponentEnabledSetting(off) != dis) {
                     pm.setComponentEnabledSetting(off, dis, flags);
                 }
