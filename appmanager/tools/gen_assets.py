@@ -67,6 +67,8 @@ SHIM = r"""
     else if (url.indexOf('/api/aot') === 0) p = call('aot', (body.pkg || '') + '|' + (body.on ? '1' : '0'));
     else if (url.indexOf('/api/setport') === 0) p = call('setport', String(body.port == null ? '' : body.port));
     else if (url.indexOf('/api/a11ystate') === 0) p = call('a11ystate', '');
+    else if (url.indexOf('/api/chanstate') === 0) p = call('chanstate', '');
+    else if (url.indexOf('/api/setchan') === 0) p = call('setchan', body.chan || '');
     else if (url.indexOf('/api/a11ysettings') === 0) p = call('a11ysettings', '');
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));

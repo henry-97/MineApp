@@ -536,6 +536,13 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     </div>
     <div class="idx-note" data-t="a11yNote" data-html="1" style="margin:4px 0 0">开启后改为直接读取屏幕控件，不再用截图式 dump —— 建索引和定位都会快很多（一次读取从 1.5~3 秒降到几十毫秒）。只读当前屏幕，不收集、不上传任何内容。</div>
 
+    <div class="setrow" id="chanRow" style="gap:12px;margin:14px 0 0;align-items:center;display:none">
+      <div class="setrow-lb" data-t="chanTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">执行通道</div>
+      <span id="chanState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
+    </div>
+    <div class="idx-note" id="chanNote" data-t="chanNote" data-html="1" style="margin:4px 0 0;display:none">仅多通道版提供。选择 Shizuku / ADB 时不会申请 root。</div>
+    <div id="chanBtns" style="display:none;gap:8px;margin:8px 0 0;flex-wrap:wrap"></div>
+
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
       <span class="setrow-lb" id="updLabel" data-ver="__APP_VERSION__">v —</span>
       <button class="edit" id="updBtn" data-t="updCheck" style="padding:0 12px">检查</button>
@@ -768,6 +775,8 @@ var I18N = {
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
     a11yTitle: '无障碍加速读取', a11yOn: '已开启', a11yOff: '未开启', a11yOpen: '去开启',
+    chanTitle: '执行通道', chanAuto: '自动',
+    chanNote: '仅多通道版提供。选择 Shizuku / ADB 时不会申请 root。',
     a11yNote: '开启后改为直接读取屏幕控件，不再用截图式 dump —— 建索引和定位都会快很多（一次读取从 1.5~3 秒降到几十毫秒）。只读当前屏幕，不收集、不上传任何内容。',
     idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
     idxHintOff: '不再提示',
@@ -925,6 +934,8 @@ var I18N = {
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
     a11yTitle: 'Accessibility boost', a11yOn: 'On', a11yOff: 'Off', a11yOpen: 'Enable',
+    chanTitle: 'Execution channel', chanAuto: 'Auto',
+    chanNote: 'Multi-channel edition only. Choosing Shizuku or ADB means root is never requested.',
     a11yNote: 'Reads the on-screen view tree directly instead of a screenshot-style dump — indexing and locating get much faster (from 1.5–3 s per read down to tens of ms). Current screen only; nothing is collected or uploaded.',
     idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
     idxHintOff: 'Don\'t show again',
@@ -1105,7 +1116,48 @@ function applyTheme(){
 }
 
 /* 无障碍读取通道：只显示状态 + 一个跳转按钮，开关本身必须用户去系统设置里打开 */
+function renderChan(){
+  var row = document.getElementById('chanRow');
+  if (!row) return;
+  fetch('/api/chanstate', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.multi) { row.style.display = 'none'; return; }
+      row.style.display = 'flex';
+      var note = document.getElementById('chanNote');
+      if (note) note.style.display = '';
+      var box = document.getElementById('chanBtns');
+      if (!box) return;
+      box.style.display = 'flex';
+      box.innerHTML = '';
+      var cur = d.chan || 'auto';
+      var name = {auto: T('chanAuto'), root: 'Root', shizuku: 'Shizuku', adb: 'ADB'};
+      var label = document.getElementById('chanState');
+      if (label) label.textContent = name[cur] || cur;
+      ['auto', 'root', 'shizuku', 'adb'].forEach(function(k){
+        var b = document.createElement('button');
+        b.className = 'edit';
+        b.textContent = name[k];
+        b.style.padding = '0 12px';
+        if (k === cur) {
+          b.style.background = 'var(--ink)';
+          b.style.color = '#fff';
+          b.style.borderColor = 'var(--ink)';
+        }
+        b.onclick = function(){
+          fetch('/api/setchan', {method:'POST', headers:{'Content-Type':'application/json'},
+                                 body: JSON.stringify({chan: k})})
+            .then(function(r){ return r.json(); })
+            .then(function(){ renderChan(); });
+        };
+        box.appendChild(b);
+      });
+    })
+    .catch(function(){});
+}
+
 function refreshA11y(){
+  renderChan();
   var st = document.getElementById('a11yState');
   if (!st) return;
   fetch('/api/a11ystate', {method:'POST'})

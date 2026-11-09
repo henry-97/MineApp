@@ -1447,8 +1447,11 @@ public class Bridge {
     private JSONObject rootIndex() {
         // root 直读是多通道版的专有能力：普通版只走「无障碍 + 逐页遍历」。
         // 两个版本编译的是同一份源码，只能靠包名区分。
-        String pn = web.getContext().getPackageName();
-        if (pn == null || !pn.endsWith(".multi")) return null;
+        if (!isMulti()) return null;
+        // 用户在「执行通道」里明确选了 ADB / Shizuku 时，不碰 su
+        String chan = web.getContext().getSharedPreferences("app", 0)
+                .getString("execChannel", "auto");
+        if ("adb".equals(chan) || "shizuku".equals(chan)) return null;
         String dst = null;
         try {
             android.content.Context ctx = web.getContext();
@@ -2675,7 +2678,49 @@ public class Bridge {
         return "v";
     }
 
-    /** 查询无障碍读取通道是否就绪，供设置页显示状态。 */
+    /** 是否多通道版：只有它才有多通道授权能力 */
+    private boolean isMulti() {
+        String pn = web.getContext().getPackageName();
+        return pn != null && pn.endsWith(".multi");
+    }
+
+    /** 执行通道现状：auto / root / adb / shizuku */
+    @JavascriptInterface
+    public void chanstate(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override public String run() {
+                JSONObject o = new JSONObject();
+                try {
+                    o.put("ok", true);
+                    o.put("multi", isMulti());
+                    o.put("chan", web.getContext().getSharedPreferences("app", 0)
+                            .getString("execChannel", "auto"));
+                } catch (Exception ignored) { }
+                return o.toString();
+            }
+        });
+    }
+
+    /** 选择执行通道。只影响是否允许走 root，不影响 ADB/无障碍路径 */
+    @JavascriptInterface
+    public void setchan(final int id, String arg) {
+        final String v = arg == null ? "" : arg.trim();
+        dispatch(id, new Task() {
+            @Override public String run() {
+                JSONObject o = new JSONObject();
+                try {
+                    String c = ("root".equals(v) || "adb".equals(v) || "shizuku".equals(v))
+                            ? v : "auto";
+                    web.getContext().getSharedPreferences("app", 0)
+                            .edit().putString("execChannel", c).apply();
+                    o.put("ok", true);
+                    o.put("chan", c);
+                } catch (Exception ignored) { }
+                return o.toString();
+            }
+        });
+    }
+
     @JavascriptInterface
     public void a11ystate(int id, String arg) {
         dispatch(id, new Task() {
@@ -2695,11 +2740,27 @@ public class Bridge {
     public void a11ysettings(int id, String arg) {
         main.post(new Runnable() {
             @Override public void run() {
+                android.content.Context ctx = web.getContext();
+                // 类名固定写全限定：多通道版包名被 rename 过，组件名仍是 com.henry.appmanager.*
+                android.content.ComponentName cn = new android.content.ComponentName(
+                        ctx.getPackageName(), "com.henry.appmanager.A11yService");
+                // 优先直达「已下载的应用 → MineApp应用查找」这一页，失败再退回总列表
+                try {
+                    android.content.Intent it = new android.content.Intent(
+                            "android.settings.ACCESSIBILITY_DETAILS_SETTINGS");
+                    it.putExtra(android.content.Intent.EXTRA_COMPONENT_NAME, cn);
+                    it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(it);
+                    dbg("无障碍设置：已跳到本服务详情页");
+                    return;
+                } catch (Throwable ignored) {
+                    dbg("本服务详情页不可用，退回无障碍总列表");
+                }
                 try {
                     android.content.Intent it = new android.content.Intent(
                             android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS);
                     it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                    web.getContext().startActivity(it);
+                    ctx.startActivity(it);
                 } catch (Throwable e) {
                     dbg("打开无障碍设置失败: " + e);
                 }
