@@ -372,14 +372,14 @@ MineApp/
 > distribution ran the app as a Termux + Python script without root. It now only holds the
 > front-end source and is no longer shipped.
 
-## Extension: Root / Shizuku channels
+## Extension: multi-channel edition (Root / Shizuku), released separately
 
 `ext-lsposed/` holds the source of an **LSPosed module** by the GitHub developer
-[MiaoluoYuanlina](https://github.com/MiaoluoYuanlina),
-released under **MIT** (see `ext-lsposed/LICENSE`). It is kept here for reference and future maintenance.
+[MiaoluoYuanlina](https://github.com/MiaoluoYuanlina). The multi-channel edition references part of it
+([upstream repo](https://github.com/MiaoluoYuanlina/MineApp-LSPosed)) as a third-party component.
 
-It does **not** modify this app's APK or its signature. Install the module, enable it in LSPosed with this
-app as its scope, and "Settings → Execution channel" gains two more options:
+Compared with the standard edition, the multi-channel edition adds two options under
+"Settings → Execution channel":
 
 | Option | What it does |
 |---|---|
@@ -389,16 +389,14 @@ app as its scope, and "Settings → Execution channel" gains two more options:
 
 Either channel removes the need for `adb tcpip 5555`, and it survives a reboot.
 
+The multi-channel edition is published under its own `multi-v*` tag; the two channels never
+overwrite each other.
+
 Notes:
 
-- This repository only **hosts the source**; it is not part of `appmanager/build.sh` — the module is a
-  Gradle project and needs its own toolchain to build
-- Upstream: <https://github.com/MiaoluoYuanlina/MineApp-LSPosed>
-- A planned **multi-channel edition** (`com.henry.appmanager.multi`) will build these channels in
-  directly — use one or the other
-- **Licensing**: this repository as a whole is **GPL-3.0** (see the root `LICENSE`); `ext-lsposed/` is an
-  independent work by its author and **keeps its original MIT licence**; use of it is subject to that
-  licence. See `THIRD-PARTY-NOTICES.md` for the third-party inventory.
+- **Third-party component**: this repository as a whole is GPL-3.0 (see the root `LICENSE`);
+  `ext-lsposed/` is an independent work by its author — use of it is subject to that licence.
+  See `THIRD-PARTY-NOTICES.md` for the third-party inventory.
 
 ## Known limitations
 
