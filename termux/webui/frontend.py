@@ -781,6 +781,8 @@ var I18N = {
     idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
     idxHintOff: '不再提示',
     idxUnsupported: '检测到应用查找暂不支持本系统，建议反馈 issue，以便持续更新',
+    idxNeedA11y: '请先开启无障碍：设置 → 已下载的应用 → MineApp应用查找（即将带你过去）',
+    idxBridgeErr: '接口未注册：{m}（应用装的是旧版或构建异常，请反馈 issue）',
     injectTitle: '开启「USB 调试（安全设置）」',
     injectText: '允许通过 USB 调试修改权限或模拟点击',
     injectBody: '系统拦截了模拟点击，应用查找无法继续。请到「开发者选项」打开「USB 调试（安全设置）」—— 它下面写着「允许通过 USB 调试修改权限或模拟点击」，不要开成上面那个「USB 调试」。打开后重启手机（这个开关必须重启才生效），再回来点「开始」。',
@@ -940,6 +942,8 @@ var I18N = {
     idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
     idxHintOff: 'Don\'t show again',
     idxUnsupported: 'App lookup is not supported on this launcher yet — please open an issue so we can add it',
+    idxNeedA11y: 'Enable accessibility first: Settings → Downloaded apps → MineApp应用查找 (taking you there)',
+    idxBridgeErr: 'Bridge method not exposed: {m} (stale or broken build — please open an issue)',
     injectTitle: 'Enable "USB debugging (Security settings)"',
     injectText: 'Allow modifying permissions or simulating taps over USB',
     injectBody: 'The system blocked simulated taps, so app lookup cannot continue. In Developer options, enable "USB debugging (Security settings)" — its description reads "allow modifying permissions or simulating taps over USB"; do not confuse it with the plain "USB debugging" above it. Reboot the phone (the switch only takes effect after a reboot), then tap Start again.',
@@ -2173,6 +2177,9 @@ function doLocate(pkg, label, force, c, now){
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (slowTip) clearTimeout(slowTip);
+      if (d && d.needA11y){ toast(T('idxNeedA11y'), 5000);
+        setTimeout(function(){ fetch('/api/a11ysettings',{method:'POST'}); }, 800); return; }
+      if (d && d.bridgeError){ toast(T2('idxBridgeErr', {m: d.bridgeError}), 6000); return; }
       if (d && d.needInject){ hintInjectBlocked(); return; }
       if (d && d.found){
         locCache[pkg] = {page: d.page, t: Date.now()};

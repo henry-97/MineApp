@@ -1111,10 +1111,13 @@ public class Bridge {
                 // 注入被系统拒绝时，后面每一步（HOME / 滑动 / 点击）都做不了。
                 // 以前这种情况会在 1 秒后报「已停止（你切换了应用）」，把系统限制
                 // 说成了用户操作（issue #3）。入口处先拦一道，让前端弹可操作的提示。
-                Boolean canInject = injectAllowed();
+                // 无障碍是首选通道；没有时仍走旧的注入 + uiautomator 路径做兼容。
+                // 只有两条路都不通，才提示用户去开无障碍。
+                boolean a11y = A11yService.ready();
+                Boolean canInject = a11y ? Boolean.TRUE : injectAllowed();
                 if (canInject != null && !canInject) {
-                    dbg("注入被拒：中止（needInject）");
-                    return "{\"ok\":false,\"needInject\":true}";
+                    dbg("无障碍与注入都不可用：中止（needA11y）");
+                    return "{\"ok\":false,\"needA11y\":true}";
                 }
                 String raw = arg == null ? "" : arg;
                 // 参数 "应用名|提示文案|缓存页号"：页号 -1 或省略表示不确定，需要逐页找
@@ -1208,7 +1211,10 @@ public class Bridge {
 
                         if (ipg >= 1) {
                             dbg("索引命中: " + label + " → 第 " + ipg + " 页, 文件夹=[" + idxFolder + "]");
-                            if (userLeft()) return o.toString();
+                            if (userLeft()) {
+                        dbg("建索引：用户已切走，放弃");
+                        return "{\"ok\":false,\"left\":true}";
+                    }
                             boolean jumped = jumpToPageSaved(ipg);
                             if (!jumped) {
                                 // 跳页失败要么是没存圆点、要么是刚被用户打断 —— 先确认一次
@@ -1591,12 +1597,20 @@ public class Bridge {
         try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return 0; }
     }
 
+    /**
+     * 构建应用位置索引：全量遍历桌面（无障碍 / 注入）。
+     * 🔴 这个 @JavascriptInterface 曾经在 3.9.0 的重构里丢失，导致 JS 调不到、
+     *    shim 静默返回空对象、界面一律显示「索引构建失败」，而日志一条都没有。
+     */
+    @JavascriptInterface
     public void buildindex(int id, String arg) {
+        dbg("buildindex 调用");          // 探针 A：请求是否到达后端
         dispatchHeavy(id, new Task() {
             @Override
             public String run() {
                 // root 直读桌面库：不发一个手势、不翻一页，几百毫秒出结果。
                 // 放在注入检查之前 —— 这条路径压根不需要注入权限。
+                dbg("buildindex 开始执行");   // 探针 B：任务是否真的跑起来
                 JSONObject fast = rootIndex();
                 if (fast != null) {
                     dbg("root 直读索引完成：" + fast.optInt("count") + " 个应用");
@@ -2715,6 +2729,28 @@ public class Bridge {
                             .edit().putString("execChannel", c).apply();
                     o.put("ok", true);
                     o.put("chan", c);
+                } catch (Exception ignored) { }
+                return o.toString();
+            }
+        });
+    }
+
+    /** Shizuku 状态：服务是否在跑、本应用是否已获授权。仅多通道版使用 */
+    @JavascriptInterface
+    public void shizukustate(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override public String run() {
+                JSONObject o = new JSONObject();
+                try {
+                    boolean alive = false, granted = false;
+                    try {
+                        alive = rikka.shizuku.Shizuku.pingBinder();
+                        granted = alive && rikka.shizuku.Shizuku.checkSelfPermission()
+                                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                    } catch (Throwable ignored) { }
+                    o.put("ok", true);
+                    o.put("alive", alive);
+                    o.put("granted", granted);
                 } catch (Exception ignored) { }
                 return o.toString();
             }

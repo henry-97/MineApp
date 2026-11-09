@@ -71,6 +71,9 @@ echo "== 0. 生成资源（从 frontend.py 提取 HTML 与名称映射） =="
 "$PYTHON" "$BASE/tools/gen_assets.py"
 "$PYTHON" "$BASE/tools/gen_icon.py"
 
+echo "== 0.5 检查 JS 接口注解（漏一个就会「操作失败且无日志」） =="
+"$PYTHON" "$BASE/tools/check_js_iface.py"
+
 rm -rf "$BUILD"
 mkdir -p "$BUILD/gen" "$BUILD/classes" "$BUILD/dex" "$OUT"
 
@@ -99,6 +102,7 @@ find "$BASE/src/java" -name "*.java" > "$BUILD/sources.txt"
 find "$BUILD/gen" -name "*.java" >> "$BUILD/sources.txt"
 "$JAVAC" -source 8 -target 8 -encoding UTF-8 \
   -bootclasspath "$PLATFORM" \
+  -classpath "$BASE/libs/shizuku-api.jar;$BASE/libs/shizuku-provider.jar" \
   -d "$BUILD/classes" \
   @"$BUILD/sources.txt"
 
@@ -107,7 +111,8 @@ find "$BUILD/classes" -name "*.class" > "$BUILD/classlist.txt"
 "$JAVA" -cp "$BT/lib/d8.jar" com.android.tools.r8.D8 \
   --lib "$PLATFORM" --min-api 26 --release \
   --output "$BUILD/dex" \
-  @"$BUILD/classlist.txt"
+  @"$BUILD/classlist.txt" \
+  "$BASE/libs/shizuku-api.jar" "$BASE/libs/shizuku-provider.jar"
 
 echo "== 5. package =="
 cp "$BUILD/base.apk" "$BUILD/unsigned.apk"

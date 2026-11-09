@@ -36,3 +36,31 @@ original licences**; using any of them also requires complying with the original
 - It is a **Gradle project** and is not part of `appmanager/build.sh`; building it needs its own toolchain.
 - MIT is **one-way compatible** with GPL-3.0: MIT code may be incorporated into a GPL-3.0 project, but
   the component's own licence is unaffected by being hosted here.
+
+---
+
+## Shizuku API（`appmanager/libs/`）
+
+| 项 / Item | 内容 / Detail |
+|---|---|
+| 组件 / Component | Shizuku API / Provider（`dev.rikka.shizuku:api`、`:provider`） |
+| 版本 / Version | 13.1.5 |
+| 作者 / Author | RikkaW（RikkaApps） |
+| 上游 / Upstream | <https://github.com/RikkaApps/Shizuku> · <https://central.sonatype.com/artifact/dev.rikka.shizuku/api> |
+| 授权 / Licence | **Apache-2.0** |
+| 许可全文 / Licence text | `appmanager/libs/LICENSE-APACHE-2.0.txt` |
+| 在本仓库中的用途 / Purpose | 多通道版编译期依赖：申请 Shizuku 授权、以 Shizuku 身份执行 shell |
+| 与本项目的关系 / Relationship | 以 jar 形式随 APK 分发；未修改其源代码 |
+
+### 说明 / Notes
+
+- 仅使用其**客户端 API**；真正的特权服务由用户自行安装的 Shizuku 应用提供，本仓库不包含、不分发该服务。
+- 依 Apache-2.0 第 4 条，本仓库**保留许可全文**并在此声明使用了该组件；未对其源码作修改。
+- Apache-2.0 与 GPL-3.0 是**单向兼容**的：Apache-2.0 代码可以并入 GPL-3.0 项目。
+
+- Only the **client API** is used; the privileged service is provided by the user-installed Shizuku app
+  and is neither bundled nor redistributed here.
+- Per Apache-2.0 §4, the licence text is retained in this repository and attribution is given here;
+  no source changes were made.
+- Apache-2.0 is **one-way compatible** with GPL-3.0: Apache-2.0 code may be incorporated into a
+  GPL-3.0 project.

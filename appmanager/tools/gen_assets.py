@@ -34,7 +34,9 @@ SHIM = r"""
       var id = ++seq;
       pending[id] = resolve;
       try { Bridge[method](id, arg); }
-      catch (e) { delete pending[id]; resolve({}); }
+      // 🔴 不能 resolve({}) —— 空对象会被上层当成「操作失败」，把
+      //    「Java 接口没注册/签名不对」这种硬错误伪装成业务失败。
+      catch (e) { delete pending[id]; resolve({ok:false, bridgeError:method}); }
     });
   }
   window.fetch = function(url, opts){

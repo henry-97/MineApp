@@ -2,8 +2,8 @@
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="154"
-    android:versionName="3.9.2">
+    android:versionCode="156"
+    android:versionName="3.9.4">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -15,6 +15,8 @@
     <!-- 应用管理器必须能列出全部应用才能取到真实应用名（否则 Android 11+ 只返回
          与自身有交互的少数包，绝大多数应用只能显示包名） -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Shizuku：客户端侧只需要这两个声明，provider 组件由对方 App 提供 -->
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
     <application
         android:label="Mine App"
@@ -22,6 +24,9 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:allowBackup="false">
+        <meta-data
+            android:name="moe.shizuku.client.V3_SUPPORT"
+            android:value="true" />
 
         <activity
             android:name="com.henry.appmanager.MainActivity"
