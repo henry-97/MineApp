@@ -537,6 +537,13 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="idx-note" id="chanNote" data-t="chanNote" data-html="1" style="margin:4px 0 0;display:none">仅多通道版提供。选择 Shizuku / ADB 时不会申请 root。</div>
     <div id="chanBtns" style="display:none;gap:8px;margin:8px 0 0;flex-wrap:wrap"></div>
 
+    <div class="setrow" id="szRow" style="gap:12px;margin:12px 0 0;align-items:center;display:none">
+      <div class="setrow-lb" data-t="szTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">Shizuku 授权</div>
+      <span id="szState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
+      <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 14px;flex:none;margin-left:8px">授权</button>
+    </div>
+    <div class="idx-note" id="szNote" data-t="szNote" data-html="1" style="margin:4px 0 0;display:none">先在手机上启动 Shizuku，再点「授权」，在弹框里允许本应用。</div>
+
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
       <span class="setrow-lb" id="updLabel" data-ver="__APP_VERSION__">v —</span>
       <button class="edit" id="updBtn" data-t="updCheck" style="padding:0 12px">检查</button>
@@ -770,6 +777,11 @@ var I18N = {
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
     chanTitle: '执行通道', chanAuto: '自动',
     chanNote: '仅多通道版提供。选择 Shizuku / ADB 时不会申请 root。',
+    szTitle: 'Shizuku 授权', szAsk: '授权', szOk: '已授权', szOff: 'Shizuku 未运行', szNoPerm: '未授权',
+    szNote: '先在手机上启动 Shizuku，再点「授权」，在弹框里允许本应用。授权后选 Shizuku 通道即可不再依赖 adb tcpip。',
+    szNotRunning: 'Shizuku 没在运行：请先打开 Shizuku App，用「无线调试启动」或「root 启动」把它跑起来',
+    szAskFail: '申请授权失败，请确认 Shizuku 已启动后重试',
+    szGranted: '已获得 Shizuku 授权', szWait: '请在 Shizuku 的弹框里点「允许」',
     idxHintNone: '还没有建立应用索引 —— 查找应用会很慢。<b>点此构建</b>',
     idxHintOff: '不再提示',
     idxUnsupported: '检测到应用查找暂不支持本系统，建议反馈 issue，以便持续更新',
@@ -934,6 +946,11 @@ var I18N = {
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
     chanTitle: 'Execution channel', chanAuto: 'Auto',
     chanNote: 'Multi-channel edition only. Choosing Shizuku or ADB means root is never requested.',
+    szTitle: 'Shizuku permission', szAsk: 'Grant', szOk: 'Granted', szOff: 'Shizuku not running', szNoPerm: 'Not granted',
+    szNote: 'Start Shizuku on the phone first, then tap Grant and allow this app. Once granted, the Shizuku channel no longer needs adb tcpip.',
+    szNotRunning: 'Shizuku is not running — open the Shizuku app and start it via wireless debugging or root',
+    szAskFail: 'Permission request failed; make sure Shizuku is running and retry',
+    szGranted: 'Shizuku permission granted', szWait: 'Tap Allow in the Shizuku dialog',
     idxHintNone: 'No app index yet — lookups will be slow. <b>Tap to build</b>',
     idxHintOff: 'Don\'t show again',
     idxUnsupported: 'App lookup is not supported on this launcher yet — please open an issue so we can add it',
@@ -1156,8 +1173,51 @@ function renderChan(){
         };
         box.appendChild(b);
       });
+      renderShizuku();
     })
     .catch(function(){});
+}
+
+/* Shizuku 状态：仅多通道版显示。服务未运行 / 未授权 / 已授权 三态 */
+function renderShizuku(){
+  var row = document.getElementById('szRow');
+  if (!row) return;
+  fetch('/api/shizukustate', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok || d.multi === false){ row.style.display = 'none'; return; }
+      row.style.display = 'flex';
+      var note = document.getElementById('szNote');
+      if (note) note.style.display = '';
+      var st = document.getElementById('szState');
+      var btn = document.getElementById('szBtn');
+      var alive = !!d.alive, granted = !!d.granted;
+      if (st){
+        st.textContent = granted ? T('szOk') : (alive ? T('szNoPerm') : T('szOff'));
+        st.style.color = granted ? 'var(--green)' : 'var(--ink3)';
+      }
+      if (btn) btn.style.display = granted ? 'none' : '';
+    })
+    .catch(function(){});
+}
+
+function askShizuku(){
+  fetch('/api/shizukuask', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok){
+        toast(d && d.msg === 'not-running' ? T('szNotRunning') : T('szAskFail'), 5000);
+        return;
+      }
+      if (d.granted){ toast(T('szGranted')); renderShizuku(); return; }
+      toast(T('szWait'), 5000);
+      // 授权是在 Shizuku 的 Activity 里完成的，回来时可能已经过了几秒，
+      // 所以多铺几个时间点，并配合下面的 visibilitychange
+      setTimeout(renderShizuku, 1500);
+      setTimeout(renderShizuku, 4000);
+      setTimeout(renderShizuku, 8000);
+    })
+    .catch(function(){ toast(T('szAskFail')); });
 }
 
 function renderSettings(){
@@ -1795,6 +1855,8 @@ document.addEventListener('visibilitychange', function(){
   load(true);
 });
 
+var loadRetry = 0;
+
 function load(force){
   lastLoadAt = Date.now();
   // force=true 表示手动刷新或刚做过操作，必须拿新数据
@@ -1820,6 +1882,14 @@ function load(force){
     clearTimeout(authTimer);
     saveCache(d);
     applyData(d);
+    // Shizuku 通道下，冷启动时 binder 可能晚到几百毫秒 → 首屏会被判成「未连接」。
+    // 这里自动重试两次，避免用户看到一片空白还要手动刷新。
+    if (d && d.adb_ok === false && loadRetry < 2){
+      loadRetry++;
+      setTimeout(function(){ load(true); }, 1800);
+    } else if (d && d.adb_ok !== false){
+      loadRetry = 0;
+    }
     if (btn) btn.disabled = false;
     spinFinish();
     refreshing = false;
@@ -2927,6 +2997,13 @@ function fallbackDownload(){
   toast(T('updInstallFail'));
   if (updUrl) openExtUrl(updUrl);
 }
+
+document.getElementById('szBtn').addEventListener('click', askShizuku);
+
+/* 从 Shizuku 授权页返回时刷新一次状态（WebView 恢复可见即触发） */
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden && typeof renderShizuku === 'function') renderShizuku();
+});
 
 document.getElementById('updBtn').addEventListener('click', function(){
   if (updApk){ installUpdate(); return; }      // 有安装包 → 应用内装

@@ -43,8 +43,8 @@ original licences**; using any of them also requires complying with the original
 
 | 项 / Item | 内容 / Detail |
 |---|---|
-| 组件 / Component | Shizuku API / Provider（`dev.rikka.shizuku:api`、`:provider`） |
-| 版本 / Version | 13.1.5 |
+| 组件 / Component | Shizuku API / Provider / AIDL（`dev.rikka.shizuku:api`、`:provider`、`:aidl`） |
+| 版本 / Version | 13.1.5（三个构件：api / provider / aidl） |
 | 作者 / Author | RikkaW（RikkaApps） |
 | 上游 / Upstream | <https://github.com/RikkaApps/Shizuku> · <https://central.sonatype.com/artifact/dev.rikka.shizuku/api> |
 | 授权 / Licence | **Apache-2.0** |

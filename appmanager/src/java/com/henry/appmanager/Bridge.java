@@ -43,6 +43,7 @@ public class Bridge {
     public Bridge(AdbService service, WebView web) {
         this.service = service;
         this.web = web;
+        syncChannel();
         // 通知栏那个「停止」按钮按下来时，走广播把两个停止标志立起来。
         // 光靠「前台不是桌面就停」不够：用户只是想滑动桌面看看、或者把图标拖一下，
         // 前台一直是桌面，检测不到，所以必须给一个能按的开关。
@@ -597,6 +598,9 @@ public class Bridge {
             if (findFoldersNamed(ax).size() >= pageFolders) return;
         }
     }
+
+    /** Shizuku 授权结果监听（只注册一次，回调后摘掉） */
+    private rikka.shizuku.Shizuku.OnRequestPermissionResultListener permListener;
 
     /** 当前屏幕尺寸，用来过滤掉「相邻页面」的节点（见 findFoldersNamed 的注释） */
     private static int SW = 0, SH = 0;
@@ -2810,6 +2814,65 @@ public class Bridge {
         return pn != null && pn.endsWith(".multi");
     }
 
+    /** 把「执行通道」偏好同步给 ShizukuShell：只有多通道版 + 明确选 Shizuku 才启用 */
+    private void syncChannel() {
+        try {
+            String c = web.getContext().getSharedPreferences("app", 0)
+                    .getString("execChannel", "auto");
+            ShizukuShell.enabled = isMulti() && "shizuku".equals(c);
+        } catch (Throwable e) {
+            ShizukuShell.enabled = false;
+        }
+    }
+
+    /** 申请 Shizuku 授权：Shizuku App 会弹「是否允许本应用使用 Shizuku」 */
+    @JavascriptInterface
+    public void shizukuask(int id, String arg) {
+        dispatch(id, new Task() {
+            @Override public String run() {
+                JSONObject o = new JSONObject();
+                try {
+                    if (!isMulti()) {
+                        o.put("ok", false); o.put("msg", "only-multi");
+                        return o.toString();
+                    }
+                    if (!ShizukuShell.alive()) {
+                        o.put("ok", false); o.put("msg", "not-running");
+                        return o.toString();
+                    }
+                    if (ShizukuShell.granted()) {
+                        o.put("ok", true); o.put("granted", true);
+                        return o.toString();
+                    }
+                    if (permListener == null) {
+                        permListener = new rikka.shizuku.Shizuku.OnRequestPermissionResultListener() {
+                            @Override
+                            public void onRequestPermissionResult(int requestCode, int grantResult) {
+                                // 授权回调在 binder 线程，摘监听要回主线程
+                                main.post(new Runnable() {
+                                    @Override public void run() {
+                                        try {
+                                            rikka.shizuku.Shizuku
+                                                    .removeRequestPermissionResultListener(permListener);
+                                        } catch (Throwable ignored) { }
+                                        permListener = null;
+                                    }
+                                });
+                            }
+                        };
+                        rikka.shizuku.Shizuku.addRequestPermissionResultListener(permListener);
+                    }
+                    rikka.shizuku.Shizuku.requestPermission(ShizukuShell.REQ_CODE);
+                    o.put("ok", true);
+                    o.put("asked", true);
+                } catch (Throwable e) {
+                    try { o.put("ok", false); o.put("msg", String.valueOf(e)); } catch (Exception ignored) { }
+                }
+                return o.toString();
+            }
+        });
+    }
+
     /** 执行通道现状：auto / root / adb / shizuku */
     @JavascriptInterface
     public void chanstate(int id, String arg) {
@@ -2839,8 +2902,10 @@ public class Bridge {
                             ? v : "auto";
                     web.getContext().getSharedPreferences("app", 0)
                             .edit().putString("execChannel", c).apply();
+                    syncChannel();          // 立即生效，不用重启 App
                     o.put("ok", true);
                     o.put("chan", c);
+                    o.put("shizuku", ShizukuShell.granted());
                 } catch (Exception ignored) { }
                 return o.toString();
             }
@@ -2863,6 +2928,9 @@ public class Bridge {
                     o.put("ok", true);
                     o.put("alive", alive);
                     o.put("granted", granted);
+                    o.put("multi", isMulti());
+                    o.put("chan", web.getContext().getSharedPreferences("app", 0)
+                            .getString("execChannel", "auto"));
                 } catch (Exception ignored) { }
                 return o.toString();
             }

@@ -67,7 +67,7 @@ fi
 echo "== 0. 生成资源（从 frontend.py 提取 HTML 与名称映射） =="
 # 🔴 gen_manifest.py 必须排第一：gen_assets.py 要从 AndroidManifest.xml 读版本号
 #    注入前端。顺序反了会读到上一次构建的版本，界面显示的版本号永远慢一版。
-"$PYTHON" "$BASE/tools/gen_manifest.py"
+"$PYTHON" "$BASE/tools/gen_manifest.py" "$EDITION"
 "$PYTHON" "$BASE/tools/gen_assets.py"
 "$PYTHON" "$BASE/tools/gen_icon.py"
 
@@ -102,7 +102,7 @@ find "$BASE/src/java" -name "*.java" > "$BUILD/sources.txt"
 find "$BUILD/gen" -name "*.java" >> "$BUILD/sources.txt"
 "$JAVAC" -source 8 -target 8 -encoding UTF-8 \
   -bootclasspath "$PLATFORM" \
-  -classpath "$BASE/libs/shizuku-api.jar;$BASE/libs/shizuku-provider.jar" \
+  -classpath "$BASE/libs/shizuku-api.jar;$BASE/libs/shizuku-provider.jar;$BASE/libs/shizuku-aidl.jar" \
   -d "$BUILD/classes" \
   @"$BUILD/sources.txt"
 
@@ -112,7 +112,7 @@ find "$BUILD/classes" -name "*.class" > "$BUILD/classlist.txt"
   --lib "$PLATFORM" --min-api 26 --release \
   --output "$BUILD/dex" \
   @"$BUILD/classlist.txt" \
-  "$BASE/libs/shizuku-api.jar" "$BASE/libs/shizuku-provider.jar"
+  "$BASE/libs/shizuku-api.jar" "$BASE/libs/shizuku-provider.jar" "$BASE/libs/shizuku-aidl.jar"
 
 echo "== 5. package =="
 cp "$BUILD/base.apk" "$BUILD/unsigned.apk"

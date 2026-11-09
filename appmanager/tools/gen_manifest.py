@@ -12,6 +12,7 @@ alias 名规律：Alias<Mine|Mgr><Sq|Cl><G|Y|K>，例如 AliasMineSqG、AliasMgr
 改图标清单时同步改这里和 tools/gen_icon.py 的 SHAPES / COLORS。
 """
 import os
+import sys
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(BASE, "src", "AndroidManifest.xml")
@@ -24,8 +25,8 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="159"
-    android:versionName="3.9.7">
+    android:versionCode="160"
+    android:versionName="3.9.8">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -49,6 +50,17 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
         <meta-data
             android:name="moe.shizuku.client.V3_SUPPORT"
             android:value="true" />
+
+        <!-- 🔴 必须声明这个 provider：Shizuku 是通过它把 binder 交给客户端的。
+             不声明的话 pingBinder() 恒为 false —— 表现为「Shizuku 里已授权，
+             但 App 一直说 Shizuku 未运行」，PC 端授权了也会显示「调试未连接」。 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="__SHIZUKU_AUTHORITY__"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <activity
             android:name="com.henry.appmanager.MainActivity"
@@ -102,6 +114,11 @@ TAIL = '''
 '''
 
 
+EDITION = (sys.argv[1] if len(sys.argv) > 1 else "main").lower()
+if EDITION not in ("main", "multi"):
+    EDITION = "main"
+
+
 def main():
     out = [HEAD]
     for tag, label in NAMES:
@@ -111,8 +128,12 @@ def main():
             out.append(ALIAS % (name, "true" if name == DEFAULT_ALIAS else "false",
                                 label, key, key))
     out.append(TAIL)
+    # 多通道版最终包名是 com.henry.appmanager.multi（aapt2 rename），
+    # provider 的 authority 是字面量、不会被 rename 重写，所以在这里就按版本拼好。
+    pkg = "com.henry.appmanager" + (".multi" if EDITION == "multi" else "")
+    body = "".join(out).replace("__SHIZUKU_AUTHORITY__", pkg + ".shizuku")
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
-        f.write("".join(out))
+        f.write(body)
     print("manifest ok  aliases=%d  default=%s" % (len(NAMES) * len(KEYS), DEFAULT_ALIAS))
 
 

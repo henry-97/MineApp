@@ -202,6 +202,11 @@ public class AdbService {
      *              写命令绝不能重试，否则可能重复执行。
      */
     private String sh(String cmd, int timeoutMs, boolean retry) throws Exception {
+        // 多通道版选了 Shizuku 通道且已授权 → 不碰 ADB，直接经 Shizuku 执行。
+        // 这样手机重启后不必再 `adb tcpip 5555`，也不需要 root。
+        if (ShizukuShell.active()) {
+            return ShizukuShell.run(cmd, timeoutMs);
+        }
         synchronized (lock) {
             try {
                 return exec(cmd, timeoutMs, false);
@@ -262,6 +267,9 @@ public class AdbService {
     }
 
     private String shLong(String cmd) throws Exception {
+        if (ShizukuShell.active()) {
+            return ShizukuShell.run(cmd, 0);
+        }
         synchronized (longLock) {
             if (longConn == null || !longConn.isConnected()) {
                 if (longConn != null) {
@@ -284,6 +292,13 @@ public class AdbService {
 
     /** 对应早期 Python 服务端的 adb_state：返回 ok / unauthorized / disconnected。 */
     public String state() {
+        // Shizuku 通道下没有 ADB 连接是正常的：只要拿到 binder 且已授权就是「可用」，
+        // 否则界面会一直挂「调试未连接」（用户反馈的实际问题）。
+        if (ShizukuShell.enabled) {
+            // binder 可能还没送达（冷启动瞬间），给它 1.5 秒，别一上来就判死
+            boolean ready = ShizukuShell.alive() || ShizukuShell.waitAlive(1500);
+            if (ready && ShizukuShell.granted()) return "ok";
+        }
         synchronized (lock) {
             try {
                 conn();

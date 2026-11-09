@@ -2,8 +2,8 @@
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="159"
-    android:versionName="3.9.7">
+    android:versionCode="160"
+    android:versionName="3.9.8">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -27,6 +27,17 @@
         <meta-data
             android:name="moe.shizuku.client.V3_SUPPORT"
             android:value="true" />
+
+        <!-- 🔴 必须声明这个 provider：Shizuku 是通过它把 binder 交给客户端的。
+             不声明的话 pingBinder() 恒为 false —— 表现为「Shizuku 里已授权，
+             但 App 一直说 Shizuku 未运行」，PC 端授权了也会显示「调试未连接」。 -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="com.henry.appmanager.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
         <activity
             android:name="com.henry.appmanager.MainActivity"
