@@ -392,7 +392,7 @@ Either channel removes the need for `adb tcpip 5555`, and it survives a reboot.
 The multi-channel edition is published under its own `multi-v*` tag; the two channels never
 overwrite each other.
 
-Notes:
+Attribution:
 
 - **Third-party component**: this repository as a whole is GPL-3.0 (see the root `LICENSE`);
   `ext-lsposed/` is an independent work by its author — use of it is subject to that licence.
