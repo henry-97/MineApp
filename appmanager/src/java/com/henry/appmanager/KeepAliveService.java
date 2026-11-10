@@ -171,18 +171,20 @@ public class KeepAliveService extends Service {
             if (b == null) {
                 text = "调试未连接";
             } else {
-                // 电池整段都塞进标题行，格式与主界面完全一致：
-                // `电池 良好 · 健康87% · 29.4℃`
-                // 正文只留「内存 + 归档/限制」，整体高度从 3 行压到 2 行
+                // 电池整段都塞进标题行。文案刻意压短：
+                // 原来「电池 良好 · 健康97% · 34℃」在某些机型上宽度不够，
+                // 缩小字号后仍差一个「℃」放不下（实测 400px 宽的通知卡就是这么挤）。
+                // 现在去掉健康词、把「电池健康」连写，`Mine App · 电池健康 97% · 34℃`
+                // 比原来少 5 个字符，小幅度的机型差异也能兜住。
                 String ht = b.optString("health_text", "");
                 int hpct = b.optInt("health_pct", 0);
                 double temp = b.optDouble("temp", 0);
 
                 StringBuilder head = new StringBuilder();
-                if (!ht.isEmpty()) head.append("电池 ").append(ht);
                 if (hpct > 0) {
-                    if (head.length() > 0) head.append(" · ");
-                    head.append("健康").append(hpct).append('%');
+                    head.append("电池健康 ").append(hpct).append('%');
+                } else if (!ht.isEmpty()) {
+                    head.append("电池").append(ht);      // 读不到百分比时退回文字描述
                 }
                 if (temp > 0) {
                     if (head.length() > 0) head.append(" · ");
@@ -190,16 +192,13 @@ public class KeepAliveService extends Service {
                 }
                 if (head.length() > 0) title += " · " + head;
 
+                // 正文只留内存占用百分比（不再带 x.x/y.yG 和括号），
+                // 这样「内存 61%　归档 3 · 限制 0」怎么都放得下。
                 StringBuilder sb = new StringBuilder();
-                long totalKb = s.optLong("mem_total", 0);
-                long availKb = s.optLong("mem_avail", 0);
-                if (totalKb > 0) {
-                    double g = 1024.0 * 1024.0;
+                double memPct = s.optDouble("mem_pct", -1);
+                if (memPct >= 0) {
                     sb.append("内存 ")
-                      .append(String.format(java.util.Locale.US, "%.1f/%.1fG",
-                              (totalKb - availKb) / g, totalKb / g))
-                      .append(String.format(java.util.Locale.US, " (%.1f%%)",
-                              s.optDouble("mem_pct", 0)));
+                      .append(String.format(java.util.Locale.US, "%.0f%%", memPct));
                 }
                 if (sb.length() > 0) sb.append("　");
                 sb.append("归档 ").append(cachedArchived < 0 ? 0 : cachedArchived);
@@ -251,9 +250,14 @@ public class KeepAliveService extends Service {
         // 观感与 App 主界面的「电池 良好 · 健康87% · 29.9℃」保持一致。
         // 注意：不能改用自定义 RemoteViews —— HyperOS 会把带自定义视图的通知
         // 收进「更多通知」分区，主通知栏里就看不到了。
+        //
+        // 🔴 不要在这里加 RelativeSizeSpan 缩字号：试过，字号是变小了，
+        //    但字距仍按原字号排，看着「间距被拉开」，反而不舒服；
+        //    而且缩小后照样差一个字符放不下。宽度问题改用缩短文案解决。
         android.text.SpannableString st = new android.text.SpannableString(title);
         st.setSpan(new android.text.style.TypefaceSpan("sans-serif"),
                 0, st.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
         b.setContentTitle(st)
                 .setContentText(text)
                 .setStyle(new Notification.BigTextStyle().bigText(text))
