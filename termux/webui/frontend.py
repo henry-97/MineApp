@@ -547,8 +547,6 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="setrow" id="szRow" style="gap:8px;margin:12px 0 0;align-items:center;display:none">
       <div class="setrow-lb" data-t="szTitle" style="width:auto;flex:none;white-space:nowrap;line-height:1.4">Shizuku 授权</div>
       <span id="szState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
-      <!-- 说明并到同一行右端，只留一句：原来那三行太长，占掉半个页面 -->
-      <span id="szNote" data-t="szNote" style="margin-left:auto;flex:none;font-size:11.5px;color:var(--ink3);white-space:nowrap;display:none">先启动 Shizuku 再点授权</span>
       <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 14px;flex:none;margin-left:6px">授权</button>
     </div>
 
@@ -785,7 +783,6 @@ var I18N = {
     chanTitle: '执行通道',
     chanNote: '选择 ADB/Shizuku 时不会申请 root',
     szTitle: 'Shizuku 授权', szAsk: '授权', szOk: '已授权', szOff: 'Shizuku 未运行', szNoPerm: '未授权',
-    szNote: '先启动 Shizuku 再点授权',
     szNotRunning: 'Shizuku 没在运行：请先打开 Shizuku App，用「无线调试启动」或「root 启动」把它跑起来',
     szAskFail: '申请授权失败，请确认 Shizuku 已启动后重试',
     szGranted: '已获得 Shizuku 授权', szWait: '请在 Shizuku 的弹框里点「允许」',
@@ -953,7 +950,6 @@ var I18N = {
     chanTitle: 'Execution channel',
     chanNote: 'No root is requested for ADB / Shizuku',
     szTitle: 'Shizuku permission', szAsk: 'Grant', szOk: 'Granted', szOff: 'Shizuku not running', szNoPerm: 'Not granted',
-    szNote: 'Start Shizuku first, then tap Grant',
     szNotRunning: 'Shizuku is not running — open the Shizuku app and start it via wireless debugging or root',
     szAskFail: 'Permission request failed; make sure Shizuku is running and retry',
     szGranted: 'Shizuku permission granted', szWait: 'Tap Allow in the Shizuku dialog',
@@ -1219,8 +1215,6 @@ function renderShizuku(){
     .then(function(d){
       if (!d || !d.ok || d.multi === false){ row.style.display = 'none'; return; }
       row.style.display = 'flex';
-      var note = document.getElementById('szNote');
-      if (note) note.style.display = '';
       var st = document.getElementById('szState');
       var btn = document.getElementById('szBtn');
       var alive = !!d.alive, granted = !!d.granted;
