@@ -116,6 +116,38 @@ public class Bridge {
 
     private interface Task { String run() throws Exception; }
 
+    /**
+     * 纯网络任务（目前只有「检查更新」）专用线程池。
+     *
+     * 🔴 检查更新只发 HTTP 请求、完全不碰 ADB，如果跟列表刷新一起排 worker 单线程，
+     *    前台正好在刷列表（采 PSS 要好几秒甚至几十秒）时，点「检查」会一直没反应 ——
+     *    用户看到的就是「检查更新卡住了」。给它一条独立通道即可。
+     */
+    private final ExecutorService netExec = Executors.newSingleThreadExecutor();
+
+    private void dispatchNet(final int id, final Task task) {
+        netExec.execute(new Runnable() {
+            @Override
+            public void run() {
+                String json;
+                try {
+                    json = task.run();
+                } catch (Throwable e) {
+                    android.util.Log.w("Bridge", "网络任务失败: " + e, e);
+                    json = "{\"ok\":false,\"msg\":\"" + e + "\"}";
+                }
+                final String payload = JSONObject.quote(json);
+                main.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        web.evaluateJavascript(
+                                "window.__bridgeResult(" + id + "," + payload + ")", null);
+                    }
+                });
+            }
+        });
+    }
+
     /** 与 dispatch 相同，只是跑在 heavy 线程池上，不阻塞普通请求 */
     private void dispatchLoc(final int id, final Task task) {
         locExec.execute(new Runnable() {
@@ -3092,7 +3124,8 @@ public class Bridge {
 
     @JavascriptInterface
     public void update(int id, String arg) {
-        dispatch(id, new Task() {
+        // 走独立线程：纯 HTTP，不该被「刷新列表」那种重活堵住
+        dispatchNet(id, new Task() {
             @Override
             public String run() {
                 java.net.HttpURLConnection c = null;
@@ -3103,8 +3136,12 @@ public class Bridge {
                             "https://api.github.com/repos/henry-97/MineApp"
                             + "/releases?per_page=30");
                     c = (java.net.HttpURLConnection) u.openConnection();
-                    c.setConnectTimeout(8000);
-                    c.setReadTimeout(8000);
+                    // 这两个超时是 socket 层的：只在 connect / read 时计时，
+                    // 排队等待（哪怕在队列里排了几十秒）根本不进这个计时器，
+                    // 所以「前台刷列表导致检查更新超时」不会发生。
+                    // 给 15 秒是因为 GitHub 走代理偶尔会慢，8 秒偏紧。
+                    c.setConnectTimeout(15000);
+                    c.setReadTimeout(15000);
                     c.setRequestProperty("Accept", "application/vnd.github+json");
                     c.setRequestProperty("User-Agent", "MineApp");
                     int code = c.getResponseCode();
