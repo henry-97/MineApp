@@ -149,7 +149,7 @@ outline:none;-webkit-appearance:none}
 /* 🔴 必须显式覆盖 min-height / font-size / font-weight / padding：
    全局 button 是 min-height:52px、font-size:16px、padding:14px 20px（给大按钮用的），
    只写 padding 和字号会让按钮被撑到 52px 高，跟 32px 的输入框严重不协调 */
-#portSave{height:32px;min-height:32px;padding:0 14px;font-size:13px;font-weight:400;
+#portSave{height:32px;min-height:32px;padding:0 14px;font-size:13px;font-weight:500;
 line-height:1;border-radius:8px;border:0.5px solid var(--line);
 background:var(--card);color:var(--ink);cursor:pointer}
 #portSave:active{background:var(--bg)}
@@ -294,7 +294,7 @@ border-top:0.5px solid var(--line);padding:10px 18px calc(10px + env(safe-area-i
 #milletMem{margin-left:auto;flex:none;font-size:13px;color:var(--ink3);
 line-height:1.4;text-align:right}
 #milletMem b{color:var(--ink2);font-weight:600}
-.mclear{flex:none;min-height:34px;padding:0 14px;font-size:14px;font-weight:400;
+.mclear{flex:none;min-height:34px;padding:0 14px;font-size:14px;font-weight:500;
 border-radius:10px;background:var(--bg);color:var(--ink);border:0.5px solid var(--line)}
 button{border:0;border-radius:12px;padding:14px 20px;font-size:16px;font-weight:500;min-height:52px;
 font-family:inherit;cursor:pointer;white-space:nowrap}
@@ -371,10 +371,12 @@ box-shadow:0 0 0 0.5px rgba(0,0,0,.12)}
 .icon-cell span{font-size:11px;color:var(--ink3);line-height:1}
 .icon-cell.on{border-color:#0f6e56}
 .icon-cell.on span{color:#0f6e56;font-weight:600}
-/* 分段按钮与 .edit 完全对齐：同字号(15px)、同高(28px) */
+/* 分段按钮与 .edit 完全对齐：同字号(15px)、同高(28px)、同字重(500)。
+   🔴 字重以前是 400、选中态 500，而「开始/检查」那类 .edit 继承全局 button 的 500，
+   于是同一屏里有的粗有的细，同一行里选中和未选中也不一样粗。现在统一 500。 */
 .seg{flex:1;background:var(--card);border:0.5px solid var(--line);border-radius:8px;
-padding:0;font-size:15px;color:var(--ink2);min-height:28px;font-weight:400}
-.seg.on{background:#0f6e56;color:#fff;border-color:#0f6e56;font-weight:500}
+padding:0;font-size:15px;color:var(--ink2);min-height:28px;font-weight:500}
+.seg.on{background:#0f6e56;color:#fff;border-color:#0f6e56}
 .tag.w{background:#faeeda;color:#854f0b}
 /* 白名单：排在「已限制」上方，单独一个胶囊 */
 .tag.b{background:#e3f0eb;color:#0f6e56}
