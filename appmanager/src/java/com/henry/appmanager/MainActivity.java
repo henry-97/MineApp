@@ -158,8 +158,9 @@ public class MainActivity extends Activity {
 
         setContentView(web, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        // decorView 已挂载，此时才能安全设置系统栏外观
-        applyBarAppearance();
+        // decorView 已挂载，此时才能安全设置系统栏外观。
+        // 先按浅色铺底；前端 applyTheme() 会在脚本跑起来后立刻纠正（深色主题会调 setnight）。
+        applyBarAppearance(getWindow(), false);
         web.loadUrl("file:///android_asset/index.html");
 
         // 应用装/卸/更新后，AOT 记录会因 versionCode 变化而失效 —— 主动重拉一次，
@@ -225,18 +226,45 @@ public class MainActivity extends Activity {
         w.setNavigationBarColor(Color.TRANSPARENT);
     }
 
-    /** 深色图标（浅色栏），需在 decorView 挂载后调用。 */
-    private void applyBarAppearance() {
-        Window w = getWindow();
+    /**
+     * 系统栏外观：dark=true 时底色变深、图标转白；false 时浅底黑字。
+     *
+     * 🔴 以前这里只下 LIGHT 位（图标颜色），底色始终由系统/窗口背景决定，
+     *    所以页面切到深色后顶上仍是一条浅色状态栏（两个版本都有）。
+     *    现在底色和图标一起跟着主题走，改由前端 applyTheme() 通过 Bridge.setnight 驱动。
+     */
+    static void applyBarAppearance(Window w, boolean dark) {
+        if (w == null) return;
+        // 深色用页面同一套底色（--bg:#141413），浅色用 --bg:#faf9f6
+        int bg;
+        try {
+            bg = Color.parseColor(dark ? "#141413" : "#FAF9F6");
+        } catch (Throwable e) {
+            bg = dark ? 0xFF141413 : 0xFFFAF9F6;
+        }
+        try {
+            // Android 12/14 上直接生效；Android 15 起系统接管会忽略这两行，
+            // 所以下面再把窗口底色一并换掉做兜底。
+            w.setStatusBarColor(bg);
+            w.setNavigationBarColor(bg);
+        } catch (Throwable ignored) { }
+        try {
+            // 系统栏透明时透出的是 decorView 背景，这里必须一起改，
+            // 否则深色主题下栏区仍是浅色（正是用户看到的现象）
+            w.getDecorView().setBackgroundColor(bg);
+        } catch (Throwable ignored) { }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             WindowInsetsController ic = w.getInsetsController();
             if (ic != null) {
                 int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                         | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-                ic.setSystemBarsAppearance(mask, mask);
+                // 深色底 → 清掉 LIGHT 位，图标变白
+                ic.setSystemBarsAppearance(dark ? 0 : mask, mask);
             }
         } else {
-            w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            w.getDecorView().setSystemUiVisibility(
+                    dark ? 0 : View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
     }
 

@@ -43,6 +43,7 @@ public class Bridge {
     public Bridge(AdbService service, WebView web) {
         this.service = service;
         this.web = web;
+        initChannelOnce();      // 仅首次安装时自动判定，之后尊重用户选择
         syncChannel();
         // 通知栏那个「停止」按钮按下来时，走广播把两个停止标志立起来。
         // 光靠「前台不是桌面就停」不够：用户只是想滑动桌面看看、或者把图标拖一下，
@@ -1535,10 +1536,8 @@ public class Bridge {
         // root 直读是多通道版的专有能力：普通版只走「无障碍 + 逐页遍历」。
         // 两个版本编译的是同一份源码，只能靠包名区分。
         if (!isMulti()) return null;
-        // 用户在「执行通道」里明确选了 ADB / Shizuku 时，不碰 su
-        String chan = web.getContext().getSharedPreferences("app", 0)
-                .getString("execChannel", "auto");
-        if ("adb".equals(chan) || "shizuku".equals(chan)) return null;
+        // 只有明确选「Root」通道才碰 su。默认通道是 ADB，按承诺不申请 root
+        if (!"root".equals(execChannel())) return null;
         String dst = null;
         try {
             android.content.Context ctx = web.getContext();
@@ -2815,25 +2814,64 @@ public class Bridge {
     }
 
     /**
-     * 把「执行通道」偏好同步给 ShizukuShell。
+     * 读「执行通道」偏好，并归一化成 adb / root / shizuku 三选一。
      *
-     * 🔴 「自动」必须也算启用 Shizuku —— 用户反馈「PC 授权了、Shizuku 也授权了，
-     *    还是显示调试未连接」的根因就在这里：以前只有显式选 Shizuku 才置 enabled，
-     *    选了「自动」就死等 ADB，明明 Shizuku 已授权也用不上。
+     * 4.0.1 起去掉了「自动」：它语义含糊（到底走哪条说不清），而且作为默认值
+     * 容易让人以为「已经能用了」，实际什么都没发生。现在默认 ADB，
+     * 想用 Shizuku / Root 自己选，界面上一眼就能看出当前走的是哪条。
      *
-     * 「自动」的正确语义是「能用就用」：Shizuku 已授权就优先走它，没授权时
-     * active() 里的 granted() 为 false，AdbService 自然回落到 ADB，不会误判。
-     * root 直读另有闸门（见 rootIndex()），不受这里影响。
+     * 老版本存下的 "auto"（以及任何未知值）一律按 ADB 处理。
      */
+    private String execChannel() {
+        String c = "adb";
+        try {
+            c = web.getContext().getSharedPreferences("app", 0)
+                    .getString("execChannel", "adb");
+        } catch (Throwable ignored) { }
+        return ("root".equals(c) || "shizuku".equals(c)) ? c : "adb";
+    }
+
+    /** 把「执行通道」偏好同步给各 Shell：Shizuku 与 Root 互斥，二者都不依赖 ADB */
     private void syncChannel() {
         try {
-            String c = web.getContext().getSharedPreferences("app", 0)
-                    .getString("execChannel", "auto");
-            ShizukuShell.enabled = isMulti()
-                    && ("shizuku".equals(c) || "auto".equals(c));
+            String c = execChannel();
+            ShizukuShell.enabled = isMulti() && "shizuku".equals(c);
+            RootShell.enabled = isMulti() && "root".equals(c);
         } catch (Throwable e) {
             ShizukuShell.enabled = false;
+            RootShell.enabled = false;
         }
+    }
+
+    /** 常见 su 路径，存在即认为设备已 root（不实际执行 su，避免弹授权框） */
+    private static boolean hasRootBinary() {
+        return RootShell.available();
+    }
+
+    /**
+     * 只在「首次安装并首次打开」时自动判定一次执行通道：
+     * 有 Shizuku → Shizuku，有 root → Root，都没有 → ADB。
+     *
+     * 🔴 判据是偏好里「有没有这个键」，而不是值：
+     *    - 用户手动选过 → 键存在，这里直接返回，绝不覆盖
+     *    - 覆盖更新   → 键仍在，保持用户原来的选择
+     *    - 卸载重装   → 数据清空，重新判定一次
+     * 
+     * 以前把默认值写死成 ADB，导致 Shizuku/root 用户装完还要自己去设置里找，
+     * 属于「默认值没帮上忙」。
+     */
+    private void initChannelOnce() {
+        try {
+            android.content.SharedPreferences sp =
+                    web.getContext().getSharedPreferences("app", 0);
+            if (sp.contains("execChannel")) return;      // 判定过 / 用户选过，不再插手
+            String c = "adb";
+            // 冷启动瞬间 binder 可能还没送到，给它 600ms；毕竟只判这一次
+            if (ShizukuShell.alive() || ShizukuShell.waitAlive(600)) c = "shizuku";
+            else if (hasRootBinary()) c = "root";
+            sp.edit().putString("execChannel", c).apply();
+            android.util.Log.i("Bridge", "首次安装自动选择通道: " + c);
+        } catch (Throwable ignored) { }
     }
 
     /** 申请 Shizuku 授权：Shizuku App 会弹「是否允许本应用使用 Shizuku」 */
@@ -2884,70 +2922,107 @@ public class Bridge {
         });
     }
 
-    /** 执行通道现状：auto / root / adb / shizuku */
-    @JavascriptInterface
-    public void chanstate(int id, String arg) {
-        dispatch(id, new Task() {
-            @Override public String run() {
-                JSONObject o = new JSONObject();
+    /** 直接回结果，不排队（给毫秒级的偏好类接口用） */
+    private void replyNow(final int id, final String json) {
+        main.post(new Runnable() {
+            @Override public void run() {
                 try {
-                    o.put("ok", true);
-                    o.put("multi", isMulti());
-                    o.put("chan", web.getContext().getSharedPreferences("app", 0)
-                            .getString("execChannel", "auto"));
-                } catch (Exception ignored) { }
-                return o.toString();
+                    web.evaluateJavascript("window.__bridgeResult(" + id + ","
+                            + JSONObject.quote(json) + ")", null);
+                } catch (Throwable ignored) { }
             }
         });
     }
 
-    /** 选择执行通道。只影响是否允许走 root，不影响 ADB/无障碍路径 */
+    /** 执行通道现状：root / shizuku / adb */
+    @JavascriptInterface
+    public void chanstate(int id, String arg) {
+        // 🔴 这里不能走 dispatch：dispatch 是单线程池，list（要采 PSS，好几秒）
+        //    排前面时，设置页的通道行会先空白一阵才冒出来（真实踩到过）。
+        //    本接口只读 SharedPreferences，微秒级，直接同步做完再回调。
+        JSONObject o = new JSONObject();
+        try {
+            o.put("ok", true);
+            o.put("multi", isMulti());
+            o.put("chan", execChannel());
+        } catch (Exception ignored) { }
+        replyNow(id, o.toString());
+    }
+
+    /** 选择执行通道。只影响走哪条 shell 路径，不影响 ADB/无障碍读取 */
     @JavascriptInterface
     public void setchan(final int id, String arg) {
         final String v = arg == null ? "" : arg.trim();
-        dispatch(id, new Task() {
-            @Override public String run() {
-                JSONObject o = new JSONObject();
-                try {
-                    String c = ("root".equals(v) || "adb".equals(v) || "shizuku".equals(v))
-                            ? v : "auto";
-                    web.getContext().getSharedPreferences("app", 0)
-                            .edit().putString("execChannel", c).apply();
-                    syncChannel();          // 立即生效，不用重启 App
-                    o.put("ok", true);
-                    o.put("chan", c);
-                    o.put("shizuku", ShizukuShell.granted());
-                } catch (Exception ignored) { }
-                return o.toString();
-            }
-        });
+        JSONObject o = new JSONObject();
+        try {
+            String c = ("root".equals(v) || "shizuku".equals(v)) ? v : "adb";
+            web.getContext().getSharedPreferences("app", 0)
+                    .edit().putString("execChannel", c).apply();
+            syncChannel();          // 立即生效，不用重启 App
+            o.put("ok", true);
+            o.put("chan", c);
+            o.put("shizuku", ShizukuShell.granted());
+        } catch (Exception ignored) { }
+        replyNow(id, o.toString());
     }
 
     /** Shizuku 状态：服务是否在跑、本应用是否已获授权。仅多通道版使用 */
     @JavascriptInterface
     public void shizukustate(int id, String arg) {
-        dispatch(id, new Task() {
-            @Override public String run() {
-                JSONObject o = new JSONObject();
+        // 同 chanstate：只查 binder 和权限，毫秒级，不跟列表抢单线程
+        JSONObject o = new JSONObject();
+        try {
+            boolean alive = false, granted = false;
+            try {
+                alive = rikka.shizuku.Shizuku.pingBinder();
+                granted = alive && rikka.shizuku.Shizuku.checkSelfPermission()
+                        == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            } catch (Throwable ignored) { }
+            o.put("ok", true);
+            o.put("alive", alive);
+            o.put("granted", granted);
+            o.put("multi", isMulti());
+            o.put("chan", execChannel());
+        } catch (Exception ignored) { }
+        replyNow(id, o.toString());
+    }
+
+
+    /**
+     * 主题明暗同步：前端 applyTheme() 决定 html.dark 之后，把结果告诉系统，
+     * 让状态栏/手势条的图标跟着翻色。
+     *
+     * 🔴 不做这一步，深色界面顶上会一直顶一条浅色状态栏（两个版本都有）。
+     * 必须在主线程改 WindowInsetsController，所以走 main.post。
+     */
+    @JavascriptInterface
+    public void setnight(final int id, String arg) {
+        final boolean dark = "1".equals(arg) || "dark".equals(arg);
+        main.post(new Runnable() {
+            @Override public void run() {
+                boolean ok = true;
                 try {
-                    boolean alive = false, granted = false;
+                    android.content.Context c = web.getContext();
+                    // WebView 自己的底色也要跟着换：深色下过度滚动露出的那一条不能是白的
                     try {
-                        alive = rikka.shizuku.Shizuku.pingBinder();
-                        granted = alive && rikka.shizuku.Shizuku.checkSelfPermission()
-                                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                        web.setBackgroundColor(dark ? 0xFF141413 : 0xFFFAF9F6);
                     } catch (Throwable ignored) { }
-                    o.put("ok", true);
-                    o.put("alive", alive);
-                    o.put("granted", granted);
-                    o.put("multi", isMulti());
-                    o.put("chan", web.getContext().getSharedPreferences("app", 0)
-                            .getString("execChannel", "auto"));
-                } catch (Exception ignored) { }
-                return o.toString();
+                    if (c instanceof android.app.Activity) {
+                        MainActivity.applyBarAppearance(
+                                ((android.app.Activity) c).getWindow(), dark);
+                    } else {
+                        ok = false;
+                    }
+                } catch (Throwable e) {
+                    ok = false;
+                }
+                try {
+                    web.evaluateJavascript("window.__bridgeResult(" + id + ","
+                            + JSONObject.quote("{\"ok\":" + ok + "}") + ")", null);
+                } catch (Throwable ignored) { }
             }
         });
     }
-
 
     /** 跳到系统的无障碍设置页，让用户手动开启本服务。 */
     @JavascriptInterface

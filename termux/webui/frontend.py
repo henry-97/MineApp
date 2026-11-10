@@ -134,7 +134,9 @@ display:flex;align-items:center;justify-content:center;margin-top:1px}
 .info-step>span{flex:1;min-width:0}
 .info-step code{white-space:nowrap;display:inline-block;background:var(--bg);padding:1px 6px;border-radius:5px;
 font-family:ui-monospace,monospace;font-size:12px;color:var(--ink)}
-.info-note{font-size:12px;color:var(--ink3);line-height:1.65;margin-top:12px;
+/* 🔴 所有说明性灰字统一 11.5px：以前 .info-note 是 12px、.idx-note 是 11.5px，
+   同一屏里两种字号并排，肉眼能看出「这句比那句大一号」。 */
+.info-note{font-size:11.5px;color:var(--ink3);line-height:1.65;margin-top:12px;
 padding-top:10px;border-top:0.5px solid var(--line)}
 /* 自定义端口：默认只露一行「…点此设置」，点开才展开输入框 ——
    旧用户不点就永远看不到，避免打扰 */
@@ -181,7 +183,7 @@ font-weight:600;color:#fff;background:#0f6e56}
 .sheet-hd h2{display:flex;align-items:center;gap:5px}
 .sheet-hd h2 .i-dot{cursor:pointer;padding:2px 0}
 .panel-loading{padding:48px 16px;text-align:center;font-size:13px;color:var(--ink3);letter-spacing:.3px}
-.millet-note{font-size:12px;color:var(--ink3);line-height:1.6;background:var(--bg);
+.millet-note{font-size:11.5px;color:var(--ink3);line-height:1.6;background:var(--bg);
 margin:8px 16px 0;padding:9px 12px;border-radius:10px}
 .sheet-body{flex:1;overflow-y:auto;padding:8px 16px calc(16px + env(safe-area-inset-bottom))}
 .trow{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:0.5px solid var(--line)}
@@ -190,7 +192,8 @@ margin:8px 16px 0;padding:9px 12px;border-radius:10px}
 .trow.disabled{opacity:.45}
 .trow .tv{font-size:13px;color:var(--ink3);font-family:ui-monospace,monospace}
 .tsect{font-size:12px;color:var(--ink3);margin:18px 0 2px}
-.edit{flex:none;font-size:13px;min-height:30px;padding:0 14px;border-radius:8px;
+/* 所有按钮一套尺寸：字号 15px、高 28px。 */
+.edit{flex:none;font-size:15px;min-height:28px;padding:0 14px;border-radius:8px;
 background:var(--card);border:0.5px solid var(--line);color:var(--ink2)}
 .switch{position:relative;display:inline-block;width:38px;height:22px;flex:none}
 .switch input{display:none}
@@ -368,8 +371,9 @@ box-shadow:0 0 0 0.5px rgba(0,0,0,.12)}
 .icon-cell span{font-size:11px;color:var(--ink3);line-height:1}
 .icon-cell.on{border-color:#0f6e56}
 .icon-cell.on span{color:#0f6e56;font-weight:600}
-.seg{flex:1;background:var(--card);border:0.5px solid var(--line);border-radius:10px;
-padding:0;font-size:15px;color:var(--ink2);min-height:34px;font-weight:400}
+/* 分段按钮与 .edit 完全对齐：同字号(15px)、同高(28px) */
+.seg{flex:1;background:var(--card);border:0.5px solid var(--line);border-radius:8px;
+padding:0;font-size:15px;color:var(--ink2);min-height:28px;font-weight:400}
 .seg.on{background:#0f6e56;color:#fff;border-color:#0f6e56;font-weight:500}
 .tag.w{background:#faeeda;color:#854f0b}
 /* 白名单：排在「已限制」上方，单独一个胶囊 */
@@ -474,7 +478,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="setrow">
       <span class="setrow-lb" data-t="secTheme">主题</span>
       <div class="sortbar" id="themeBar">
-        <button class="seg" data-theme="auto" data-t="themeAuto">跟随系统</button>
+        <button class="seg" data-theme="auto" data-t="themeAuto">自动</button>
         <button class="seg" data-theme="light" data-t="themeLight">浅色</button>
         <button class="seg" data-theme="dark" data-t="themeDark">深色</button>
       </div>
@@ -482,7 +486,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="setrow">
       <span class="setrow-lb" data-t="secLang">语言</span>
       <div class="sortbar" id="langBar">
-        <button class="seg" data-lang="auto" data-t="langAuto">跟随系统</button>
+        <button class="seg" data-lang="auto" data-t="langAuto">自动</button>
         <button class="seg" data-lang="zh" data-t="langZh">中文</button>
         <button class="seg" data-lang="en" data-t="langEn">English</button>
       </div>
@@ -530,19 +534,21 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="idx-note" data-t="idxNote" data-html="1" style="margin:4px 0 0">遍历桌面建立应用位置索引，用于应用查找，可随时打断、续建。推荐无障碍路径，速度更快。</div>
 
 
-    <div class="setrow" id="chanRow" style="gap:12px;margin:14px 0 0;align-items:center;display:none">
-      <div class="setrow-lb" data-t="chanTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">执行通道</div>
+    <div class="setrow" id="chanRow" style="gap:8px;margin:14px 0 0;align-items:center;display:none">
+      <div class="setrow-lb" data-t="chanTitle" style="width:auto;flex:none;white-space:nowrap;line-height:1.4">执行通道</div>
       <span id="chanState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
+      <!-- 这行提示并到「执行通道」同行右端，省掉单独一行的高度 -->
+      <span id="chanNote" data-t="chanNote" style="margin-left:auto;flex:none;font-size:11.5px;color:var(--ink3);white-space:nowrap;display:none">选择 ADB/Shizuku 时不会申请 root</span>
     </div>
-    <div class="idx-note" id="chanNote" data-t="chanNote" data-html="1" style="margin:4px 0 0;display:none">仅多通道版提供。选择 Shizuku / ADB 时不会申请 root。</div>
     <div id="chanBtns" style="display:none;gap:8px;margin:8px 0 0;flex-wrap:wrap"></div>
 
-    <div class="setrow" id="szRow" style="gap:12px;margin:12px 0 0;align-items:center;display:none">
-      <div class="setrow-lb" data-t="szTitle" style="width:auto;flex:1;min-width:0;white-space:normal;line-height:1.4">Shizuku 授权</div>
+    <div class="setrow" id="szRow" style="gap:8px;margin:12px 0 0;align-items:center;display:none">
+      <div class="setrow-lb" data-t="szTitle" style="width:auto;flex:none;white-space:nowrap;line-height:1.4">Shizuku 授权</div>
       <span id="szState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
-      <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 14px;flex:none;margin-left:8px">授权</button>
+      <!-- 说明并到同一行右端，只留一句：原来那三行太长，占掉半个页面 -->
+      <span id="szNote" data-t="szNote" style="margin-left:auto;flex:none;font-size:11.5px;color:var(--ink3);white-space:nowrap;display:none">先启动 Shizuku 再点授权</span>
+      <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 14px;flex:none;margin-left:6px">授权</button>
     </div>
-    <div class="idx-note" id="szNote" data-t="szNote" data-html="1" style="margin:4px 0 0;display:none">先在手机上启动 Shizuku，再点「授权」，在弹框里允许本应用。</div>
 
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
       <span class="setrow-lb" id="updLabel" data-ver="__APP_VERSION__">v —</span>
@@ -745,8 +751,8 @@ var I18N = {
     rootNote: '以下项目需要 root，当前仅显示',
     rtName: '实时调度 RT', tempLimit: '温度限制阈值', bootMode: '开机默认模式', governor: 'CPU 调度器',
     settings: '设置', secName: '应用名称', secTheme: '主题', secLang: '语言',
-    themeAuto: '跟随系统', themeLight: '浅色', themeDark: '深色',
-    langAuto: '跟随系统', langZh: '中文', langEn: 'English',
+    themeAuto: '自动', themeLight: '浅色', themeDark: '深色',
+    langAuto: '自动', langZh: '中文', langEn: 'English',
     perfTip: '性能模式',
     perfNote: '「性能模式」不是费电开关 —— 它只是<b>解除主频上限</b>，并不会让 CPU 一直满血跑。前台活干得快，几秒就回落到低频，比被压着主频慢慢磨更省。<br>真正吃待机的是后台偷偷唤醒、联网、刷新。「省电 / 均衡」压主频，前台同样的事要跑更久、后台该醒还是醒，反而<b>又卡又费电</b>。<br>推荐组合：<b>性能模式 + 限制用不着的应用</b>。前台快、后台静，两头都省。',
     secTip: '显示界面提示', tipHelp: '控制界面上那些 ⓘ 提示要不要显示。', tipShow: '显示', tipHide: '隐藏',
@@ -775,10 +781,10 @@ var I18N = {
     secAgo: ' 秒前', minAgo: ' 分钟前', locating: '正在寻找应用（碰屏幕可停止）',
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
-    chanTitle: '执行通道', chanAuto: '自动',
-    chanNote: '仅多通道版提供。选择 Shizuku / ADB 时不会申请 root。',
+    chanTitle: '执行通道',
+    chanNote: '选择 ADB/Shizuku 时不会申请 root',
     szTitle: 'Shizuku 授权', szAsk: '授权', szOk: '已授权', szOff: 'Shizuku 未运行', szNoPerm: '未授权',
-    szNote: '先在手机上启动 Shizuku，再点「授权」，在弹框里允许本应用。授权后选 Shizuku 通道即可不再依赖 adb tcpip。',
+    szNote: '先启动 Shizuku 再点授权',
     szNotRunning: 'Shizuku 没在运行：请先打开 Shizuku App，用「无线调试启动」或「root 启动」把它跑起来',
     szAskFail: '申请授权失败，请确认 Shizuku 已启动后重试',
     szGranted: '已获得 Shizuku 授权', szWait: '请在 Shizuku 的弹框里点「允许」',
@@ -913,8 +919,8 @@ var I18N = {
     rootNote: 'The following need root and are read-only',
     rtName: 'Real-time scheduling', tempLimit: 'Temperature limits', bootMode: 'Default boot mode', governor: 'CPU governor',
     settings: 'Settings', secName: 'App name', secTheme: 'Theme', secLang: 'Language',
-    themeAuto: 'System', themeLight: 'Light', themeDark: 'Dark',
-    langAuto: 'System', langZh: '中文', langEn: 'English',
+    themeAuto: 'Auto', themeLight: 'Light', themeDark: 'Dark',
+    langAuto: 'Auto', langZh: '中文', langEn: 'English',
     perfTip: 'Performance',
     perfNote: "'Performance' sounds like a battery hog, but it isn't — it only <b>lifts the CPU's peak-frequency cap</b>; it does not pin the CPU at full tilt. Foreground work finishes in seconds and the CPU drops back down, which costs less than grinding along under a cap.<br>What actually drains a phone on standby is background apps waking, going online and refreshing. Battery-saver / balanced modes cap the CPU, so the foreground takes longer while the background keeps waking — <b>slower and just as thirsty</b>.<br>Our recommendation: <b>Performance + restrict the apps you don't need</b>. Fast foreground, quiet background — you save on both ends.",
     secTip: 'Show hints', tipHelp: 'Controls whether the little ⓘ hints are shown in the UI.', tipShow: 'Show', tipHide: 'Hide',
@@ -944,10 +950,10 @@ var I18N = {
     secAgo: 's ago', minAgo: 'm ago', locating: 'Looking for app (tap to stop)',
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
-    chanTitle: 'Execution channel', chanAuto: 'Auto',
-    chanNote: 'Multi-channel edition only. Choosing Shizuku or ADB means root is never requested.',
+    chanTitle: 'Execution channel',
+    chanNote: 'No root is requested for ADB / Shizuku',
     szTitle: 'Shizuku permission', szAsk: 'Grant', szOk: 'Granted', szOff: 'Shizuku not running', szNoPerm: 'Not granted',
-    szNote: 'Start Shizuku on the phone first, then tap Grant and allow this app. Once granted, the Shizuku channel no longer needs adb tcpip.',
+    szNote: 'Start Shizuku first, then tap Grant',
     szNotRunning: 'Shizuku is not running — open the Shizuku app and start it via wireless debugging or root',
     szAskFail: 'Permission request failed; make sure Shizuku is running and retry',
     szGranted: 'Shizuku permission granted', szWait: 'Tap Allow in the Shizuku dialog',
@@ -1133,10 +1139,26 @@ function renderIcons(){
   if (t) t.textContent = iconExpanded ? T('iconCollapse') : T('iconExpand');
 }
 
+var _mqDark = (window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null);
+
 function applyTheme(){
   var dark = themeMode === 'dark'
-    || (themeMode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    || (themeMode === 'auto' && _mqDark && _mqDark.matches);
   document.documentElement.classList.toggle('dark', dark);
+  // 系统状态栏 / 手势条跟着一起翻。只改页面不管栏的话，深色界面顶上会
+  // 一直顶一条浅色状态栏，沉浸感全无（两个版本以前都是这样）。
+  try {
+    fetch('/api/setnight', {method:'POST', headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({dark: dark ? 1 : 0})})
+      .catch(function(){});
+  } catch (e) { }
+}
+
+/* 「跟随系统」时用户在系统设置里切了深色，页面和状态栏要立刻跟上 */
+if (_mqDark) {
+  var _onSchemeChange = function(){ if (themeMode === 'auto') applyTheme(); };
+  if (_mqDark.addEventListener) _mqDark.addEventListener('change', _onSchemeChange);
+  else if (_mqDark.addListener) _mqDark.addListener(_onSchemeChange);
 }
 
 /* 无障碍读取通道：只显示状态 + 一个跳转按钮，开关本身必须用户去系统设置里打开 */
@@ -1154,19 +1176,21 @@ function renderChan(){
       if (!box) return;
       box.style.display = 'flex';
       box.innerHTML = '';
-      var cur = d.chan || 'auto';
-      var name = {auto: T('chanAuto'), root: 'Root', shizuku: 'Shizuku', adb: 'ADB'};
+      // 去掉「自动」：它的语义含糊（到底走哪条？），而且默认值让人以为已经能用了。
+      // 改成默认 ADB，想用 Shizuku 自己选，界面上一眼就清楚当前走的是什么。
+      var cur = d.chan || 'adb';
+      var name = {root: 'Root', shizuku: 'Shizuku', adb: 'ADB'};
       var label = document.getElementById('chanState');
       if (label) label.textContent = name[cur] || cur;
-      ['auto', 'root', 'shizuku', 'adb'].forEach(function(k){
+      ['adb', 'shizuku', 'root'].forEach(function(k){
         var b = document.createElement('button');
         b.className = 'edit';
         b.textContent = name[k];
         b.style.padding = '0 12px';
         if (k === cur) {
-          b.style.background = 'var(--ink)';
+          b.style.background = '#0f6e56';
           b.style.color = '#fff';
-          b.style.borderColor = 'var(--ink)';
+          b.style.borderColor = '#0f6e56';
         }
         b.onclick = function(){
           fetch('/api/setchan', {method:'POST', headers:{'Content-Type':'application/json'},

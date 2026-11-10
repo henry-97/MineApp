@@ -207,6 +207,11 @@ public class AdbService {
         if (ShizukuShell.active()) {
             return ShizukuShell.run(cmd, timeoutMs);
         }
+        // 选了 Root 通道 → 走本机 su，同样不依赖 ADB（以前只给 launcher.db 提权，
+        // 其余命令仍走 ADB，没连 ADB 时 Root 通道等于不可用）
+        if (RootShell.active()) {
+            return RootShell.run(cmd, timeoutMs);
+        }
         synchronized (lock) {
             try {
                 return exec(cmd, timeoutMs, false);
@@ -270,6 +275,9 @@ public class AdbService {
         if (ShizukuShell.active()) {
             return ShizukuShell.run(cmd, 0);
         }
+        if (RootShell.active()) {
+            return RootShell.run(cmd, 0);
+        }
         synchronized (longLock) {
             if (longConn == null || !longConn.isConnected()) {
                 if (longConn != null) {
@@ -286,8 +294,7 @@ public class AdbService {
     }
 
     /** 读命令：断线自动重连重试一次。 */
-    private String shR(String cmd) throws Exception {
-        return sh(cmd, 30000, true);
+    private String shR(String cmd) throws Exception {        return sh(cmd, 30000, true);
     }
 
     /** 对应早期 Python 服务端的 adb_state：返回 ok / unauthorized / disconnected。 */
@@ -300,6 +307,8 @@ public class AdbService {
             boolean ready = ShizukuShell.waitBinderOnce(1500);
             if (ready && ShizukuShell.granted()) return "ok";
         }
+        // Root 通道同样不依赖 ADB：su 存在即可用（首次调用会弹 Magisk 授权框）
+        if (RootShell.active()) return "ok";
         synchronized (lock) {
             try {
                 conn();
