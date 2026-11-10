@@ -1,4 +1,8 @@
-# Mine App 4.0.2
+# Mine App 4.0.2（多通道版）
+
+> **本版只发布多通道版**（`com.henry.appmanager.multi`）。
+> 标准版没有 Root 通道（`RootShell.enabled = isMulti() && ...`，标准版恒为 false），
+> 本次修复对它没有任何作用，功能与 4.0.1 完全一致，因此不单独发版。
 
 ## 修复
 
