@@ -28,29 +28,65 @@ final class RootShell {
 
     private RootShell() { }
 
+    /** 常见 su 路径，按优先级排列（Magisk 主要放 /system/bin，老 SuperSU 在 xbin） */
+    private static final String[] SU_PATHS = {
+            "/system/bin/su", "/system/xbin/su", "/sbin/su", "/su/bin/su",
+            "/system/sd/xbin/su", "/data/local/bin/su", "/data/local/xbin/su",
+    };
+
+    private static volatile String SU = null;
+    private static volatile boolean SU_RESOLVED = false;
+
     /**
-     * su 二进制是否存在。
+     * 解析 su 的绝对路径。
+     *
+     * 🔴 两个坑都要绕开：
+     *    1. 不能直接 `new ProcessBuilder("su", ...)` 依赖 PATH ——
+     *       实测 App 进程的 PATH 里没有 /system/xbin，su 明明装着，
+     *       也会报 `Cannot run program "su": error=13, Permission denied`。
+     *    2. 不能用 canExecute() 做筛选 —— SELinux 会把「权限位有 x」的
+     *       文件判成不可执行，明明 exists() 为真却 canExecute() 为假。
+     *       所以这里只用 exists() 挑路径，能不能跑交给实际执行去验证。
+     */
+    private static String resolveSu() {
+        if (SU_RESOLVED) return SU;
+        synchronized (RootShell.class) {
+            if (SU_RESOLVED) return SU;
+            for (String p : SU_PATHS) {
+                try {
+                    if (new File(p).exists()) {
+                        SU = p;
+                        SU_RESOLVED = true;
+                        return p;
+                    }
+                } catch (Throwable ignored) { }
+            }
+            SU = "su";              // 都没找到，最后交给 PATH 碰碰运气
+            SU_RESOLVED = true;
+            return SU;
+        }
+    }
+
+    /**
+     * su 二进制是否存在且可执行。
      *
      * 只看文件、不实际执行 —— 执行会弹 Magisk 授权框，不能拿来做探测。
-     * 覆盖 Magisk（/system/bin/su）、SuperSU（/system/xbin/su 等）常见位置。
      */
     static boolean available() {
         if (FAILED) return false;
-        String[] paths = {
-                "/system/bin/su", "/system/xbin/su", "/sbin/su", "/su/bin/su",
-                "/system/sd/xbin/su", "/data/local/bin/su", "/data/local/xbin/su",
-        };
-        for (String p : paths) {
-            try {
-                if (new File(p).exists()) return true;
-            } catch (Throwable ignored) { }
-        }
-        return false;
+        return !"su".equals(resolveSu());
     }
 
-    /** 现在这条命令该不该走 su */
+    /**
+     * 现在这条命令该不该走 su。
+     *
+     * 🔴 不拿 available() 当闸门：文件检测会因为「目录权限」误判 ——
+     *    实测某镜像里 /system/xbin 是 root:shell 0750，other 进不去目录，
+     *    new File("/system/xbin/su").exists() 直接返回 false，明明有 su 也用不上。
+     *    用户既然明确选了 Root 通道，就应该真去试一次；起不来再置 FAILED。
+     */
     static boolean active() {
-        return enabled && available();
+        return enabled && !FAILED;
     }
 
     private static final java.util.concurrent.atomic.AtomicInteger LOGGED =
@@ -63,12 +99,13 @@ final class RootShell {
      * 命令里带引号、重定向时会散架。
      */
     static String run(String cmd, int timeoutMs) throws Exception {
+        final String exe = resolveSu();
         if (LOGGED.getAndIncrement() < 5) {
-            android.util.Log.i("RootShell", "exec via su: " + cmd);
+            android.util.Log.i("RootShell", "exec via " + exe + ": " + cmd);
         }
         Process p;
         try {
-            p = new ProcessBuilder("su", "-c", cmd)
+            p = new ProcessBuilder(exe, "-c", cmd)
                     .redirectErrorStream(true)
                     .start();
         } catch (Exception e) {
@@ -96,7 +133,12 @@ final class RootShell {
             }
             t.join(300);
             synchronized (buf) {
-                return buf.toString("UTF-8");
+                String out = buf.toString("UTF-8");
+                if (LOGGED.get() < 8) {
+                    android.util.Log.i("RootShell", "  <- " + out.length() + "B: "
+                            + (out.length() > 100 ? out.substring(0, 100) : out).replace('\n', '|'));
+                }
+                return out;
             }
         } finally {
             try { p.destroy(); } catch (Throwable ignored) { }
