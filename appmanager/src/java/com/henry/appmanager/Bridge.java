@@ -3053,6 +3053,19 @@ public class Bridge {
         });
     }
 
+    /** 这个 Release 里有没有多通道版的 APK（文件名含 multi） */
+    private static boolean hasMultiAsset(JSONObject rel) {
+        org.json.JSONArray assets = rel.optJSONArray("assets");
+        if (assets == null) return false;
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject a = assets.optJSONObject(i);
+            if (a == null) continue;
+            String nm = a.optString("name", "").toLowerCase();
+            if (nm.endsWith(".apk") && nm.contains("multi")) return true;
+        }
+        return false;
+    }
+
     /**
      * 用户手动点了刷新 → 让常驻服务立刻补一次全量（电池健康 / 归档 / 限制），
      * 不用等 3 分钟的定时周期。
@@ -3177,9 +3190,14 @@ public class Bridge {
                     org.json.JSONArray arr = new org.json.JSONArray(
                             new String(bos.toByteArray(), "UTF-8"));
 
-                    // 按通道挑：主版本只认 v 开头（且跳过 multi- 与预发布），
-                    // 多通道版只认 multi-v 开头（**允许预发布** —— 它本来就该以
-                    // pre-release 发布，这样主版本的 /releases/latest 才不会被抢走）。
+                    // 按通道挑。
+                    //
+                    // 旧格式：标准版发 vX，多通道版发 multi-vX（两个独立 Release）。
+                    // 新格式：只发一个 vX，两个 APK 都挂在同一个 Release 下。
+                    //
+                    // 🔴 必须两种都认，否则切换格式的那一刻，装了旧版（只会找 multi-vX）
+                    //    的多通道用户就再也收不到更新了。先发这一版做桥接，之后的版本
+                    //    才可以只发单 Release。
                     JSONObject r = null;
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject x = arr.optJSONObject(i);
@@ -3191,6 +3209,20 @@ public class Bridge {
                         if (!multi && x.optBoolean("prerelease")) continue;
                         r = x;
                         break;
+                    }
+                    // 多通道版：没有 multi-vX 的 Release 时，回落到单 Release 格式。
+                    // 但要求那个 Release 里确实带 -multi.apk，避免拿到纯标准版的包。
+                    if (r == null && multi) {
+                        for (int i = 0; i < arr.length(); i++) {
+                            JSONObject x = arr.optJSONObject(i);
+                            if (x == null) continue;
+                            if (x.optBoolean("draft")) continue;
+                            String tg = x.optString("tag_name", "");
+                            if (!tg.toLowerCase().startsWith("v")) continue;   // 排除 multi-v
+                            if (!hasMultiAsset(x)) continue;
+                            r = x;
+                            break;
+                        }
                     }
                     o.put("ok", true);
                     if (r == null) {
@@ -3204,7 +3236,10 @@ public class Bridge {
                     String tag = r.optString("tag_name", "");
                     o.put("tag", tag);
                     // 清洗成可比大小的一般版本号：multi-v3.9.0 → 3.9.0，v3.9.0 → 3.9.0
-                    o.put("ver", tag.startsWith(prefix) ? tag.substring(prefix.length()) : tag);
+                    String ver = tag;
+                    if (ver.startsWith("multi-v")) ver = ver.substring("multi-v".length());
+                    else if (ver.startsWith("v") || ver.startsWith("V")) ver = ver.substring(1);
+                    o.put("ver", ver);
                     o.put("url", r.optString("html_url"));
                     o.put("name", r.optString("name"));
                     // 资产也要分开挑：主版本拿 MineApp-x.y.z.apk，
