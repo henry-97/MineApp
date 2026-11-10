@@ -688,7 +688,7 @@ var I18N = {
     agoNever: '24h 以上',
     bannerOff: '等待调试通道连接后即可刷新应用列表', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip {p}',
     bannerOffSafe: '已设置的归档与限制依然生效，待方便时再授权即可',
-    bannerUnauth: '等待授权', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
+    bannerUnauth: '确认授权中', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
     bannerOffline: '设备离线', bannerOfflineHint: '重新执行一次：adb tcpip {p}',
     bannerErr: '调试通道异常', bannerErrHint: '请按下方指引重新开启',
     bannerGuide: '查看操作指引 ›',
@@ -858,7 +858,7 @@ var I18N = {
     agoNever: '>24h',
     bannerOff: 'Waiting for the ADB channel — the list refreshes once connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip {p}',
     bannerOffSafe: 'Your archives and restrictions stay in effect — re-authorise whenever convenient',
-    bannerUnauth: 'Waiting for authorization', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
+    bannerUnauth: 'Authorizing…', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
     bannerOffline: 'Device offline', bannerOfflineHint: 'Run again: adb tcpip {p}',
     bannerErr: 'ADB channel error', bannerErrHint: 'Follow the guide below to re-enable',
     bannerGuide: 'Setup guide ›',
@@ -1910,9 +1910,11 @@ function load(force){
   if (state === 0 && el) el.textContent = T('loading');
 
   // 首次连接可能要在手机上点授权，几秒没回来就先提示用户去看手机
+  // 10 秒还没回来才提示「确认授权中」：
+  // 4 秒太急，正常拉一次列表（采 PSS）也可能超过 4 秒，会误报成卡在授权上。
   var authTimer = setTimeout(function(){
     if (state === 0 && el && el.textContent === T('loading')) el.textContent = T('bannerUnauth');
-  }, 4000);
+  }, 10000);
 
   fetch('/api/list?pss=1').then(function(r){ return r.json(); }).then(function(d){
     clearTimeout(authTimer);
