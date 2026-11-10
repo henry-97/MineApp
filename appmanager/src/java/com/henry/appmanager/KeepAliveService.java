@@ -200,7 +200,9 @@ public class KeepAliveService extends Service {
                     sb.append("内存 ")
                       .append(String.format(java.util.Locale.US, "%.0f%%", memPct));
                 }
-                if (sb.length() > 0) sb.append("　");
+                // 用「 · 」而不是全角空格：全角空格视觉上就是一段空白，
+                // 「内存 66%　归档 10」看着像两个字段黏在一起、少了分隔符。
+                if (sb.length() > 0) sb.append(" · ");
                 sb.append("归档 ").append(cachedArchived < 0 ? 0 : cachedArchived);
                 sb.append(" · 限制 ").append(cachedRestricted < 0 ? 0 : cachedRestricted);
                 text = sb.toString().trim();
