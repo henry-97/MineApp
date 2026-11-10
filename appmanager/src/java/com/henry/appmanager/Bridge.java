@@ -3054,6 +3054,21 @@ public class Bridge {
     }
 
     /**
+     * 用户手动点了刷新 → 让常驻服务立刻补一次全量（电池健康 / 归档 / 限制），
+     * 不用等 3 分钟的定时周期。
+     */
+    @JavascriptInterface
+    public void refreshstat(int id, String arg) {
+        boolean ok = true;
+        try {
+            KeepAliveService.requestRefreshNow();
+        } catch (Throwable e) {
+            ok = false;
+        }
+        replyNow(id, "{\"ok\":" + ok + "}");
+    }
+
+    /**
      * 主题明暗同步：前端 applyTheme() 决定 html.dark 之后，把结果告诉系统，
      * 让状态栏/手势条的图标跟着翻色。
      *

@@ -74,6 +74,7 @@ SHIM = r"""
     else if (url.indexOf('/api/shizukuask') === 0) p = call('shizukuask', '');
     else if (url.indexOf('/api/a11ysettings') === 0) p = call('a11ysettings', '');
     else if (url.indexOf('/api/setnight') === 0) p = call('setnight', body.dark ? '1' : '0');
+    else if (url.indexOf('/api/refreshstat') === 0) p = call('refreshstat', '');
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
     else if (url.indexOf('/api/opensetting') === 0) p = call('opensetting', String(body.k || ''));

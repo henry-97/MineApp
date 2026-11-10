@@ -40,7 +40,17 @@ public class KeepAliveService extends Service {
      * 加 4 条 pm/appops，高频下纯属浪费。
      */
     private static final long TICK_MS = 3000L;
-    private static final int FULL_EVERY = 20;
+    /** 全量刷新（电池健康 / 归档 / 限制）的间隔：亮屏 3 分钟、熄屏 30 分钟 */
+    private static final long FULL_GAP_ON_MS = 180000L;
+    private static final long FULL_GAP_OFF_MS = 1800000L;
+
+    /** 供 Bridge 触发「立即刷新」用；进程内静态引用，避免持有 Service 实例 */
+    private static volatile Handler sHandler;
+    private static volatile Runnable sTick;
+    /** 上次全量刷新的时刻；0 表示还没跑过，首轮强制全量 */
+    private volatile long lastFullAt = 0;
+    /** 用户手动点了刷新 → 下一轮强制全量，不看时间间隔 */
+    private static volatile boolean sForceFull = false;
 
     /** 上次全量刷新拿到的电池段与计数，小刷新时沿用 */
     private JSONObject cachedBattery;
@@ -73,32 +83,59 @@ public class KeepAliveService extends Service {
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    refresh(tickCount % FULL_EVERY == 0);
+                    long now = System.currentTimeMillis();
+                    // 全量刷新（电池健康 / 归档数 / 限制数）按**时间**判断，不跟 tick 次数挂钩：
+                    // 亮屏 3 分钟一次，熄屏 30 分钟一次。以前用 tickCount % 20，
+                    // 改间隔时周期会被一起放大，后台一度变成 5 分钟。
+                    boolean on = screenOn();
+                    long gap = on ? FULL_GAP_ON_MS : FULL_GAP_OFF_MS;
+                    // sForceFull：用户手动点了刷新，本轮必须全量，不看时间间隔
+                    boolean full = sForceFull || (lastFullAt == 0) || (now - lastFullAt >= gap);
+                    if (sForceFull) sForceFull = false;
+                    refresh(full);
+                    if (full) lastFullAt = now;
                     tickCount++;
+                    // 便于验证刷新频率：亮屏应约 3 秒一条，熄屏约 60 秒一条
+                    android.util.Log.d("KeepAlive", "tick full=" + full
+                            + " screen=" + on + " mem=" + LIVE_MEM_PCT + "%");
                     handler.postDelayed(tick, nextIntervalMs());
                 }
             }, "keepalive-refresh").start();
         }
     };
 
-    /**
-     * 下一次刷新的间隔 —— 后台能耗优先。
-     *
-     * 🔴 固定 3 秒在后台是纯浪费：屏幕黑着没人看通知，却还在不断读数据、
-     *    重建通知。按可见性分三档：
-     *    - 屏幕亮 + App 在前台：3 秒（用户在盯着看）
-     *    - 屏幕亮 + App 在后台：15 秒（通知栏可能被拉下来看）
-     *    - 屏幕熄灭：60 秒（没人看得到，只保持通知内容不彻底陈旧）
-     */
-    private long nextIntervalMs() {
-        boolean screenOn = true;
+    private boolean screenOn() {
         try {
             android.os.PowerManager pm =
                     (android.os.PowerManager) getSystemService(POWER_SERVICE);
-            if (pm != null) screenOn = pm.isInteractive();
-        } catch (Throwable ignored) { }
-        if (!screenOn) return 60000L;
-        return Bridge.FOREGROUND ? TICK_MS : 15000L;
+            return pm == null || pm.isInteractive();
+        } catch (Throwable e) {
+            return true;
+        }
+    }
+
+    /**
+     * 内存刷新间隔 —— 只看屏幕，不看 App 在不在前台。
+     *
+     * 亮屏时用户随时可能下拉通知栏看数字，3 秒一刷；熄屏没人看得到，降到 60 秒。
+     * （内存读的是 ActivityManager，不跑 shell，3 秒的代价本来就很小。）
+     */
+    private long nextIntervalMs() {
+        return screenOn() ? TICK_MS : 60000L;
+    }
+
+    /**
+     * 用户手动点了刷新 → 立刻补一次全量（电池/归档/限制），不用等 3 分钟。
+     * Bridge 通过静态入口调用，不持有 Service 实例，避免生命周期纠缠。
+     */
+    static void requestRefreshNow() {
+        Handler h = sHandler;
+        Runnable t = sTick;
+        if (h != null && t != null) {
+            sForceFull = true;          // 否则时间没到 3 分钟，这一轮还是会走轻量分支
+            h.removeCallbacks(t);
+            h.post(t);
+        }
     }
 
     @Override
@@ -113,6 +150,8 @@ public class KeepAliveService extends Service {
             public void line(String msg) { }
         });
         running = true;
+        sHandler = handler;
+        sTick = tick;
 
         // 屏幕亮起时立刻刷一次：熄灭期间是 60 秒才跑一轮，用户点亮屏幕后
         // 不应该还看到熄灭前的旧数字。
@@ -352,6 +391,8 @@ public class KeepAliveService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        sHandler = null;
+        sTick = null;
         handler.removeCallbacksAndMessages(null);
         try {
             if (screenOnReceiver != null) unregisterReceiver(screenOnReceiver);

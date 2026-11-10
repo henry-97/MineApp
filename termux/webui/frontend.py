@@ -2396,6 +2396,9 @@ document.getElementById('info').addEventListener('click', function(e){
 document.getElementById('btnRefresh').addEventListener('click', function(){
   if (busy) { toast('正在处理，请稍候'); return; }
   load(true);
+  // 同时让常驻服务立刻补一次全量：电池健康 / 归档数 / 限制数平时 3 分钟才刷，
+  // 用户手点了刷新就不该等 —— 后台跑一轮，通知栏那条也跟着更新
+  try { fetch('/api/refreshstat', {method:'POST'}).catch(function(){}); } catch (e) { }
 });
 
 /* 点电池信息看明细 */

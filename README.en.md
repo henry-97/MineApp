@@ -57,19 +57,34 @@ no Shizuku, no Ice Box, no Hail, no resident daemon, no extra permissions.
 
 ### Polling: minimal load, without letting the data go stale
 
-A resident tool is at risk of becoming the very thing it is meant to fix. Mine App splits its
-polling into two tiers:
+A resident tool is at risk of becoming the very thing it is meant to fix. Mine App's rule is
+**use a system API instead of a shell command, and run it as rarely as the data allows**:
 
-| Frequency | What is fetched | Why split this way |
+| Frequency | What is fetched | How |
 |---|---|---|
-| **Every 3 s** | A single `cat /proc/meminfo` — total and used memory | So cheap it is effectively free, yet enough to keep the memory picture live |
-| **Every 60 s** | Battery health, archive count, restriction count | These only change about once a minute, and cost `dumpsys battery` + `dumpsys batterystats` + four `pm`/`appops` calls — far heavier than meminfo, so only once a minute |
+| **Every 3 s while the screen is on / every 60 s while off** | Memory usage | `ActivityManager.MemoryInfo` — **no shell command at all** |
+| **Every 3 min while the screen is on / every 30 min while off** | Battery health, archive count, restriction count | `dumpsys battery` + `dumpsys batterystats` + four `pm` / `appops` calls |
 
-There is also a **manual refresh button**, for when you want the state right now instead of waiting
-for the next tick.
+Three notes:
 
-In short: **poll the lightest metric often, do the heavy work rarely** — minimal load on the device,
-with information that never goes stale.
+- **Memory no longer goes through a shell.** Earlier builds ran `cat /proc/meminfo` every 3 s — over
+  Shizuku / ADB that means forking a process every 3 s, which was the single biggest standby drain.
+  It now reads the same numbers from the system API, with zero process overhead.
+- **Frequency follows the screen, not the foreground state.** As long as the screen is on you may pull
+  down the notification shade at any moment, so memory refreshes every 3 s whether the app is in front
+  or not. When the screen is off nobody can see it, so it drops to 60 s. Turning the screen back on
+  triggers an immediate refresh — you never see a stale number.
+- **Heavy work stays rare.** Battery health and archive/restriction counts need `dumpsys` and `pm`,
+  so they run every 3 minutes on-screen and every 30 minutes off-screen.
+
+Turning the screen back on also refreshes immediately, so you will never be looking at pre-sleep numbers.
+
+There is also a **manual refresh button**: besides reloading the list, it forces an immediate full
+refresh of the notification's battery / archive / restriction figures, so you never wait for the
+timer.
+
+In short: **poll the lightest metric often, do the heavy work rarely, and do almost nothing with the
+screen off.**
 
 ### Compared to the usual options
 
@@ -108,7 +123,7 @@ with information that never goes stale.
 | **Per-app cleanup** | An **×** on every row runs `am kill` — clears background processes only. **Auto-start and enabled state are untouched**, so the next launch is a normal cold start. It also reports how much memory was actually freed |
 | **Real app names** | Resolved in two passes — launcher-activity labels, then application labels — so every installed app shows its real name instead of its package name |
 | **Batch actions** | Select many apps, then archive / restore / restrict / unrestrict in one go |
-| **Ongoing notification** | Battery health, memory usage and archive count in the status bar; memory ticks every 3 s, battery/counts every 60 s — barely any battery cost |
+| **Ongoing notification** | Battery health, memory usage and archive count in the status bar; memory reads a system API (no shell) every 3 s while the screen is on and 60 s while off, battery/counts every 3 min / 30 min — almost no standby cost |
 | **Appearance** | 6 icon sets (blocks / clover × green / gold / black), two app names, light & dark theme, Chinese & English |
 | **List cache** | The fetched list is cached locally; re-entering within a minute does not refetch |
 
