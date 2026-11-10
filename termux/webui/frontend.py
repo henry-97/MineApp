@@ -689,7 +689,6 @@ var I18N = {
     bannerOff: '等待调试通道连接后即可刷新应用列表', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip {p}',
     bannerOffSafe: '已设置的归档与限制依然生效，待方便时再授权即可',
     bannerUnauth: '等待授权', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
-    waitAuth: '刷新中，请稍后',
     bannerOffline: '设备离线', bannerOfflineHint: '重新执行一次：adb tcpip {p}',
     bannerErr: '调试通道异常', bannerErrHint: '请按下方指引重新开启',
     bannerGuide: '查看操作指引 ›',
@@ -860,7 +859,6 @@ var I18N = {
     bannerOff: 'Waiting for the ADB channel — the list refreshes once connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip {p}',
     bannerOffSafe: 'Your archives and restrictions stay in effect — re-authorise whenever convenient',
     bannerUnauth: 'Waiting for authorization', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
-    waitAuth: 'Refreshing, please wait…',
     bannerOffline: 'Device offline', bannerOfflineHint: 'Run again: adb tcpip {p}',
     bannerErr: 'ADB channel error', bannerErrHint: 'Follow the guide below to re-enable',
     bannerGuide: 'Setup guide ›',
@@ -1711,8 +1709,11 @@ function updateBanner(d){
     title = T('bannerErr');
     hint = T('bannerErrHint');
   }
+  // 「已设置的归档与限制依然生效」这句必须一直显示 ——
+  // 以前 unauthorized / error 时被条件排除了，而「刚装未授权」正好是 unauthorized，
+  // 用户最需要知道「不授权也不影响已经设好的东西」，却恰恰看不到这句。
   el.innerHTML = '<b>' + title + '</b><span class="fix">' + hint + '</span>'
-    + ((st === 'unauthorized' || st === 'error') ? '' : '<span class="safe">' + T('bannerOffSafe') + '</span>')
+    + '<span class="safe">' + T('bannerOffSafe') + '</span>'
     + '<span class="guide" id="bannerGuide">' + T('bannerGuide') + '</span>';
   el.style.display = 'flex';
   var g = document.getElementById('bannerGuide');
@@ -1910,7 +1911,7 @@ function load(force){
 
   // 首次连接可能要在手机上点授权，几秒没回来就先提示用户去看手机
   var authTimer = setTimeout(function(){
-    if (state === 0 && el && el.textContent === T('loading')) el.textContent = T('waitAuth');
+    if (state === 0 && el && el.textContent === T('loading')) el.textContent = T('bannerUnauth');
   }, 4000);
 
   fetch('/api/list?pss=1').then(function(r){ return r.json(); }).then(function(d){

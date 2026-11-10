@@ -157,8 +157,11 @@ public class AdbClient {
         boolean sentSig = false;
         boolean sentPub = false;
         while (true) {
-            // 等待用户点「允许」时可能耗时较久，超时放宽到 60 秒
-            socket.setSoTimeout(60000);
+            // 等用户点「允许」需要留点时间，但 60 秒太久 ——
+            // 弹窗没弹出来时（典型：adb tcpip 之后授权失效），
+            // 界面会一直转圈将近一分钟才肯说「未连接」，看着像卡死。
+            // 20 秒足够正常人找到手机并点一下。
+            socket.setSoTimeout(20000);
             Msg m;
             try {
                 m = read();
