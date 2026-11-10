@@ -3053,6 +3053,42 @@ public class Bridge {
         });
     }
 
+    /**
+     * tag 里的版本是否高于当前已安装版本。
+     * 例如 tag=multi-v4.5、prefix=multi-v、cur=4.4 → true。
+     * 解析不出来时保守返回 true（宁可让前端自己再比一次，也别漏掉更新）。
+     */
+    private static boolean newerThan(String tag, String prefix, String cur) {
+        if (cur == null || cur.length() == 0) return true;
+        if (!tag.startsWith(prefix)) return true;
+        return cmpVer(tag.substring(prefix.length()), cur) > 0;
+    }
+
+    /** 比较 "4.10" 与 "4.9"：按点分段转数字比，非数字尾巴直接忽略 */
+    private static int cmpVer(String a, String b) {
+        if (a == null) a = "";
+        if (b == null) b = "";
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        int n = Math.max(pa.length, pb.length);
+        for (int i = 0; i < n; i++) {
+            int x = numHead(i < pa.length ? pa[i] : "");
+            int y = numHead(i < pb.length ? pb[i] : "");
+            if (x != y) return x > y ? 1 : -1;
+        }
+        return 0;
+    }
+
+    /** 取字符串开头的数字："4beta" → 4，"9" → 9，无数字 → 0 */
+    private static int numHead(String s) {
+        int v = 0, i = 0;
+        while (i < s.length() && Character.isDigit(s.charAt(i))) {
+            v = v * 10 + (s.charAt(i) - '0');
+            i++;
+        }
+        return v;
+    }
+
     /** 这个 Release 里有没有多通道版的 APK（文件名含 multi） */
     private static boolean hasMultiAsset(JSONObject rel) {
         org.json.JSONArray assets = rel.optJSONArray("assets");
@@ -3198,6 +3234,12 @@ public class Bridge {
                     // 🔴 必须两种都认，否则切换格式的那一刻，装了旧版（只会找 multi-vX）
                     //    的多通道用户就再也收不到更新了。先发这一版做桥接，之后的版本
                     //    才可以只发单 Release。
+                    String curVer = "";
+                    try {
+                        curVer = web.getContext().getPackageManager()
+                                .getPackageInfo(web.getContext().getPackageName(), 0).versionName;
+                    } catch (Throwable ignored) { }
+
                     JSONObject r = null;
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject x = arr.optJSONObject(i);
@@ -3207,10 +3249,14 @@ public class Bridge {
                         if (!tg.startsWith(prefix)) continue;
                         if (!multi && tg.toLowerCase().startsWith("multi")) continue;
                         if (!multi && x.optBoolean("prerelease")) continue;
+                        // 🔴 多通道版还要排除「不比当前版本新」的旧 multi-v：
+                        //    否则历史上那个 multi-v4.4 永远命中，用户就再也看不到
+                        //    后来改用单 Release 格式发布的 v4.5（回落分支根本进不去）。
+                        if (multi && !newerThan(tg, "multi-v", curVer)) continue;
                         r = x;
                         break;
                     }
-                    // 多通道版：没有 multi-vX 的 Release 时，回落到单 Release 格式。
+                    // 多通道版：没有更新的 multi-vX 时，回落到单 Release 格式。
                     // 但要求那个 Release 里确实带 -multi.apk，避免拿到纯标准版的包。
                     if (r == null && multi) {
                         for (int i = 0; i < arr.length(); i++) {
@@ -3220,6 +3266,7 @@ public class Bridge {
                             String tg = x.optString("tag_name", "");
                             if (!tg.toLowerCase().startsWith("v")) continue;   // 排除 multi-v
                             if (!hasMultiAsset(x)) continue;
+                            if (!newerThan(tg, "v", curVer)) continue;
                             r = x;
                             break;
                         }
