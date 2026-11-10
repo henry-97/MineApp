@@ -3053,15 +3053,11 @@ public class Bridge {
         });
     }
 
-    /**
-     * tag 里的版本是否高于当前已安装版本。
-     * 例如 tag=multi-v4.5、prefix=multi-v、cur=4.4 → true。
-     * 解析不出来时保守返回 true（宁可让前端自己再比一次，也别漏掉更新）。
-     */
-    private static boolean newerThan(String tag, String prefix, String cur) {
-        if (cur == null || cur.length() == 0) return true;
-        if (!tag.startsWith(prefix)) return true;
-        return cmpVer(tag.substring(prefix.length()), cur) > 0;
+    /** 从 tag 里取版本号：v4.6 → 4.6，multi-v4.5 → 4.5，认不出来 → 空串 */
+    private static String verOfTag(String tag) {
+        if (tag.startsWith("multi-v")) return tag.substring("multi-v".length());
+        if (tag.startsWith("v") || tag.startsWith("V")) return tag.substring(1);
+        return "";
     }
 
     /** 比较 "4.10" 与 "4.9"：按点分段转数字比，非数字尾巴直接忽略 */
@@ -3089,15 +3085,22 @@ public class Bridge {
         return v;
     }
 
-    /** 这个 Release 里有没有多通道版的 APK（文件名含 multi） */
-    private static boolean hasMultiAsset(JSONObject rel) {
+    /**
+     * 这个 Release 里有没有指定通道的 APK。
+     *
+     * 多通道版只认文件名含 multi 的，标准版只认不含的 —— 这是防串包的最后一道闸：
+     * 最新版本如果只发了标准版包，多通道版会因这里返回 false 而显示「已是最新」，
+     * 绝不会退而求其次装成本标准版。
+     */
+    private static boolean hasAssetFor(JSONObject rel, boolean multi) {
         org.json.JSONArray assets = rel.optJSONArray("assets");
         if (assets == null) return false;
         for (int i = 0; i < assets.length(); i++) {
             JSONObject a = assets.optJSONObject(i);
             if (a == null) continue;
             String nm = a.optString("name", "").toLowerCase();
-            if (nm.endsWith(".apk") && nm.contains("multi")) return true;
+            if (!nm.endsWith(".apk")) continue;
+            if (nm.contains("multi") == multi) return true;
         }
         return false;
     }
@@ -3226,67 +3229,47 @@ public class Bridge {
                     org.json.JSONArray arr = new org.json.JSONArray(
                             new String(bos.toByteArray(), "UTF-8"));
 
-                    // 按通道挑。
+                    // 挑版本：不再按 tag 前缀找通道，改成「先找编号最新的 Release，
+                    // 再看里面有没有我这个通道的包」。
                     //
-                    // 旧格式：标准版发 vX，多通道版发 multi-vX（两个独立 Release）。
-                    // 新格式：只发一个 vX，两个 APK 都挂在同一个 Release 下。
-                    //
-                    // 🔴 必须两种都认，否则切换格式的那一刻，装了旧版（只会找 multi-vX）
-                    //    的多通道用户就再也收不到更新了。先发这一版做桥接，之后的版本
-                    //    才可以只发单 Release。
+                    // 4.6 起只发一个 vX 挂两个 APK，multi-vX 不会再出现，所以不需要
+                    // 「先找 multi-v、找不到再回落」那套了（那套还有个隐患：同时存在
+                    // multi-v4.6 和 v4.7 时会先命中较旧的 4.6）。
                     String curVer = "";
                     try {
                         curVer = web.getContext().getPackageManager()
                                 .getPackageInfo(web.getContext().getPackageName(), 0).versionName;
                     } catch (Throwable ignored) { }
 
-                    JSONObject r = null;
+                    JSONObject latest = null;
+                    String latestVer = "";
                     for (int i = 0; i < arr.length(); i++) {
                         JSONObject x = arr.optJSONObject(i);
                         if (x == null) continue;
                         if (x.optBoolean("draft")) continue;
-                        String tg = x.optString("tag_name", "");
-                        if (!tg.startsWith(prefix)) continue;
-                        if (!multi && tg.toLowerCase().startsWith("multi")) continue;
                         if (!multi && x.optBoolean("prerelease")) continue;
-                        // 🔴 多通道版还要排除「不比当前版本新」的旧 multi-v：
-                        //    否则历史上那个 multi-v4.4 永远命中，用户就再也看不到
-                        //    后来改用单 Release 格式发布的 v4.5（回落分支根本进不去）。
-                        if (multi && !newerThan(tg, "multi-v", curVer)) continue;
-                        r = x;
-                        break;
-                    }
-                    // 多通道版：没有更新的 multi-vX 时，回落到单 Release 格式。
-                    // 但要求那个 Release 里确实带 -multi.apk，避免拿到纯标准版的包。
-                    if (r == null && multi) {
-                        for (int i = 0; i < arr.length(); i++) {
-                            JSONObject x = arr.optJSONObject(i);
-                            if (x == null) continue;
-                            if (x.optBoolean("draft")) continue;
-                            String tg = x.optString("tag_name", "");
-                            if (!tg.toLowerCase().startsWith("v")) continue;   // 排除 multi-v
-                            if (!hasMultiAsset(x)) continue;
-                            if (!newerThan(tg, "v", curVer)) continue;
-                            r = x;
-                            break;
+                        String v = verOfTag(x.optString("tag_name", ""));
+                        if (v.length() == 0) continue;
+                        if (latest == null || cmpVer(v, latestVer) > 0) {
+                            latest = x;
+                            latestVer = v;
                         }
                     }
                     o.put("ok", true);
-                    if (r == null) {
-                        // 这个通道还没有发布过：当作「已是最新」，不要报错吓人
+                    // 条件不满足一律当「已是最新」，不报错、更不回退去找旧版本
+                    if (latest == null
+                            || cmpVer(latestVer, curVer) <= 0
+                            || !hasAssetFor(latest, multi)) {
                         o.put("tag", "");
                         o.put("ver", "");
                         o.put("url", "");
                         o.put("name", "");
                         return o.toString();
                     }
+                    JSONObject r = latest;
                     String tag = r.optString("tag_name", "");
                     o.put("tag", tag);
-                    // 清洗成可比大小的一般版本号：multi-v3.9.0 → 3.9.0，v3.9.0 → 3.9.0
-                    String ver = tag;
-                    if (ver.startsWith("multi-v")) ver = ver.substring("multi-v".length());
-                    else if (ver.startsWith("v") || ver.startsWith("V")) ver = ver.substring(1);
-                    o.put("ver", ver);
+                    o.put("ver", latestVer);
                     o.put("url", r.optString("html_url"));
                     o.put("name", r.optString("name"));
                     // 资产也要分开挑：主版本拿 MineApp-x.y.z.apk，

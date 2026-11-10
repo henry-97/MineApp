@@ -547,7 +547,8 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="setrow" id="szRow" style="gap:8px;margin:12px 0 0;align-items:center;display:none">
       <div class="setrow-lb" data-t="szTitle" style="width:auto;flex:none;white-space:nowrap;line-height:1.4">Shizuku 授权</div>
       <span id="szState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
-      <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 14px;flex:none;margin-left:6px">授权</button>
+      <!-- margin-left:auto 把它推到行末，与「应用查找」那行的「开始」按钮右对齐 -->
+      <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 14px;flex:none;margin-left:auto">授权</button>
     </div>
 
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
