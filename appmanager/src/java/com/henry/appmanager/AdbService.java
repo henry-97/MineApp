@@ -434,6 +434,27 @@ public class AdbService {
     }
 
     private long[] getMemInfo() throws Exception {
+        // 🔴 优先用系统 API 读内存：微秒级、不需要 shell。
+        //    以前这里跑 `cat /proc/meminfo`，而后台每 3 秒就要调一次 ——
+        //    走 Shizuku 时等于每 3 秒 fork 一个进程，是后台能耗的大头。
+        //    ActivityManager.MemoryInfo 读的是系统侧同一份数据，零进程开销。
+        try {
+            if (appCtx != null) {
+                android.app.ActivityManager am = (android.app.ActivityManager)
+                        appCtx.getSystemService(android.content.Context.ACTIVITY_SERVICE);
+                if (am != null) {
+                    android.app.ActivityManager.MemoryInfo mi =
+                            new android.app.ActivityManager.MemoryInfo();
+                    am.getMemoryInfo(mi);
+                    if (mi.totalMem > 0) {
+                        // 对外单位保持 KB，与原先 /proc/meminfo 的口径一致
+                        return new long[]{ mi.totalMem / 1024, mi.availMem / 1024 };
+                    }
+                }
+            }
+        } catch (Throwable ignored) { }
+
+        // 兜底：系统 API 拿不到时才退回 shell
         long total = 0, avail = 0;
         for (String line : shR("cat /proc/meminfo").split("\n")) {
             Matcher m = MEM_TOTAL.matcher(line);

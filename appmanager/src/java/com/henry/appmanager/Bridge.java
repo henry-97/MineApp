@@ -43,6 +43,8 @@ public class Bridge {
     public Bridge(AdbService service, WebView web) {
         this.service = service;
         this.web = web;
+        // 登记给 KeepAliveService 做内存推送用（Activity 重建时会被新实例覆盖）
+        LIVE_WEB = new java.lang.ref.WeakReference<WebView>(web);
         initChannelOnce();      // 仅首次安装时自动判定，之后尊重用户选择
         syncChannel();
         // 通知栏那个「停止」按钮按下来时，走广播把两个停止标志立起来。
@@ -2987,6 +2989,37 @@ public class Bridge {
         replyNow(id, o.toString());
     }
 
+
+    /**
+     * 主界面底部的实时内存 —— 由 KeepAliveService 主动推送，前端不轮询。
+     *
+     * KeepAliveService 每 3 秒查一次内存（通知栏本来就要查），刷新完顺手调
+     * {@link #pushMem} 把同一份数据推给页面。
+     * 这样「一条命令的结果」只算一次，通知和主界面同时更新，前端连定时器都不用挂。
+     *
+     * 用弱引用：Activity 被回收重建时不会拖住旧 WebView，新 Bridge 构造时会重新登记。
+     */
+    private static volatile java.lang.ref.WeakReference<WebView> LIVE_WEB = null;
+
+    /**
+     * App 是否在前台。后台时不再往 WebView 推内存 —— 界面根本看不见，
+     * 推了只是白白唤醒 JS 引擎。通知栏不受影响，那是 Service 自己直接 notify 的。
+     */
+    static volatile boolean FOREGROUND = false;
+
+    static void pushMem(final long total, final long avail, final double pct) {
+        if (!FOREGROUND) return;          // 后台：只更新通知栏，不推页面
+        final WebView w = (LIVE_WEB == null) ? null : LIVE_WEB.get();
+        if (w == null) return;
+        w.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    w.evaluateJavascript("window.__onMem&&window.__onMem("
+                            + total + "," + avail + "," + pct + ")", null);
+                } catch (Throwable ignored) { }
+            }
+        });
+    }
 
     /**
      * 主题明暗同步：前端 applyTheme() 决定 html.dark 之后，把结果告诉系统，

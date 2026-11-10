@@ -1645,17 +1645,23 @@ function showBatteryInfo(){
 
 function updateInfo(){
   var s = T2('infoSel', {n: keep.size, t: apps.length});
-  var mem = '';
-  if (memTotal) {
-    var ug = ((memTotal - memAvail) / 1048576).toFixed(1);
-    var tg = (memTotal / 1048576).toFixed(1);
-    var up = ((memTotal - memAvail) * 100.0 / memTotal).toFixed(1);
-    mem = T2('infoMem', {u: ug, g: tg, p: up});
-  }
   document.getElementById('info').innerHTML =
       '<span class="i-sel">' + s
     + (keep.size > 0 ? ' <span id="clearSel">' + T('clearSel') + '</span>' : '')
-    + '</span><span class="i-mem">' + mem + '</span>';
+    + '</span><span class="i-mem" id="infoMem"></span>';
+  updateMemOnly();
+}
+
+/* 只重画内存那一小段，不动「已选 N」和清除按钮 ——
+   否则每 3 秒重建一次 #info，用户正在点的按钮会被换掉。 */
+function updateMemOnly(){
+  var el = document.getElementById('infoMem');
+  if (!el) return;
+  if (!memTotal){ el.innerHTML = ''; return; }
+  var ug = ((memTotal - memAvail) / 1048576).toFixed(1);
+  var tg = (memTotal / 1048576).toFixed(1);
+  var up = ((memTotal - memAvail) * 100.0 / memTotal).toFixed(1);
+  el.innerHTML = T2('infoMem', {u: ug, g: tg, p: up});
 }
 
 /* 底部按钮可用性：按「勾选了哪些应用」判断，把没意义的操作置灰。
@@ -3140,6 +3146,17 @@ applyName();
 applyTheme();
 applyTip();
 applyLang();
+
+/* 底部内存由原生侧主动推过来：KeepAliveService 每 3 秒查一次内存（通知栏本来就要查），
+   查完直接调这个函数，不再让前端挂定时器轮询 —— 一条命令的结果两处共用。 */
+window.__onMem = function(total, avail, pct){
+  if (!total) return;
+  memTotal = total;
+  memAvail = avail || 0;
+  memPct = pct || 0;
+  updateMemOnly();
+};
+
 /* Termux 版没有 Java 桥，图标选择器无从落地，整段（标题 + 展开 + 网格）一起藏掉 */
 if (!HAS_BRIDGE) {
   ['iconSec', 'iconGrid'].forEach(function(id){

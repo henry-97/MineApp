@@ -48,7 +48,21 @@ public class KeepAliveService extends Service {
     private int cachedRestricted = -1;
     private int tickCount = 0;
 
+    /**
+     * 内存快照，给主界面底部实时显示用。
+     *
+     * 🔴 以前底部那行「内存 x/yG (p%)」只在手动刷新列表时才更新，
+     *    而通知栏是 3 秒一刷，同一块屏幕上两个数字各走各的，看着像主界面卡住了。
+     *    这里每 3 秒（和通知同频）写一份静态快照，Bridge 直接读，
+     *    **不额外跑任何 shell** —— 通知本来就要算这次内存。
+     */
+    static volatile long LIVE_MEM_TOTAL = 0;
+    static volatile long LIVE_MEM_AVAIL = 0;
+    static volatile double LIVE_MEM_PCT = 0;
+
     private final Handler handler = new Handler(Looper.getMainLooper());
+    /** 亮屏广播接收器：熄灭期间是低频刷新，亮屏要立刻补一次 */
+    private android.content.BroadcastReceiver screenOnReceiver;
     private AdbService service;
     private volatile boolean running;
 
@@ -61,11 +75,31 @@ public class KeepAliveService extends Service {
                 public void run() {
                     refresh(tickCount % FULL_EVERY == 0);
                     tickCount++;
-                    handler.postDelayed(tick, TICK_MS);
+                    handler.postDelayed(tick, nextIntervalMs());
                 }
             }, "keepalive-refresh").start();
         }
     };
+
+    /**
+     * 下一次刷新的间隔 —— 后台能耗优先。
+     *
+     * 🔴 固定 3 秒在后台是纯浪费：屏幕黑着没人看通知，却还在不断读数据、
+     *    重建通知。按可见性分三档：
+     *    - 屏幕亮 + App 在前台：3 秒（用户在盯着看）
+     *    - 屏幕亮 + App 在后台：15 秒（通知栏可能被拉下来看）
+     *    - 屏幕熄灭：60 秒（没人看得到，只保持通知内容不彻底陈旧）
+     */
+    private long nextIntervalMs() {
+        boolean screenOn = true;
+        try {
+            android.os.PowerManager pm =
+                    (android.os.PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null) screenOn = pm.isInteractive();
+        } catch (Throwable ignored) { }
+        if (!screenOn) return 60000L;
+        return Bridge.FOREGROUND ? TICK_MS : 15000L;
+    }
 
     @Override
     public void onCreate() {
@@ -79,6 +113,21 @@ public class KeepAliveService extends Service {
             public void line(String msg) { }
         });
         running = true;
+
+        // 屏幕亮起时立刻刷一次：熄灭期间是 60 秒才跑一轮，用户点亮屏幕后
+        // 不应该还看到熄灭前的旧数字。
+        try {
+            screenOnReceiver = new android.content.BroadcastReceiver() {
+                @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+                    if (!running) return;
+                    handler.removeCallbacks(tick);
+                    handler.post(tick);
+                }
+            };
+            registerReceiver(screenOnReceiver,
+                    new android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_ON));
+        } catch (Throwable ignored) { }
+
         // 延后首轮刷新：界面刚启动就要跑一整套取数，两者抢同一把锁会把首屏拖慢好几秒
         handler.postDelayed(tick, 8000);
     }
@@ -162,6 +211,14 @@ public class KeepAliveService extends Service {
             }
 
             JSONObject s = new JSONObject(service.summaryJson(full));
+            // 内存每次都会带上（full 与否都有）。这一份同时喂给通知栏和主界面 ——
+            // 前端不轮询，由这里主动推过去，一条命令的结果两处共用。
+            if (s.has("mem_total")) {
+                LIVE_MEM_TOTAL = s.optLong("mem_total", 0);
+                LIVE_MEM_AVAIL = s.optLong("mem_avail", 0);
+                LIVE_MEM_PCT = s.optDouble("mem_pct", 0);
+                Bridge.pushMem(LIVE_MEM_TOTAL, LIVE_MEM_AVAIL, LIVE_MEM_PCT);
+            }
             if (full) {
                 cachedBattery = s.optJSONObject("battery");
                 cachedArchived = s.optInt("archived", -1);
@@ -296,6 +353,10 @@ public class KeepAliveService extends Service {
     public void onDestroy() {
         running = false;
         handler.removeCallbacksAndMessages(null);
+        try {
+            if (screenOnReceiver != null) unregisterReceiver(screenOnReceiver);
+        } catch (Throwable ignored) { }
+        screenOnReceiver = null;
         super.onDestroy();
     }
 

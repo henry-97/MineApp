@@ -342,6 +342,22 @@ public class MainActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
+    /**
+     * 前台状态同步给 Bridge：只有在前台才往 WebView 推实时内存。
+     * 后台时界面不可见，推过去只是空跑；通知栏由 Service 自己 notify，不受影响。
+     */
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Bridge.FOREGROUND = true;
+    }
+
+    @Override
+    protected void onPause() {
+        Bridge.FOREGROUND = false;
+        super.onPause();
+    }
+
     @Override
     protected void onDestroy() {
         if (pkgReceiver != null) {
