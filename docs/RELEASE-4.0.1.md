@@ -1,4 +1,8 @@
-# Mine App 4.0.1
+# Mine App 4.0.1（多通道版）
+
+> 本说明适用于多通道版 `com.henry.appmanager.multi`。
+> 标准版请看 `RELEASE-4.0.1-main.md` —— 它没有执行通道 / Shizuku / Root，
+> 那几条改动与它无关。
 
 > 主要是设置页的观感调整，外加两处实际修好才敢说「沉浸」的改动。
 
