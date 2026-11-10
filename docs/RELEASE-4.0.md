@@ -1,4 +1,7 @@
-# Mine App 4.0
+# Mine App 4.0（多通道版）
+
+> 本说明适用于多通道版 `com.henry.appmanager.multi`。
+> 标准版请看 `RELEASE-4.0-main.md` —— 它没有执行通道 / Shizuku / Root。
 
 > 这一版解决一个反馈较多的问题：Shizuku 明明授权了，界面还是显示「调试未连接」。
 
