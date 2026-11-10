@@ -2814,12 +2814,23 @@ public class Bridge {
         return pn != null && pn.endsWith(".multi");
     }
 
-    /** 把「执行通道」偏好同步给 ShizukuShell：只有多通道版 + 明确选 Shizuku 才启用 */
+    /**
+     * 把「执行通道」偏好同步给 ShizukuShell。
+     *
+     * 🔴 「自动」必须也算启用 Shizuku —— 用户反馈「PC 授权了、Shizuku 也授权了，
+     *    还是显示调试未连接」的根因就在这里：以前只有显式选 Shizuku 才置 enabled，
+     *    选了「自动」就死等 ADB，明明 Shizuku 已授权也用不上。
+     *
+     * 「自动」的正确语义是「能用就用」：Shizuku 已授权就优先走它，没授权时
+     * active() 里的 granted() 为 false，AdbService 自然回落到 ADB，不会误判。
+     * root 直读另有闸门（见 rootIndex()），不受这里影响。
+     */
     private void syncChannel() {
         try {
             String c = web.getContext().getSharedPreferences("app", 0)
                     .getString("execChannel", "auto");
-            ShizukuShell.enabled = isMulti() && "shizuku".equals(c);
+            ShizukuShell.enabled = isMulti()
+                    && ("shizuku".equals(c) || "auto".equals(c));
         } catch (Throwable e) {
             ShizukuShell.enabled = false;
         }

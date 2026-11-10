@@ -487,7 +487,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
         <button class="seg" data-lang="en" data-t="langEn">English</button>
       </div>
     </div>
-    <div class="sec" style="display:flex;align-items:center;margin-bottom:12px">
+    <div class="sec" id="iconSec" style="display:flex;align-items:center;margin-bottom:12px">
       <span data-t="secIcon">应用图标</span>
       <a href="#" id="iconToggle" style="margin-left:auto;color:#0f6e56;font-size:12px;
          text-decoration:none;cursor:pointer">展开</a>
@@ -1107,16 +1107,17 @@ function iconLabel(k){
   return T(p[0] === 'cl' ? 'icCl' : 'icSq') + '·' + T('ic' + p[1].toUpperCase());
 }
 
-/* 图标网格默认折叠，只露前 3 个（方块系列）；「展开」看全部，再点「折叠」收回去。
-   如果当前选中的是后半部分，默认就展开 —— 否则选中态看不见。 */
-var ICON_FOLD = 3;
+/* 图标网格默认全部折叠（一个都不铺），点「展开」才列出 6 个。
+   早先默认露 3 个，设置页光图标就占掉两行，而绝大多数人装完就不会再改。
+   注意：不要按「当前选中的排在后面」自动展开 —— 那会让每次进来都是展开态，
+   与「默认折叠」矛盾。 */
+var ICON_FOLD = 0;
 var iconExpanded = false;
 
 function renderIcons(){
   var g = document.getElementById('iconGrid');
   if (!g) return;
-  var idx = ICONS.indexOf(iconKey);
-  if (idx >= ICON_FOLD) iconExpanded = true;
+  if (!HAS_BRIDGE) { g.style.display = 'none'; return; }   // Termux 版没有 Java 桥
   var n = iconExpanded ? ICONS.length : Math.min(ICON_FOLD, ICONS.length);
   var h = '';
   for (var i = 0; i < n; i++){
@@ -1126,6 +1127,8 @@ function renderIcons(){
        + '<span>' + iconLabel(k) + '</span></div>';
   }
   g.innerHTML = h;
+  // 折叠时连空容器的高度一起省掉（CSS 默认是 grid，展开时必须还原成空串）
+  g.style.display = n ? '' : 'none';
   var t = document.getElementById('iconToggle');
   if (t) t.textContent = iconExpanded ? T('iconCollapse') : T('iconExpand');
 }
@@ -1169,7 +1172,12 @@ function renderChan(){
           fetch('/api/setchan', {method:'POST', headers:{'Content-Type':'application/json'},
                                  body: JSON.stringify({chan: k})})
             .then(function(r){ return r.json(); })
-            .then(function(){ renderChan(); });
+            .then(function(){
+              renderChan();
+              // 切完通道主界面的「调试未连接」必须立刻重判 —— 不然要杀进程重启
+              // App 才会变成已连接（用户反馈过这个坑）
+              load(true);
+            });
         };
         box.appendChild(b);
       });
@@ -1258,6 +1266,7 @@ function relang(){
 
 function openSettings(){
   updateIdxAt();                // 先用缓存值填上，别等列表刷新
+  iconExpanded = false;         // 图标网格每次进来都是收起的
   renderSettings();
   document.getElementById('settings').classList.add('show');
 }
@@ -3102,10 +3111,12 @@ applyName();
 applyTheme();
 applyTip();
 applyLang();
-/* Termux 版没有 Java 桥，图标选择器无从落地，直接藏掉整段 */
+/* Termux 版没有 Java 桥，图标选择器无从落地，整段（标题 + 展开 + 网格）一起藏掉 */
 if (!HAS_BRIDGE) {
-  var ig = document.getElementById('iconGrid');
-  if (ig) ig.style.display = 'none';
+  ['iconSec', 'iconGrid'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
 }
 load();
 </script>

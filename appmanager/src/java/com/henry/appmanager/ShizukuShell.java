@@ -59,6 +59,24 @@ final class ShizukuShell {
         return alive();
     }
 
+    /** 本进程是否已经为「等 binder」付出过一次代价 */
+    private static volatile boolean WAITED = false;
+
+    /**
+     * 只在本进程第一次判断时等 binder。
+     *
+     * 🔴 为什么不能每次都等：ShizukuShell.enabled 在「自动」通道下也是 true
+     * （没有 Shizuku 的用户很常见），若每次 state() 都 waitAlive(1500)，
+     * 每刷一次列表就白卡 1.5 秒。竞态只发生在冷启动的头几百毫秒，
+     * 等一次就够；之后 alive() 是实时查询，服务后来起来了照样能认出来。
+     */
+    static boolean waitBinderOnce(long maxMs) {
+        if (alive()) { WAITED = true; return true; }
+        if (WAITED) return false;
+        WAITED = true;
+        return waitAlive(maxMs);
+    }
+
     /** 现在这条命令该不该走 Shizuku */
     static boolean active() {
         return enabled && granted();

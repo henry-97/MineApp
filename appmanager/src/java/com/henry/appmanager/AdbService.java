@@ -295,8 +295,9 @@ public class AdbService {
         // Shizuku 通道下没有 ADB 连接是正常的：只要拿到 binder 且已授权就是「可用」，
         // 否则界面会一直挂「调试未连接」（用户反馈的实际问题）。
         if (ShizukuShell.enabled) {
-            // binder 可能还没送达（冷启动瞬间），给它 1.5 秒，别一上来就判死
-            boolean ready = ShizukuShell.alive() || ShizukuShell.waitAlive(1500);
+            // binder 可能还没送达（冷启动瞬间），给它 1.5 秒，别一上来就判死。
+            // 只等一次：没装 Shizuku 的用户也在「自动」通道里，不能每次刷新都卡 1.5 秒。
+            boolean ready = ShizukuShell.waitBinderOnce(1500);
             if (ready && ShizukuShell.granted()) return "ok";
         }
         synchronized (lock) {
