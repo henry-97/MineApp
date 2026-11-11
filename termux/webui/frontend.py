@@ -184,8 +184,10 @@ text-overflow:ellipsis;white-space:nowrap}
 .his-op{flex:none;font-size:11px;padding:1.5px 8px;border-radius:8px}
 .op-freeze{color:var(--red);background:var(--redbg)}
 .op-unfreeze{color:var(--green);background:var(--greenbg)}
-.op-restrict{color:var(--blue);background:var(--bluebg)}
+.op-restrict{color:#854f0b;background:#faeeda}
 .op-unrestrict{color:var(--green);background:var(--greenbg)}
+/* 深色模式跟随「已限制」胶囊（.tag.w）的暗色配色 */
+html.dark .op-restrict{background:#3a2a12;color:#fac775}
 .his-l2{font-size:11.5px;color:var(--ink3);margin-top:3px;overflow:hidden;
 text-overflow:ellipsis;white-space:nowrap}
 .his-empty{font-size:13.5px;color:var(--ink3);text-align:center;padding:30px 0}
