@@ -597,8 +597,8 @@ padding-top:10px;border-top:0.5px solid var(--line)}
   <div class="sheet-body">
     <div class="setrow" style="margin-top:0;gap:8px">
       <span class="setrow-lb" data-t="hisLimitLb" style="width:auto;flex:none">保存条数</span>
-      <input id="hisLimit" type="number" min="0" max="10000" inputmode="numeric" value="200"
-             style="width:74px;height:30px;flex:none;padding:0 8px;text-align:right;font-size:14px;border-radius:8px;border:0.5px solid var(--line);background:var(--card);color:var(--ink);-webkit-appearance:none">
+      <input id="hisLimit" type="text" inputmode="numeric" autocomplete="off" value="200"
+             style="width:60px;height:30px;flex:none;padding:0 7px;text-align:right;font-size:14px;border-radius:8px;border:0.5px solid var(--line);background:var(--card);color:var(--ink);-webkit-appearance:none">
       <span data-t="hisLimitNote"
             style="font-size:11.5px;color:var(--ink3);white-space:nowrap">0=不保存，最大值10000</span>
     </div>
@@ -2861,12 +2861,18 @@ document.getElementById('hisClear').onclick = function(){
       .catch(function(){});
   });
 };
-/* 改条数：失焦或回车时提交；0 表示关闭记录，最大 10000 */
+/* 改条数：失焦或回车时提交。
+   规则：纯数字才接受；超过 10000 截断成 10000；
+   出现任何非数字（含正负号、字母、空）一律回落到默认值 200。 */
 document.getElementById('hisLimit').addEventListener('change', function(){
-  var v = parseInt(this.value, 10);
-  if (isNaN(v)) v = 200;
-  if (v < 0) v = 0;
-  if (v > 10000) v = 10000;
+  var raw = String(this.value == null ? '' : this.value).trim();
+  var v;
+  if (!/^\d+$/.test(raw)){
+    v = 200;                       // 非纯数字 → 默认值（0 是纯数字，允许）
+  } else {
+    v = parseInt(raw, 10);
+    if (v > 10000) v = 10000;      // 超上限截断
+  }
   this.value = v;
   fetch('/api/historylimit', {
     method:'POST',
