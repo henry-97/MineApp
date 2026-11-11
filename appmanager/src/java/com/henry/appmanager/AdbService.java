@@ -1520,8 +1520,11 @@ public class AdbService {
         }
 
         for (String p : items) {
-            if (doOne(p, action, active, disabled)) ok++;
-            else fail.put(p);
+            if (doOne(p, action, active, disabled)) {
+                ok++;
+                // 成功后记一条历史；上限为 0 时 OpHistory 内部会直接跳过
+                OpHistory.record(appCtx, p, action);
+            } else fail.put(p);
         }
         try {
             out.put("ok", ok);

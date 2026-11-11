@@ -3106,6 +3106,40 @@ public class Bridge {
     }
 
     /**
+     * 操作历史：返回 {ok, limit, items:[{t,p,a}]}。
+     * 应用名不在这里返回 —— 前端已经有完整的应用列表，用它补比后端逐条查 shell 快得多。
+     */
+    @JavascriptInterface
+    public void history(int id, String arg) {
+        JSONObject o = new JSONObject();
+        try {
+            android.content.Context c = web.getContext();
+            o.put("ok", true);
+            o.put("limit", OpHistory.limit(c));
+            o.put("items", new org.json.JSONArray(OpHistory.list(c)));
+        } catch (Throwable e) {
+            try { o.put("ok", false); } catch (Exception ignored) { }
+        }
+        replyNow(id, o.toString());
+    }
+
+    /** 设置保存条数（0 = 关闭，最大 10000） */
+    @JavascriptInterface
+    public void historylimit(int id, String arg) {
+        int lim = OpHistory.limit(web.getContext());
+        try {
+            lim = OpHistory.setLimit(web.getContext(), Integer.parseInt(arg == null ? "" : arg.trim()));
+        } catch (Throwable ignored) { }
+        replyNow(id, "{\"ok\":true,\"limit\":" + lim + "}");
+    }
+
+    @JavascriptInterface
+    public void historyclear(int id, String arg) {
+        try { OpHistory.clear(web.getContext()); } catch (Throwable ignored) { }
+        replyNow(id, "{\"ok\":true}");
+    }
+
+    /**
      * 用户手动点了刷新 → 让常驻服务立刻补一次全量（电池健康 / 归档 / 限制），
      * 不用等 3 分钟的定时周期。
      */

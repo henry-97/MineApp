@@ -175,6 +175,20 @@ border-bottom:0.5px solid var(--line)}
 .sheet-hd h2{font-size:17px;font-weight:600;margin:0}
 .sheet-hd .close{margin-left:auto;width:34px;height:34px;min-height:34px;padding:0;border-radius:50%;
 background:var(--card);border:0.5px solid var(--line);font-size:18px;color:var(--ink2)}
+/* 操作历史列表 */
+.his-item{padding:10px 0;border-bottom:0.5px solid var(--line)}
+.his-item:last-child{border-bottom:0}
+.his-l1{display:flex;align-items:center;gap:10px}
+.his-name{font-size:14.5px;color:var(--ink);flex:1;min-width:0;overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.his-op{flex:none;font-size:11px;padding:1.5px 8px;border-radius:8px}
+.op-freeze{color:var(--red);background:var(--redbg)}
+.op-unfreeze{color:var(--green);background:var(--greenbg)}
+.op-restrict{color:var(--blue);background:var(--bluebg)}
+.op-unrestrict{color:var(--green);background:var(--greenbg)}
+.his-l2{font-size:11.5px;color:var(--ink3);margin-top:3px;overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.his-empty{font-size:13.5px;color:var(--ink3);text-align:center;padding:30px 0}
 .hd-save{margin-left:auto;min-height:34px;padding:0 15px;border-radius:9px;font-size:15px;
 font-weight:600;color:#fff;background:#0f6e56}
 .hd-save:active{opacity:.85}
@@ -468,7 +482,11 @@ padding-top:10px;border-top:0.5px solid var(--line)}
   </div>
 </div>
 <div id="settings" class="sheet">
-  <div class="sheet-hd"><h2 data-t="settings">设置</h2><button class="close" id="setClose">×</button></div>
+  <div class="sheet-hd"><h2 data-t="settings">设置</h2>
+    <button class="close" id="setHistory" aria-label="history" style="margin-left:auto;padding:0;display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+    </button>
+    <button class="close" id="setClose" style="margin-left:16px">×</button></div>
   <div class="sheet-body">
     <div class="setrow">
       <span class="setrow-lb" data-t="secName">应用名称</span>
@@ -566,6 +584,25 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       </span>
     </div>
     <div class="ext-note" style="margin-top:9px" data-t="extLicense">本项目(GPL-3.0)禁止自行闭源分发，如需商务合作，可提 Issue。</div>
+  </div>
+</div>
+<!-- 操作历史：从设置页右上角的时钟按钮打开 -->
+<div id="history" class="sheet">
+  <div class="sheet-hd">
+    <h2 data-t="hisTitle">操作历史</h2>
+    <button id="hisClear" data-t="hisClear"
+            style="margin-left:12px;padding:0 2px;background:none;border:0;font-size:13.5px;color:var(--ink3)">清空</button>
+    <button class="close" id="hisClose" style="margin-left:auto">×</button>
+  </div>
+  <div class="sheet-body">
+    <div class="setrow" style="margin-top:0;gap:8px">
+      <span class="setrow-lb" data-t="hisLimitLb" style="width:auto;flex:none">保存条数</span>
+      <input id="hisLimit" type="number" min="0" max="10000" inputmode="numeric" value="200"
+             style="width:74px;height:30px;flex:none;padding:0 8px;text-align:right;font-size:14px;border-radius:8px;border:0.5px solid var(--line);background:var(--card);color:var(--ink);-webkit-appearance:none">
+      <span data-t="hisLimitNote"
+            style="font-size:11.5px;color:var(--ink3);white-space:nowrap">0=不保存，最大值10000</span>
+    </div>
+    <div id="hisList" style="margin-top:12px"></div>
   </div>
 </div>
 <div id="risk" class="risk show">
@@ -751,6 +788,11 @@ var I18N = {
     rootNote: '以下项目需要 root，当前仅显示',
     rtName: '实时调度 RT', tempLimit: '温度限制阈值', bootMode: '开机默认模式', governor: 'CPU 调度器',
     settings: '设置', secName: '应用名称', secTheme: '主题', secLang: '语言',
+    hisTitle: '操作历史', hisLimitLb: '保存条数',
+    hisLimitNote: '0=不保存，最大值10000',
+    hisEmpty: '还没有操作记录', hisClear: '清空',
+    hisClearAsk: '确定清空全部操作记录？此操作不可撤销。',
+    op_freeze: '归档', op_unfreeze: '还原', op_restrict: '限制', op_unrestrict: '解限',
     themeAuto: '自动', themeLight: '浅色', themeDark: '深色',
     langAuto: '自动', langZh: '中文', langEn: 'English',
     perfTip: '性能模式',
@@ -917,6 +959,11 @@ var I18N = {
     rootNote: 'The following need root and are read-only',
     rtName: 'Real-time scheduling', tempLimit: 'Temperature limits', bootMode: 'Default boot mode', governor: 'CPU governor',
     settings: 'Settings', secName: 'App name', secTheme: 'Theme', secLang: 'Language',
+    hisTitle: 'Operation history', hisLimitLb: 'Keep entries',
+    hisLimitNote: '0=off, max 10000',
+    hisEmpty: 'No operations recorded yet', hisClear: 'Clear',
+    hisClearAsk: 'Clear all operation history? This cannot be undone.',
+    op_freeze: 'Archived', op_unfreeze: 'Restored', op_restrict: 'Restricted', op_unrestrict: 'Unrestricted',
     themeAuto: 'Auto', themeLight: 'Light', themeDark: 'Dark',
     langAuto: 'Auto', langZh: '中文', langEn: 'English',
     perfTip: 'Performance',
@@ -1293,6 +1340,78 @@ function openSettings(){
 /* 关闭时只摘掉 show：位移动画由 CSS transition 负责，左滑退出与点 × 同一条路径 */
 function closeSettings(){
   document.getElementById('settings').classList.remove('show');
+}
+
+/* ---------- 操作历史 ---------- */
+
+function openHistory(){
+  document.getElementById('history').classList.add('show');
+  loadHistory();
+}
+
+function closeHistory(){
+  document.getElementById('history').classList.remove('show');
+}
+
+function loadHistory(){
+  fetch('/api/history', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var inp = document.getElementById('hisLimit');
+      if (inp && d && typeof d.limit === 'number') inp.value = d.limit;
+      renderHistory((d && d.items) || []);
+    })
+    .catch(function(){
+      renderHistory([]);
+    });
+}
+
+/* 应用名用本地已经拿到的 apps 补：后端只存包名，逐条查 shell 太慢 */
+function appLabelOf(pkg){
+  for (var i = 0; i < apps.length; i++){
+    if (apps[i].package === pkg) return apps[i].label || pkg;
+  }
+  return pkg;
+}
+
+function fmtHisTime(ms){
+  var d = new Date(ms);
+  if (isNaN(d.getTime())) return '';
+  function p(n){ return n < 10 ? '0' + n : '' + n; }
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+       + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function renderHistory(items){
+  var box = document.getElementById('hisList');
+  if (!box) return;
+  if (!items.length){
+    box.innerHTML = '<p class="his-empty">' + T('hisEmpty') + '</p>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < items.length; i++){
+    var it = items[i] || {};
+    var pkg = it.p || '';
+    var act = it.a || '';
+    var opKey = 'op_' + act;
+    var opName = T(opKey);
+    if (opName === opKey) opName = act;          // 没配到翻译就退回原始动作名
+    html += '<div class="his-item">'
+          +   '<div class="his-l1">'
+          +     '<span class="his-name">' + escHtml(appLabelOf(pkg)) + '</span>'
+          +     '<span class="his-op op-' + escHtml(act) + '">' + escHtml(opName) + '</span>'
+          +   '</div>'
+          +   '<div class="his-l2">' + escHtml(pkg) + ' · ' + escHtml(fmtHisTime(it.t)) + '</div>'
+          + '</div>';
+  }
+  box.innerHTML = html;
+}
+
+function escHtml(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function saveKeep(){ localStorage.setItem('keep', JSON.stringify(Array.from(keep))); }
@@ -2730,6 +2849,33 @@ document.getElementById('milletSave').onclick = function(){
 document.getElementById('appTitle').addEventListener('click', openSettings);
 
 document.getElementById('setClose').onclick = closeSettings;
+
+/* 设置页右上角的时钟按钮 → 操作历史 */
+document.getElementById('setHistory').onclick = openHistory;
+document.getElementById('hisClose').onclick = closeHistory;
+document.getElementById('hisClear').onclick = function(){
+  askConfirm(T('hisClearAsk'), function(){
+    fetch('/api/historyclear', {method:'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(){ loadHistory(); })
+      .catch(function(){});
+  });
+};
+/* 改条数：失焦或回车时提交；0 表示关闭记录，最大 10000 */
+document.getElementById('hisLimit').addEventListener('change', function(){
+  var v = parseInt(this.value, 10);
+  if (isNaN(v)) v = 200;
+  if (v < 0) v = 0;
+  if (v > 10000) v = 10000;
+  this.value = v;
+  fetch('/api/historylimit', {
+    method:'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({limit: v})
+  }).then(function(r){ return r.json(); })
+    .then(function(){ loadHistory(); })
+    .catch(function(){});
+});
 
 document.getElementById('nameBar').addEventListener('click', function(e){
   var b = e.target.closest('[data-name]');

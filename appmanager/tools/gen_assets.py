@@ -75,6 +75,11 @@ SHIM = r"""
     else if (url.indexOf('/api/a11ysettings') === 0) p = call('a11ysettings', '');
     else if (url.indexOf('/api/setnight') === 0) p = call('setnight', body.dark ? '1' : '0');
     else if (url.indexOf('/api/refreshstat') === 0) p = call('refreshstat', '');
+    // 注意顺序：historylimit / historyclear 必须先于 history 匹配，
+    // 否则会被 '/api/history' 前缀吃掉
+    else if (url.indexOf('/api/historylimit') === 0) p = call('historylimit', String(body.limit === undefined ? '' : body.limit));
+    else if (url.indexOf('/api/historyclear') === 0) p = call('historyclear', '');
+    else if (url.indexOf('/api/history') === 0) p = call('history', '');
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
     else if (url.indexOf('/api/opensetting') === 0) p = call('opensetting', String(body.k || ''));
