@@ -559,17 +559,11 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="setrow" id="chanRow" style="gap:8px;margin:14px 0 0;align-items:center;display:none">
       <div class="setrow-lb" data-t="chanTitle" style="width:auto;flex:none;white-space:nowrap;line-height:1.4">执行通道</div>
       <span id="chanState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
-      <!-- 这行提示并到「执行通道」同行右端，省掉单独一行的高度 -->
-      <span id="chanNote" data-t="chanNote" style="margin-left:auto;flex:none;font-size:11.5px;color:var(--ink3);white-space:nowrap;display:none">选择 ADB/Shizuku 时不会申请 root</span>
+      <!-- Shizuku 授权状态并到本行右端：已授权绿、未授权灰，未授权时才出现「授权」按钮 -->
+      <span id="szState" style="margin-left:auto;flex:none;font-size:12.5px;color:var(--ink3);white-space:nowrap"></span>
+      <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 12px;flex:none;margin-left:6px;display:none">授权</button>
     </div>
     <div id="chanBtns" style="display:none;gap:8px;margin:8px 0 0;flex-wrap:wrap"></div>
-
-    <div class="setrow" id="szRow" style="gap:8px;margin:12px 0 0;align-items:center;display:none">
-      <div class="setrow-lb" data-t="szTitle" style="width:auto;flex:none;white-space:nowrap;line-height:1.4">Shizuku 授权</div>
-      <span id="szState" style="flex:none;font-size:13px;color:var(--ink3)">—</span>
-      <!-- margin-left:auto 把它推到行末，与「应用查找」那行的「开始」按钮右对齐 -->
-      <button class="edit" id="szBtn" data-t="szAsk" style="padding:0 14px;flex:none;margin-left:auto">授权</button>
-    </div>
 
     <div class="setrow" style="gap:8px;margin:8px 0 2px">
       <span class="setrow-lb" id="updLabel" data-ver="__APP_VERSION__">v —</span>
@@ -826,8 +820,7 @@ var I18N = {
     locFound: '已找到 {n}', locNotFound: '没找到 {n}',
     idxTitle: '初始化应用查找功能', idxStart: '开始', idxRunning: '遍历中…', cancel: '取消',
     chanTitle: '执行通道',
-    chanNote: '选择 ADB/Shizuku 时不会申请 root',
-    szTitle: 'Shizuku 授权', szAsk: '授权', szOk: '已授权', szOff: 'Shizuku 未运行', szNoPerm: '未授权',
+    szTitle: 'Shizuku 授权', szAsk: '授权', szOk: 'Shizuku 已授权', szOff: 'Shizuku 未运行', szNoPerm: 'Shizuku 未授权',
     szNotRunning: 'Shizuku 没在运行：请先打开 Shizuku App，用「无线调试启动」或「root 启动」把它跑起来',
     szAskFail: '申请授权失败，请确认 Shizuku 已启动后重试',
     szGranted: '已获得 Shizuku 授权', szWait: '请在 Shizuku 的弹框里点「允许」',
@@ -998,8 +991,7 @@ var I18N = {
     locFound: 'Found {n}', locNotFound: 'Not found: {n}',
     idxTitle: 'Build app location index', idxStart: 'Start', idxRunning: 'Scanning…', cancel: 'Cancel',
     chanTitle: 'Execution channel',
-    chanNote: 'No root is requested for ADB / Shizuku',
-    szTitle: 'Shizuku permission', szAsk: 'Grant', szOk: 'Granted', szOff: 'Shizuku not running', szNoPerm: 'Not granted',
+    szTitle: 'Shizuku permission', szAsk: 'Grant', szOk: 'Shizuku granted', szOff: 'Shizuku not running', szNoPerm: 'Shizuku not granted',
     szNotRunning: 'Shizuku is not running — open the Shizuku app and start it via wireless debugging or root',
     szAskFail: 'Permission request failed; make sure Shizuku is running and retry',
     szGranted: 'Shizuku permission granted', szWait: 'Tap Allow in the Shizuku dialog',
@@ -1216,8 +1208,6 @@ function renderChan(){
     .then(function(d){
       if (!d || !d.multi) { row.style.display = 'none'; return; }
       row.style.display = 'flex';
-      var note = document.getElementById('chanNote');
-      if (note) note.style.display = '';
       var box = document.getElementById('chanBtns');
       if (!box) return;
       box.style.display = 'flex';
@@ -1258,20 +1248,21 @@ function renderChan(){
 
 /* Shizuku 状态：仅多通道版显示。服务未运行 / 未授权 / 已授权 三态 */
 function renderShizuku(){
-  var row = document.getElementById('szRow');
-  if (!row) return;
+  var st = document.getElementById('szState');
+  var btn = document.getElementById('szBtn');
+  if (!st) return;
   fetch('/api/shizukustate', {method:'POST'})
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if (!d || !d.ok || d.multi === false){ row.style.display = 'none'; return; }
-      row.style.display = 'flex';
-      var st = document.getElementById('szState');
-      var btn = document.getElementById('szBtn');
-      var alive = !!d.alive, granted = !!d.granted;
-      if (st){
-        st.textContent = granted ? T('szOk') : (alive ? T('szNoPerm') : T('szOff'));
-        st.style.color = granted ? 'var(--green)' : 'var(--ink3)';
+      // 标准版没有 Shizuku 通道：清空状态、藏掉按钮即可，不再单独占一行
+      if (!d || !d.ok || d.multi === false){
+        st.textContent = '';
+        if (btn) btn.style.display = 'none';
+        return;
       }
+      var granted = !!d.granted;
+      st.textContent = granted ? T('szOk') : T('szNoPerm');
+      st.style.color = granted ? 'var(--green)' : 'var(--ink3)';
       if (btn) btn.style.display = granted ? 'none' : '';
     })
     .catch(function(){});
