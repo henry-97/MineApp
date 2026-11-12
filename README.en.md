@@ -506,11 +506,9 @@ Issues and pull requests are just as welcome — they help a lot too.
 
 ## License
 
-[GPL-3.0](LICENSE).
-
-Use it, modify it, redistribute it — but **derivatives must stay open source; repackaging it with ads
-and shipping it closed-source is strictly prohibited**. If you need it inside a proprietary product,
-open an issue to discuss a licence.
+[GPL-3.0](LICENSE). Use it, modify it, redistribute it — but **derivatives must stay open source;
+repackaging it with ads and shipping it closed-source is strictly prohibited**. If you need it inside a
+proprietary product, open an issue to discuss a licence.
 
 ## Usage notes
 
