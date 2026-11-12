@@ -601,7 +601,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div id="hisList" style="margin-top:12px"></div>
   </div>
 </div>
-<div id="risk" class="risk show">
+<div id="risk" class="risk">
   <div class="risk-box">
     <h3 data-t="riskTitle">使用前请留意</h3>
     <p data-t="riskBody">本软件通过 ADB 直接调用系统命令，能力很强。请勿随意冻结或限制系统必要组件（时钟、桌面启动器、输入法等），否则可能导致闹钟不响、桌面异常、收不到来电等。</p>
@@ -619,10 +619,29 @@ padding-top:10px;border-top:0.5px solid var(--line)}
    只认"同意过"就再也不会弹；只认布尔 false 又每次都弹。 */
 /* 只在「全新安装」时提示：标记落 localStorage（覆盖安装保留、卸载清空）。
    老版本用的是按 versionCode 记的 riskOkVer，这里做一次兼容迁移。 */
-if (localStorage.getItem('riskOk') === '1' || localStorage.getItem('riskOkVer')) {
-  localStorage.setItem('riskOk', '1');
-  document.getElementById('risk').classList.remove('show');
+/* 只在「全新安装」时提示：标记同时落 localStorage 与 SharedPreferences。
+   localStorage 会被 WebView 在存储紧张时清掉（实测「过段时间又弹一次」），
+   所以 SharedPreferences 那份才是权威，localStorage 只是让首屏不必等异步查询。 */
+function riskDecide(showIfNone){
+  if (localStorage.getItem('riskOk') === '1' || localStorage.getItem('riskOkVer')) {
+    localStorage.setItem('riskOk', '1');
+    return;                                  // 本地记着，直接放行
+  }
+  // 本地没了 → 问后端要权威答案，避免每次都重弹
+  fetch('/api/riskok', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.ok){
+        localStorage.setItem('riskOk', '1'); // 补回本地，下次不用再问
+        return;
+      }
+      if (showIfNone) document.getElementById('risk').classList.add('show');
+    })
+    .catch(function(){
+      if (showIfNone) document.getElementById('risk').classList.add('show');
+    });
 }
+riskDecide(true);
 
 </script>
 <div id="toast"></div>
@@ -2926,8 +2945,10 @@ document.getElementById('themeBar').addEventListener('click', function(e){
 /* 启动风险提示：只能通过「同意并使用」关闭，点遮罩无效 */
 document.getElementById('riskOk').addEventListener('click', function(){
   // 记「已同意」而不是「这个版本已同意」：覆盖安装保留、卸载重装清空，
-  // 正好对应「只有全新安装才需要再看一次」
+  // 正好对应「只有全新安装才需要再看一次」。
+  // 同时写后端：WebView 的 localStorage 会被系统清掉，SharedPreferences 才是权威。
   localStorage.setItem('riskOk', '1');
+  fetch('/api/riskagree', {method:'POST'}).catch(function(){});
   document.getElementById('risk').classList.remove('show');
 });
 document.getElementById('riskQuit').addEventListener('click', function(){

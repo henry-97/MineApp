@@ -926,12 +926,6 @@ public class Bridge {
             dbg("滑动探测：桌面 dump 为空，放弃");
             return 0;
         }
-        // 🔴 判断「这一屏还是不是桌面」的通用依据：**Dock 图标**。
-        //    桌面每一页底部都有同一组 Dock（电话/信息/相机…），负一屏
-        //    （Google Discover / 各家智能助理）没有 —— 实测单页桌面被数成 2 页，
-        //    就是因为把 Discover 当成了一页。
-        java.util.Set<String> base = new java.util.HashSet<String>();
-        for (String d : prev.split("\\|")) base.add(d);
 
         // ① 一路右滑，直到内容不再变化（= 已经在最左一页）
         for (int i = 0; i < MAX; i++) {
@@ -940,8 +934,12 @@ public class Bridge {
             String cur = pageSignature(dumpHome(false));
             if (cur.isEmpty()) return 0;
             if (cur.equals(prev)) break;              // 滑不动了
-            if (!sharesDock(cur, base)) {             // 进了负一屏 → 退回来收工
-                dbg("滑动探测：右侧遇到非桌面页面，退回");
+            // 🔴 判「还在不在桌面」只看顶层 Activity，不看图标名有没有重叠。
+            //    以前用 sharesDock（两页有同名 content-desc 就算同桌面），在两页
+            //    应用完全不重名时会判成「离开了桌面」，第一页就 break，页数变 1 —— 
+            //    表现就是「只索引到首屏」。
+            if (!isLauncherFront()) {
+                dbg("滑动探测：右侧离开桌面，退回");
                 swipePage(true);
                 try { Thread.sleep(400); } catch (InterruptedException ignored) { }
                 break;
@@ -958,8 +956,9 @@ public class Bridge {
             String cur = pageSignature(dumpHome(false));
             if (cur.isEmpty()) break;
             if (!seen.add(cur)) break;                // 绕回已见过的页 = 到头
-            if (!sharesDock(cur, base)) {             // 负一屏 / 别家界面
-                dbg("滑动探测：左侧遇到非桌面页面，停止");
+            // 同 ①：用顶层 Activity 判断，而不是同名图标重叠
+            if (!isLauncherFront()) {
+                dbg("滑动探测：左侧离开桌面，停止");
                 swipePage(false);                     // 退回最后一页真实桌面
                 try { Thread.sleep(400); } catch (InterruptedException ignored) { }
                 break;
@@ -1056,14 +1055,6 @@ public class Bridge {
             if (pg < MAX) swipePage(true);
         }
         return null;
-    }
-
-    /** 这一屏是否还带桌面 Dock（与首页有共同的应用图标）。 */
-    private static boolean sharesDock(String sig, java.util.Set<String> base) {        if (sig.isEmpty() || base.isEmpty()) return false;
-        for (String d : sig.split("\\|")) {
-            if (base.contains(d)) return true;
-        }
-        return false;
     }
 
     /** 翻页：toNext=true 左滑去下一页，false 右滑回上一页。 */
@@ -1837,7 +1828,9 @@ public class Bridge {
                     notifyLocate(resumePage > 1
                             ? "从第 " + resumePage + "/" + total + " 页继续索引"
                             : "开始遍历桌面 · 共 " + total + " 页 · 可随时打断", false);
-                    for (; page <= total && page <= 8; page++) {
+                    // 上限 20 页：只为防「页数算错导致死循环」，正常桌面远小于此。
+                    // 以前写死 8 页，桌面超过 8 页时后面几页永远索引不到。
+                    for (; page <= total && page <= 20; page++) {
                         if (idxStop || touchHit || !isLauncherFront()) break;
                         if (sweepMode) {
                             // 🔴 这里不能用 jumpToPage：它读不到当前页时会按 HOME，
@@ -3136,6 +3129,32 @@ public class Bridge {
     @JavascriptInterface
     public void historyclear(int id, String arg) {
         try { OpHistory.clear(web.getContext()); } catch (Throwable ignored) { }
+        replyNow(id, "{\"ok\":true}");
+    }
+
+    /**
+     * 免责声明的「已同意」标记。
+     *
+     * 前端原来只存 localStorage —— 而 WebView 的存储会被系统在存储紧张时清掉，
+     * 用户过段时间打开就被再弹一次（实测被反馈）。这里额外存一份 SharedPreferences，
+     * 那是 App 私有数据，不受 WebView 清理影响。
+     */
+    @JavascriptInterface
+    public void riskok(int id, String arg) {
+        boolean ok = false;
+        try {
+            ok = web.getContext().getSharedPreferences("app", 0)
+                    .getBoolean("risk_ok", false);
+        } catch (Throwable ignored) { }
+        replyNow(id, "{\"ok\":" + ok + "}");
+    }
+
+    @JavascriptInterface
+    public void riskagree(int id, String arg) {
+        try {
+            web.getContext().getSharedPreferences("app", 0).edit()
+                    .putBoolean("risk_ok", true).apply();
+        } catch (Throwable ignored) { }
         replyNow(id, "{\"ok\":true}");
     }
 
