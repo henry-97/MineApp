@@ -1246,24 +1246,26 @@ function renderChan(){
     .catch(function(){});
 }
 
-/* Shizuku 状态：仅多通道版显示。服务未运行 / 未授权 / 已授权 三态 */
+/* Shizuku 状态：仅多通道版显示。服务未运行 / 未授权 / 已授权 三态。
+   返回 Promise，授权轮询链靠它判断「是不是已经拿到了」。 */
 function renderShizuku(){
   var st = document.getElementById('szState');
   var btn = document.getElementById('szBtn');
-  if (!st) return;
-  fetch('/api/shizukustate', {method:'POST'})
+  if (!st) return Promise.resolve(null);
+  return fetch('/api/shizukustate', {method:'POST'})
     .then(function(r){ return r.json(); })
     .then(function(d){
       // 标准版没有 Shizuku 通道：清空状态、藏掉按钮即可，不再单独占一行
       if (!d || !d.ok || d.multi === false){
         st.textContent = '';
         if (btn) btn.style.display = 'none';
-        return;
+        return null;
       }
       var granted = !!d.granted;
       st.textContent = granted ? T('szOk') : T('szNoPerm');
       st.style.color = granted ? 'var(--green)' : 'var(--ink3)';
       if (btn) btn.style.display = granted ? 'none' : '';
+      return d;
     })
     .catch(function(){});
 }
@@ -1278,13 +1280,27 @@ function askShizuku(){
       }
       if (d.granted){ toast(T('szGranted')); renderShizuku(); return; }
       toast(T('szWait'), 5000);
-      // 授权是在 Shizuku 的 Activity 里完成的，回来时可能已经过了几秒，
-      // 所以多铺几个时间点，并配合下面的 visibilitychange
-      setTimeout(renderShizuku, 1500);
-      setTimeout(renderShizuku, 4000);
-      setTimeout(renderShizuku, 8000);
+      // 授权是在 Shizuku 的 Activity 里完成的，用户点「允许」的时机不定。
+      // 2/5/8/11 秒各查一次；任一次查到已授权就终止整条链，后面不再发请求。
+      // 稀疏散点而不是密集轮询 —— 最多 4 次请求，且提前成功就提前结束。
+      shizukuCheckChain([2000, 5000, 8000, 11000], 0);
     })
     .catch(function(){ toast(T('szAskFail')); });
+}
+
+/* 依次在给定的绝对时间点（毫秒）检查授权；查到即停，并顺手刷新主界面撤横幅。 */
+function shizukuCheckChain(times, i){
+  if (i >= times.length) return;
+  var delay = (i === 0) ? times[0] : (times[i] - times[i - 1]);
+  setTimeout(function(){
+    renderShizuku().then(function(d){
+      if (d && d.granted){
+        load(true);          // 已授权：撤横幅 + 重拉列表，链条到此结束
+        return;
+      }
+      shizukuCheckChain(times, i + 1);
+    });
+  }, delay);
 }
 
 function renderSettings(){
@@ -2000,6 +2016,10 @@ function spinFinish(){ if (spinOn) spinStop = true; }
 var lastLoadAt = 0;
 document.addEventListener('visibilitychange', function(){
   if (document.hidden) return;
+  // 通道不可用（横幅亮着）时不走 15 秒节流：用户很可能刚去 Shizuku App 或
+  // 系统弹窗里点了允许，切回来必须立刻核对一次，否则要等 15 秒或手动刷新。
+  // 这是用户主动切回触发的，不是常驻轮询，没有额外功耗。
+  if (!adbOk){ load(true); return; }
   if (Date.now() - lastLoadAt < 15000) return;
   load(true);
 });
