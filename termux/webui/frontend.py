@@ -2120,9 +2120,10 @@ function restoreCache(allowStale){
     if (!d || !d.t) return 0;
     var fresh = (Date.now() - d.t) <= CACHE_TTL;
     if (!fresh && !allowStale) return 0;
-    // 缓存里的进程数是旧快照：先不显示，等这一轮刷新拿到新数据再显示。
-    // 否则用户点开「N进程」看到的是一个已经过时的列表。
-    if (d.apps) for (var i = 0; i < d.apps.length; i++) d.apps[i].procs = 0;
+    // 🔴 只有「过期缓存」才清进程数 —— 那种情况紧接着就会刷新，旧数字马上被覆盖。
+    //    1 分钟内的新鲜缓存不会触发刷新（load 里 state===1 直接 return），
+    //    这时清了就永远看不到进程数了。
+    if (!fresh && d.apps) for (var i = 0; i < d.apps.length; i++) d.apps[i].procs = 0;
     applyData(d);
     return fresh ? 1 : 2;
   } catch (e) { return 0; }
