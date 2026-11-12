@@ -1566,19 +1566,93 @@ public class AdbService {
                 return true;   // 本来就在启用状态
             }
             if ("restrict".equals(action)) {
+                // 🔴 绝不允许限制自己：本 App 的进程一旦被冻，
+                //    用户就没有任何入口能回来解除限制了。
+                if (appCtx != null && p.equals(appCtx.getPackageName())) {
+                    Log.w(TAG, "拒绝限制本应用: " + p);
+                    return false;
+                }
+                // 🔴 真正生效的是「墓碑」：am set-inactive 之后，应用的后台进程会被
+                //    降到 cached 并交给 cgroup freezer 冻结（实测 CPU 时间零增长），
+                //    用户点图标时 AMS 自动解冻、同一个 PID 原地复活 —— 状态不丢。
+                //
+                //    旧的 RUN_IN_BACKGROUND=ignore 在 HyperOS 上实测完全无效：
+                //    设了之后 60 秒，应用 6 个进程照样在跑，oomAdj 与未限制时一致。
+                //
+                //    appops 这一行保留，但**只当标记用**：一条
+                //    `cmd appops query-op RUN_IN_BACKGROUND ignore` 就能批量查出
+                //    全部被限制的应用；而 am get-inactive 只能逐个查，605 个包要几十秒。
+                sh("am set-inactive --user 0 " + p + " true");
                 sh("cmd appops set " + p + " RUN_IN_BACKGROUND ignore");
-                sh("am set-standby-bucket " + p + " restricted");
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("ignore");
             }
             if ("unrestrict".equals(action)) {
+                sh("am set-inactive --user 0 " + p + " false");
                 sh("cmd appops set " + p + " RUN_IN_BACKGROUND allow");
-                sh("am set-standby-bucket " + p + " rare");
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("allow");
             }
         } catch (Exception e) {
             Log.w(TAG, "操作失败 " + p + ": " + e);
         }
         return false;
+    }
+
+    /**
+     * 旧机制迁移：把「限制」从 appops 换成墓碑（am set-inactive）。
+     *
+     * 以前只写 RUN_IN_BACKGROUND=ignore，在 HyperOS 上实测完全无效（设了之后
+     * 应用后台进程照样存活、oomAdj 与未限制时一致）。升级后给已标记的包补一次
+     * set-inactive，让它们真正进入墓碑。
+     *
+     * 🔴 用**持久化的布尔标记**，不用 versionCode：
+     *    拿版本号当判断依据的话，每次升级（4.9.3 → 5.0 → 6.0…）都会把
+     *    整个清单重迁一遍，几十条 shell 命令白跑。
+     *    这里和索引状态一样只记「迁过了」这一个事实，之后每次启动读到就返回，
+     *    开销只有一次 SharedPreferences 读取。
+     *
+     *    必须全部成功才写标记 —— 否则通道临时不可用会把这次迁移永久跳过。
+     */
+    void migrateRestrictOnce() {
+        if (appCtx == null) return;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    // 等通道就绪：冷启动瞬间 Shizuku binder 可能还没送到
+                    Thread.sleep(3000);
+
+                    android.content.SharedPreferences sp = appCtx.getSharedPreferences(
+                            "app", android.content.Context.MODE_PRIVATE);
+                    if (sp.getBoolean("restrictMigrated", false)) return;   // 迁过了，什么都不做
+
+                    // 4.9.3 早期版本用 versionCode 记过迁移状态：已经迁过的直接补标记，
+                    // 避免这次升级又对几十个包重发一遍命令
+                    if (sp.getInt("restrictMigratedVer", 0) > 0) {
+                        sp.edit().putBoolean("restrictMigrated", true).apply();
+                        return;
+                    }
+
+                    if (!"ok".equals(state())) return;          // 没通道，下次启动再来
+
+                    java.util.Set<String> olds = getRestricted();
+                    boolean allOk = true;
+                    int n = 0;
+                    for (String p : olds) {
+                        try {
+                            String r = sh("am set-inactive --user 0 " + p + " true");
+                            if (r != null && r.toLowerCase().contains("error")) allOk = false;
+                            else n++;
+                        } catch (Throwable e) {
+                            allOk = false;
+                        }
+                    }
+                    // 这台机器上 am get-inactive 恒返回 false（HyperOS 把它阉了），
+                    // 没法回读校验，所以留一条日志：adb logcat -s AdbService 可查
+                    Log.i(TAG, "限制机制迁移: 共 " + olds.size() + " 个, 成功 " + n
+                            + ", allOk=" + allOk);
+                    if (allOk) sp.edit().putBoolean("restrictMigrated", true).apply();
+                } catch (Throwable ignored) { }
+            }
+        }).start();
     }
 
     public void close() {

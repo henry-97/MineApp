@@ -155,6 +155,9 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(bridge, "Bridge");
         // 覆盖安装会把无障碍解绑，用户不会想到是它导致「查找应用」失灵
         healA11yBinding();
+        // 「限制」底层换成了墓碑（set-inactive）：升级后把旧 appops 标记的补一次，
+        // 之后靠 versionCode 判断，不再重复跑
+        service.migrateRestrictOnce();
         // 覆盖安装后 manifest 里的 alias 会重置成默认，这里把用户选过的名称/图标重新落回去
         bridge.restoreAlias();
 

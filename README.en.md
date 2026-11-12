@@ -428,6 +428,21 @@ Attribution:
   greyed-out disabled state). That's system behaviour, not an uninstall — tap "Restore" in the
   app and it returns to its original spot.
 
+- **Since 4.9.3, "Restrict" uses the Tombstone (App Inactive) mechanism.**
+  Some Chinese OEM ROMs ignore the standard AppOps background restriction — after setting
+  `RUN_IN_BACKGROUND=ignore` the app keeps running in the background (measured after a full day:
+  process still alive, oomAdj identical to an unrestricted app). So it now uses `am set-inactive`:
+  background processes are frozen (zero CPU, no network, no push) and resume **in the same process**
+  when you open the app — state intact, no cold start.
+
+  **Restrictions set under the old mechanism are migrated automatically** after upgrading; you don't
+  need to re-apply anything. The migration runs exactly once and never repeats, regardless of which
+  version you upgrade to later.
+
+  If an app misbehaves after being restricted (missing messages, broken background tasks), tap
+  "Unrestrict" in the app. Freezing only affects the background — opening and using the app works
+  normally.
+
 - **Never approve an unexpected "Allow USB debugging?" dialog on a public network.**
   `adb tcpip 5555` makes adbd listen on all interfaces, so anyone on the same network can trigger
   that dialog; tapping Allow hands them control of your phone and can leak your data. Deny anything
@@ -474,12 +489,23 @@ This app drives the system `pm` / `am` / `cmd` commands directly through ADB —
 **Do not freeze or restrict components the system depends on** (Clock, the launcher, the keyboard,
 Phone / Messaging, …). Doing so can stop alarms, break the home screen, block incoming calls, and more.
 
-If you lock yourself out and the app can no longer be opened, connect the phone to a PC and run:
+**The risk of restricting system apps is unknown — evaluate carefully before doing it.**
+
+If you lock yourself out and the app can no longer be opened, connect the phone to a PC:
 
 ```bash
+# Archive (component disabled, icon gone)
 adb shell pm enable <package>
+
+# Restrict (tombstone)
+adb shell am set-inactive --user 0 <package> false
+adb shell cmd appops set <package> RUN_IN_BACKGROUND allow
 ```
 
-That re-enables the component and gets you back in.
+Lift every restriction at once (runs on any desktop platform):
+
+```bash
+adb shell "cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 \$p false; cmd appops set \$p RUN_IN_BACKGROUND allow; done"
+```
 
 **The author is not liable for data loss or device misbehaviour caused by misuse.**
