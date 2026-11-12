@@ -202,6 +202,12 @@ font-weight:600;color:#fff;background:#0f6e56}
 .millet-note{font-size:11.5px;color:var(--ink3);line-height:1.6;background:var(--bg);
 margin:8px 16px 0;padding:9px 12px;border-radius:10px}
 .sheet-body{flex:1;overflow-y:auto;padding:8px 16px calc(16px + env(safe-area-inset-bottom))}
+/* 滚动条：Android WebView 默认几乎看不见，显式画一条细的 —— 拖动时能看出当前位置，
+   也提示「这里还能往下滑」。主列表和弹窗共用同一套。 */
+.sheet-body::-webkit-scrollbar,#list::-webkit-scrollbar{width:3px}
+.sheet-body::-webkit-scrollbar-track,#list::-webkit-scrollbar-track{background:transparent}
+.sheet-body::-webkit-scrollbar-thumb,#list::-webkit-scrollbar-thumb{background:var(--ink3);border-radius:2px}
+.sheet-body::-webkit-scrollbar-thumb:active,#list::-webkit-scrollbar-thumb:active{background:var(--ink2)}
 .trow{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:0.5px solid var(--line)}
 .trow .tl{font-size:15px;color:var(--ink)}
 .trow .ts{font-size:11.5px;color:var(--ink3);margin-top:3px}
