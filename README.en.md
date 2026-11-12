@@ -461,7 +461,7 @@ Attribution:
   app). So it now uses `am set-inactive`: background processes are frozen (zero CPU, no network, no
   push) and resume **in the same process** when you open the app — state intact, no cold start.
 
-  To be clear: **some high-privilege apps may still keep a few processes alive.** This app maintains
+  To be clear: **some high-privilege apps — or apps that just returned to the background — may still keep a few processes alive.** This app maintains
   the restriction state only within a low-power budget — those apps stay significantly quieter than
   when unrestricted, but complete stillness is not guaranteed.
 
