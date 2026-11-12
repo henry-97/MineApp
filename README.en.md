@@ -520,7 +520,7 @@ adb shell "pm enable <package>; cmd package install-existing <package>"
 > `appops query-op` to list every restricted package in one command. Unfreezing without clearing the
 > marker leaves the app listed under "lift every restriction" forever.
 >
-> **Why an archive tries both**: `pm disable-user` disables the app outright, undone with `pm enable`;
+> **Why restoring tries both**: `pm disable-user` disables the app outright, undone with `pm enable`;
 > when the ROM refuses to disable a system app it falls back to `pm uninstall --user 0`, which only
 > removes it for the current user (the APK stays in the system partition) — that one is restored with
 > `cmd package install-existing`. Running both covers either case.
