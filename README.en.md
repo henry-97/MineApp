@@ -508,19 +508,23 @@ Phone / Messaging, …). Doing so can stop alarms, break the home screen, block 
 If you lock yourself out and the app can no longer be opened, connect the phone to a PC:
 
 ```bash
-# Undo an archive — depends on which command was used to archive
-adb shell pm enable <package>                        # the app was "disabled"
-adb shell cmd package install-existing <package>      # the app was "removed for the current user"
+# Undo a restriction (one command: unfreeze + clear the marker)
+adb shell "am set-inactive --user 0 <package> false; cmd appops set <package> RUN_IN_BACKGROUND allow"
 
-# Undo a restriction — both lines are needed
-adb shell am set-inactive --user 0 <package> false              # unfreeze (the layer that takes effect)
-adb shell cmd appops set <package> RUN_IN_BACKGROUND allow      # clear the marker (otherwise it stays listed)
+# Undo an archive (one command: tries both archive methods; the wrong one just errors out)
+adb shell "pm enable <package>; cmd package install-existing <package>"
 ```
 
-> Archiving has two implementations: `pm disable-user` disables the app outright; when the ROM refuses
-> to disable a system app, it falls back to `pm uninstall --user 0`, which only removes it for the current
-> user (the APK stays in the system partition). The first is undone with `pm enable`, the second only with
-> `cmd package install-existing`. **If unsure, run both** — the wrong one simply errors out and changes nothing.
+> **Why a restriction needs two layers cleared**: `am set-inactive` is the layer that actually takes
+> effect (it unfreezes the app); `cmd appops` is the index layer — this app uses
+> `appops query-op` to list every restricted package in one command. Unfreezing without clearing the
+> marker leaves the app listed under "lift every restriction" forever.
+>
+> **Why an archive tries both**: `pm disable-user` disables the app outright; when the ROM refuses to
+> disable a system app it falls back to `pm uninstall --user 0`, which only removes it for the current
+> user (the APK stays in the system partition). The first is undone with `pm enable`, the second only
+> with `cmd package install-existing`. Running both is idempotent — the wrong one errors out and
+> changes nothing.
 
 **Restore every archived app**:
 

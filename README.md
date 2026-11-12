@@ -465,18 +465,20 @@ MineApp/
 如果不慎误操作、且本软件已经无法打开，可以用数据线连电脑恢复：
 
 ```bash
-# 归档后还原 —— 取决于当时归档用的是哪条命令
-adb shell pm enable <包名>                        # 被「禁用」的应用
-adb shell cmd package install-existing <包名>      # 被「移除当前用户」的应用
+# 限制后解限（一条命令：解冻 + 清标记）
+adb shell "am set-inactive --user 0 <包名> false; cmd appops set <包名> RUN_IN_BACKGROUND allow"
 
-# 限制后解限 —— 两条都要
-adb shell am set-inactive --user 0 <包名> false              # 解除冻结（真正生效的那层）
-adb shell cmd appops set <包名> RUN_IN_BACKGROUND allow      # 清掉标记（否则会一直留在名单里）
+# 归档后还原（一条命令：两种归档方式都试，跑错的那条直接报错）
+adb shell "pm enable <包名>; cmd package install-existing <包名>"
 ```
 
-> 归档有两种实现：`pm disable-user` 直接禁用；系统应用不允许禁用时，退回
+> **解限为什么要清两层**：`am set-inactive` 是真正生效的那层（解除冻结），
+> `cmd appops` 是索引层——本 App 靠 `appops query-op` 一条命令查出所有被限制的应用。
+> 只解冻不清标记的话，应用会一直留在「一键解除」的名单里。
+>
+> **归档为什么两条都跑**：`pm disable-user` 直接禁用；系统应用不允许禁用时会退回
 > `pm uninstall --user 0` 只移除当前用户（APK 仍在系统分区）。前者用 `pm enable` 还原，
-> 后者只能用 `cmd package install-existing`。**拿不准就两条都执行**，跑错的那条会直接报错，不会破坏状态。
+> 后者只能用 `cmd package install-existing`。两条都执行是幂等的，跑错的那条直接报错、不改状态。
 
 **一键还原所有归档**：
 
