@@ -106,6 +106,7 @@ screen off.**
 | Performance profile tuning | **Yes ✓** | — | — | — |
 | Per-app AOT compilation | **Yes ✓** | — | — | — |
 | PSS memory sorting | **Yes ✓** | — | — | — |
+| Per-process details (CPU / memory / oom) | **Yes ✓** | — | — | — |
 
 > **✓** marks where Mine App has the edge.
 > "Ships its own ADB client" means the app implements the ADB protocol itself (CNXN / AUTH / OPEN /
@@ -120,7 +121,7 @@ screen off.**
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, and its **launcher icon disappears entirely** (MIUI / HyperOS doesn't render a greyed-out state) |
 | **Restrict** | `am set-inactive` (tombstone) freezes background processes, and also blocks the app from **starting foreground services** (`START_FOREGROUND`) and **holding wake locks** (`WAKE_LOCK`) — many apps hide behind "I'm a foreground service" to survive background cleanup, so closing that path is what makes the tombstone stick. Opening the app resumes **the same process**. Milder than archiving: it still launches and keeps its icon. Some high-privilege apps may keep a few processes — see Known limitations |
-| **Process details** (5.0) | Multi-process apps show `4procs ›` after the timestamp; tap it to see each process: sub-process name, cumulative CPU time, memory, system oom level, and which ones are still active. Processes in a dual-app / cloned profile are tagged `·dual`. **Queried only on expand — never polled in the background** |
+| **Process details** (5.0) | `Nprocs ›` after the timestamp; tap it to see each process: sub-process name, cumulative CPU time, memory, system oom level, and which ones are still active. Processes in a dual-app / cloned profile are tagged `·dual`. **Queried only on expand — never polled in the background** |
 | **App finder** (since 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
 | **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling. **State is auto-detected**: after a reinstall or data wipe it reads back which apps are already AOT-compiled from `dumpsys package dexopt`, so the UI shows the truth instead of starting from zero |
@@ -148,6 +149,21 @@ screen off.**
 >
 > The third one we cannot write — to make MIUI's UI show "No restrictions", pick it once on the
 > app-info page.
+
+> **Why does a process show more memory than the whole app?**
+>
+> The number in the list is **PSS**; the number in the process rows is **RSS**. They treat shared
+> libraries differently:
+>
+> | Metric | How shared libraries count | The question it answers |
+> |---|---|---|
+> | **PSS** (app row) | **Split** across the processes using it | How much physical memory this app really accounts for |
+> | **RSS** (process row) | **Full size for every** process | How many physical pages this process maps |
+>
+> Example: a 200 MB shared library used by 10 processes is counted as 200 MB in every process's RSS,
+> but only 20 MB in PSS. So **a single process's RSS can exceed the app's total PSS — even for a
+> single-process app**. Both numbers are correct, they just answer different questions: use PSS (the
+> list) to compare apps, use RSS to see how much a specific process touches.
 
 > **On "Performance" mode: it is not actually a battery hog**
 >
