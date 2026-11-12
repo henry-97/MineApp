@@ -1437,9 +1437,9 @@ public class AdbService {
                 a.put("pss", v == null ? 0 : v);
                 a.put("active", pssInfo.active.contains(pkg));
                 a.put("restricted", restricted.contains(pkg));
-                // 只在多进程时才带这个字段：单进程是常态，全量下发只会让前端做无用判断
+                // 有进程就带这个字段：1 个进程也显示，用户点开能看是哪条、占多少
                 Integer pc = procCnt.get(pkg);
-                if (pc != null && pc.intValue() > 1) a.put("procs", pc.intValue());
+                if (pc != null && pc.intValue() > 0) a.put("procs", pc.intValue());
                 // 只有桌面能放图标的才显示「定位」按钮；纯服务类应用没有启动入口
                 a.put("launcher", launchableSet != null && launchableSet.contains(pkg));
                 // 桌面索引里没有这个名字 = 桌面上没有它的图标，定位必然失败 → 不显示按钮
@@ -1622,23 +1622,35 @@ public class AdbService {
                     Log.w(TAG, "拒绝限制本应用: " + p);
                     return false;
                 }
-                // 🔴 真正生效的是「墓碑」：am set-inactive 之后，应用的后台进程会被
-                //    降到 cached 并交给 cgroup freezer 冻结（实测 CPU 时间零增长），
-                //    用户点图标时 AMS 自动解冻、同一个 PID 原地复活 —— 状态不丢。
+                // 🔴 一次连接把四件事都做完（逐条连接每次多 ~300ms 往返）：
                 //
-                //    旧的 RUN_IN_BACKGROUND=ignore 在 HyperOS 上实测完全无效：
-                //    设了之后 60 秒，应用 6 个进程照样在跑，oomAdj 与未限制时一致。
+                //  1) set-inactive —— 真正生效的那层：后台进程降到 cached 并交给
+                //     cgroup freezer 冻结（实测 CPU 时间零增长），点图标时 AMS 自动
+                //     解冻、同一个 PID 原地复活。旧的 RUN_IN_BACKGROUND=ignore 在
+                //     HyperOS 上实测完全无效（设满一天进程照跑），只留作标记。
                 //
-                //    appops 这一行保留，但**只当标记用**：一条
-                //    `cmd appops query-op RUN_IN_BACKGROUND ignore` 就能批量查出
-                //    全部被限制的应用；而 am get-inactive 只能逐个查，605 个包要几十秒。
-                sh("am set-inactive --user 0 " + p + " true");
-                sh("cmd appops set " + p + " RUN_IN_BACKGROUND ignore");
+                //  2) START_FOREGROUND=ignore —— 禁止它启动前台服务。很多国产应用靠
+                //     「我是前台服务」躲过后台清理，堵掉这条路之后 set-inactive 才压得实。
+                //
+                //  3) WAKE_LOCK=ignore —— 禁止持有唤醒锁，待机时不会把 CPU 拽醒。
+                //
+                //  2 和 3 是持久的 AppOps 设置（存系统数据库，重启也在），
+                //  不像 set-inactive 会被「用户打开应用」清掉，所以不用每次补做。
+                sh("am set-inactive --user 0 " + p + " true"
+                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND ignore"
+                        + "; cmd appops set " + p + " START_FOREGROUND ignore"
+                        + "; cmd appops set " + p + " WAKE_LOCK ignore");
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("ignore");
             }
             if ("unrestrict".equals(action)) {
-                sh("am set-inactive --user 0 " + p + " false");
-                sh("cmd appops set " + p + " RUN_IN_BACKGROUND allow");
+                // 解限必须把限制时设的四项全撤回，否则会出现「界面已解除，
+                // 但应用还是启动不了前台服务 / 还是拿不到唤醒锁」的怪状态。
+                // START_FOREGROUND 和 WAKE_LOCK 用 default（恢复系统默认）而不是 allow，
+                // 避免把本来就被系统限制的应用改成完全放行。
+                sh("am set-inactive --user 0 " + p + " false"
+                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND allow"
+                        + "; cmd appops set " + p + " START_FOREGROUND default"
+                        + "; cmd appops set " + p + " WAKE_LOCK default");
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("allow");
             }
         } catch (Exception e) {
@@ -1779,6 +1791,45 @@ public class AdbService {
         } catch (Throwable e) {
             Log.w(TAG, "补做限制失败: " + e);
         }
+    }
+
+    /**
+     * 给旧版本留下的限制补上 START_FOREGROUND / WAKE_LOCK。
+     *
+     * 5.0.1 起「限制」多了这两项（禁止启动前台服务、禁止持有唤醒锁），
+     * 但升级前就存在的限制只有 set-inactive + appops 标记。这里跑一次补齐。
+     *
+     * 用**独立标记**：只补这两项，不重复 set-inactive（那个由 migrateRestrictOnce 管）。
+     * 95 个包 × 2 条拼成一条 shell 执行，约 5~10 秒，只跑一次。
+     */
+    void migrateDeepRestrictOnce() {
+        if (appCtx == null) return;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    Thread.sleep(3500);
+                    android.content.SharedPreferences sp = appCtx.getSharedPreferences(
+                            "app", android.content.Context.MODE_PRIVATE);
+                    if (sp.getBoolean("deepRestrictMigrated", false)) return;
+                    if (!"ok".equals(state())) return;      // 没通道，下次启动再来
+
+                    java.util.Set<String> olds = getRestricted();
+                    if (olds.isEmpty()) {
+                        sp.edit().putBoolean("deepRestrictMigrated", true).apply();
+                        return;
+                    }
+                    StringBuilder sb = new StringBuilder();
+                    for (String p : olds) {
+                        sb.append("cmd appops set ").append(p).append(" START_FOREGROUND ignore;");
+                        sb.append("cmd appops set ").append(p).append(" WAKE_LOCK ignore;");
+                    }
+                    String out = sh(sb.toString());
+                    boolean allOk = out == null || !out.toLowerCase().contains("error");
+                    Log.i(TAG, "深度限制补做: " + olds.size() + " 个, allOk=" + allOk);
+                    if (allOk) sp.edit().putBoolean("deepRestrictMigrated", true).apply();
+                } catch (Throwable ignored) { }
+            }
+        }).start();
     }
 
     /**

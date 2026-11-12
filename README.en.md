@@ -119,7 +119,7 @@ screen off.**
 | Feature | What it does |
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, and its **launcher icon disappears entirely** (MIUI / HyperOS doesn't render a greyed-out state) |
-| **Restrict** | `am set-inactive` (tombstone) — background processes are frozen by the system, and resume **in the same process** when you open the app. Milder than archiving: the app still launches normally and keeps its launcher icon. Some high-privilege apps may still keep a few processes alive — see Known limitations |
+| **Restrict** | `am set-inactive` (tombstone) freezes background processes, and also blocks the app from **starting foreground services** (`START_FOREGROUND`) and **holding wake locks** (`WAKE_LOCK`) — many apps hide behind "I'm a foreground service" to survive background cleanup, so closing that path is what makes the tombstone stick. Opening the app resumes **the same process**. Milder than archiving: it still launches and keeps its icon. Some high-privilege apps may keep a few processes — see Known limitations |
 | **Process details** (5.0) | Multi-process apps show `4procs ›` after the timestamp; tap it to see each process: sub-process name, cumulative CPU time, memory, system oom level, and which ones are still active. Processes in a dual-app / cloned profile are tagged `·dual`. **Queried only on expand — never polled in the background** |
 | **App finder** (since 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
 | **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
@@ -508,8 +508,8 @@ Phone / Messaging, …). Doing so can stop alarms, break the home screen, block 
 If you lock yourself out and the app can no longer be opened, connect the phone to a PC:
 
 ```bash
-# Undo a restriction (one command: unfreeze + clear the marker)
-adb shell "am set-inactive --user 0 <package> false; cmd appops set <package> RUN_IN_BACKGROUND allow"
+# Undo a restriction (one command: unfreeze + revert every switch set by Restrict)
+adb shell "am set-inactive --user 0 <package> false; cmd appops set <package> RUN_IN_BACKGROUND allow; cmd appops set <package> START_FOREGROUND default; cmd appops set <package> WAKE_LOCK default"
 
 # Undo an archive (one command: attempts both restore methods)
 adb shell "pm enable <package>; cmd package install-existing <package>"
@@ -534,7 +534,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 **Lift every restriction**:
 
 ```bash
-adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; done'
+adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; done'
 ```
 
 > Both commands are wrapped in single quotes, so they work as-is in PowerShell / macOS / Linux / Git Bash.

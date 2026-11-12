@@ -253,8 +253,9 @@ transition:transform .15s}
 .mem .proc-btn.open{color:var(--ink3)}
 .mem .proc-btn.open .chev{transform:rotate(90deg)}
 /* 进程展开区：必须 display:block —— 全局 li 是 flex，不覆盖的话
-   几行进程会被横向并排，超出部分直接看不见 */
-.proc-wrap{display:block;list-style:none;background:var(--card);
+   几行进程会被横向并排，超出部分直接看不见。
+   min-height:0 同理：全局 li 有 min-height:68px，一行进程也会撑出 68px 的大空白 */
+.proc-wrap{display:block;list-style:none;background:var(--card);min-height:0;
 padding:4px 14px 8px 44px;position:relative}
 /* 用 grid 定列：名称吃剩余宽度，时间/内存/oom 按内容自适应 ——
    max-content 会取该列所有行里最宽的内容，所以多行之间照样对齐，
@@ -262,7 +263,8 @@ padding:4px 14px 8px 44px;position:relative}
 .proc-row{display:grid;grid-template-columns:6px minmax(0,1fr) max-content max-content max-content;
 gap:10px;align-items:center;padding:5px 0;font-size:12px;
 font-family:ui-monospace,monospace;color:var(--ink3)}
-.proc-dot{width:6px;height:6px;border-radius:50%;background:var(--line)}
+/* 点默认透明：不活跃的进程不放灰点，但保留这一列的宽度，多行名称才对齐 */
+.proc-dot{width:6px;height:6px;border-radius:50%;background:transparent}
 .proc-dot.live{background:#12b76a;box-shadow:0 0 0 2px rgba(18,183,106,.16);
 animation:dotPulse 2.2s ease-in-out infinite}
 .proc-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
@@ -1649,11 +1651,9 @@ function subline(a){
     var ago = fmtAgo(idleMap[a.pkg]) || T('agoNever');
     h += (h ? ' · ' : '') + '<span class="ago">' + ago + '</span>';
   }
-  // 多进程 = 这个应用在后台挂了常驻组件（:pushservice / :channel / :widget…），
-  // 单进程是常态，只在多开时才提示。点击可展开进程明细（按需查询，后台不刷）。
-  // 单独拿出来而不是拼进 h：前面文字可以省略，这个标记必须完整显示。
+  // 有几条进程就标几条（1 条也标），点开能看是哪条、占多少内存
   var btn = '';
-  if (a.procs > 1){
+  if (a.procs > 0){
     btn = (h ? '<span class="sep">·</span>' : '') + '<span class="proc-btn" data-procbtn="' + a.pkg + '">'
         + a.procs + T('procs')
         + '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"'

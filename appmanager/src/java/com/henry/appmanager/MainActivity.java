@@ -158,6 +158,8 @@ public class MainActivity extends Activity {
         // 「限制」底层换成了墓碑（set-inactive）：升级后把旧 appops 标记的补一次，
         // 之后靠 versionCode 判断，不再重复跑
         service.migrateRestrictOnce();
+        // 5.0.1 起限制多了「禁前台服务 / 禁唤醒锁」，老限制补一次（独立标记）
+        service.migrateDeepRestrictOnce();
         // 覆盖安装后 manifest 里的 alias 会重置成默认，这里把用户选过的名称/图标重新落回去
         bridge.restoreAlias();
 

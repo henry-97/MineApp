@@ -102,7 +102,7 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 | 功能 | 说明 |
 |---|---|
 | **归档（冻结）** | `pm disable-user`，应用彻底不跑、不出现在最近任务，**桌面图标直接消失**（MIUI / HyperOS 不显示变灰态） |
-| **限制** | `am set-inactive`（墓碑机制），后台进程被系统冻结；点开时**同一个进程原地复活**，状态不丢。比归档温和：应用照常打开使用，桌面图标也还在。部分高权限应用仍可能保留少量进程，见「已知限制」 |
+| **限制** | `am set-inactive`（墓碑机制）冻结后台进程，同时禁止它**启动前台服务**（`START_FOREGROUND`）和**持有唤醒锁**（`WAKE_LOCK`）——很多应用靠「我是前台服务」躲过后台清理，堵掉这条路墓碑才压得实。点开时**同一个进程原地复活**，状态不丢。比归档温和：应用照常打开、桌面图标也还在。部分高权限应用仍可能保留少量进程，见「已知限制」 |
 | **进程明细**（5.0） | 多进程的应用会在时间后面标 `4进程 ›`，点开看它的每个进程：子进程名、累计 CPU 时间、内存、系统 oom 档位，以及哪个还在活动。应用双开 / 手机分身的进程标 `·多开`。**只在点开时查询，后台不刷新** |
 | **应用查找**（3.8 起） | 点每行的定位按钮，就直接跳到该应用所在的桌面页并打开文件夹 —— 应用再多也能一眼找到。索引只需构建一次；没有索引或索引没建完时，列表上方会给出提示，点一下直达设置页补齐 |
 | **白名单（免限制）** | 把应用加进系统的 doze / standby 白名单（`MILLET_NO_RESTRICT_APP`），系统不再按「长时间未使用」压制它的后台活动。**注意：这不等同于 MIUI 界面上的「省电策略 → 无限制」** —— 那个开关由 `com.miui.powerkeeper` 自己维护，写 settings 改不动，需要到应用信息页单独设置。名单内的应用会显示「白名单」胶囊并置顶；页底实时汇总已选应用的 PSS 合计 |
@@ -465,8 +465,8 @@ MineApp/
 如果不慎误操作、且本软件已经无法打开，可以用数据线连电脑恢复：
 
 ```bash
-# 限制后解限（一条命令：解冻 + 清标记）
-adb shell "am set-inactive --user 0 <包名> false; cmd appops set <包名> RUN_IN_BACKGROUND allow"
+# 限制后解限（一条命令：解冻 + 把限制时设的开关全部撤回）
+adb shell "am set-inactive --user 0 <包名> false; cmd appops set <包名> RUN_IN_BACKGROUND allow; cmd appops set <包名> START_FOREGROUND default; cmd appops set <包名> WAKE_LOCK default"
 
 # 归档后还原（一条命令：两种归档方式一起尝试还原）
 adb shell "pm enable <包名>; cmd package install-existing <包名>"
@@ -489,7 +489,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 **一键解除所有限制**：
 
 ```bash
-adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; done'
+adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; done'
 ```
 
 > 上面两条用单引号包裹，PowerShell / macOS / Linux / Git Bash 可直接使用。
