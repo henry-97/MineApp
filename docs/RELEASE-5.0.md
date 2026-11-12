@@ -82,7 +82,7 @@ Android 的设计是「用户主动启动应用时，把它从 inactive 状态�
 
 | 文件 | 包名 | 说明 |
 |---|---|---|
-| `MineApp-5.0.apk` | `com.henry.appmanager` | 经典版（ADB / Root 通道） |
-| `MineApp-5.0-multi.apk` | `com.henry.appmanager.multi` | 多通道版（多一个 Shizuku 通道） |
+| `MineApp-5.0.apk` | `com.henry.appmanager` | 经典版（仅 ADB 通道） |
+| `MineApp-5.0-multi.apk` | `com.henry.appmanager.multi` | 多通道版（ADB / Root / Shizuku） |
 
 两个包可以同时安装，互不影响。升级时请下载与当前已装版本对应的那一个，包名不同无法互相覆盖。
