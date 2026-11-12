@@ -101,7 +101,7 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 | 功能 | 说明 |
 |---|---|
 | **归档（冻结）** | `pm disable-user`，应用彻底不跑、不出现在最近任务，**桌面图标直接消失**（MIUI / HyperOS 不显示变灰态） |
-| **限制** | `appops RUN_IN_BACKGROUND`，限制后台活动，比冻结温和，应用还能被拉起 |
+| **限制** | `am set-inactive`（墓碑机制），后台进程被系统冻结、CPU 零占用、不联网不推送；点开时**同一个进程原地复活**，状态不丢。比归档温和：应用照常打开使用，桌面图标也还在 |
 | **应用查找**（3.8 新增、完善） | 点每行的定位按钮，就直接跳到该应用所在的桌面页并打开文件夹 —— 应用再多也能一眼找到。索引只需构建一次；没有索引或索引没建完时，列表上方会给出提示，点一下直达设置页补齐 |
 | **白名单（免限制）** | 把应用加进系统的 doze / standby 白名单（`MILLET_NO_RESTRICT_APP`），系统不再按「长时间未使用」压制它的后台活动。**注意：这不等同于 MIUI 界面上的「省电策略 → 无限制」** —— 那个开关由 `com.miui.powerkeeper` 自己维护，写 settings 改不动，需要到应用信息页单独设置。名单内的应用会显示「白名单」胶囊并置顶；页底实时汇总已选应用的 PSS 合计 |
 | **AOT 编译** | `cmd package compile -m speed`，把 dex 提前编译成本地码，冷启动更快；**可单应用针对性编译，也可批量**，编译时轨道内显示已用时。**状态自动识别**：重装或清数据后，会从系统 `dumpsys package dexopt` 批量读回哪些应用已经 AOT，界面照实显示，不用重新编译一遍 |
@@ -119,11 +119,13 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 >
 > | 你在哪操作 | 实际改的是什么 | 管到哪一层 |
 > |---|---|---|
-> | 本应用 → **限制** | `appops RUN_IN_BACKGROUND` | 这个应用能不能在后台活动 |
+> | 本应用 → **限制** | `am set-inactive`（墓碑），外加 `appops` 只作标记 | 后台进程被冻结；前台照常，点开即解冻 |
 > | 本应用 → **白名单** | 系统 doze / standby 白名单（`EXEMPTED`） | 系统要不要压制它 |
 > | MIUI 设置 → **省电策略** | `com.miui.powerkeeper` 的私有状态 | MIUI 自己的省电逻辑 |
 >
-> 前两个互不覆盖，所以**一个应用可以既「已限制」又「在白名单」**。
+> 前两个是两套独立状态，可以同时存在（一个应用可以既「已限制」又「在白名单」）。
+> 但作用方向相反：**白名单放宽、限制收紧**，同时开时以更强的那个为准 —— 想让它后台跑就别加限制。
+>
 > 第三个我们写不进去 —— 想让 MIUI 界面也显示「无限制」，得去应用信息页手动选一次。
 
 > **关于「性能模式」：它其实不费电**
@@ -362,12 +364,11 @@ MineApp/
 > 本项目不需要提前装 Termux。`termux/` 这个目录名是历史遗留：早期提供过「Termux + Python 脚本免 root」的分发形态，
 > 现在只作为前端源码的存放位置，不再随项目分发。
 
-## 扩展：多通道授权版（Root / Shizuku 等），独立发布 release
+## 扩展版本：多通道授权版，独立发布 release APK
 
-`ext-lsposed/` 是 GitHub 开发者 [MiaoluoYuanlina](https://github.com/MiaoluoYuanlina) 写的 LSPosed 模块源码，
-该版本引用其部分内容（[仓库链接](https://github.com/MiaoluoYuanlina/MineApp-LSPosed)）作为第三方组件。
-
-多通道版相比普通版，在 App 内「设置 → 执行通道」会多出两个选项：
+多通道版（其中引用了 GitHub 开发者 [MiaoluoYuanlina](https://github.com/MiaoluoYuanlina) 的
+[仓库](https://github.com/MiaoluoYuanlina/MineApp-LSPosed) 中的部分内容）相比普通版，
+在 App 内「设置 → 执行通道」会多出两个选项：
 
 | 选项 | 说明 |
 |---|---|
@@ -377,7 +378,7 @@ MineApp/
 
 走这两个通道就不必再执行 `adb tcpip 5555`，重启手机后也不会失效。
 
-多通道版以 `multi-v*` 为 tag 单独发布，与普通版互不覆盖。
+多通道版与普通版打同一个 tag，两个 APK 挂在同一个 Release 下；包名不同，互不覆盖。
 
 引用说明：
 
@@ -451,23 +452,32 @@ MineApp/
 请**不要随意冻结或限制系统必要组件**（时钟、桌面启动器、输入法、电话 / 短信等），
 否则可能导致闹钟不响、桌面异常、收不到来电等问题。
 
-**对系统应用施加「限制」的风险未知**，请谨慎评估后再操作。
+**对系统应用施加「限制」、「归档」的风险未知**，请谨慎评估后再操作。
 
 如果不慎误操作、且本软件已经无法打开，可以用数据线连电脑恢复：
 
 ```bash
-# 归档（应用被禁用、图标消失）
+# 归档后还原
 adb shell pm enable <包名>
 
-# 限制（墓碑机制）
+# 限制后解限
 adb shell am set-inactive --user 0 <包名> false
 adb shell cmd appops set <包名> RUN_IN_BACKGROUND allow
 ```
 
-一次解除全部「限制」（在电脑上跑，任意平台通用）：
+**一键还原所有归档**（两种归档方式都覆盖：禁用、移除当前用户）：
 
 ```bash
-adb shell "cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 \$p false; cmd appops set \$p RUN_IN_BACKGROUND allow; done"
+adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable $p; done; pm list packages -u --user 0 | sed "s/package://" | sort > /data/local/tmp/aa.txt; pm list packages --user 0 | sed "s/package://" | sort > /data/local/tmp/bb.txt; comm -23 /data/local/tmp/aa.txt /data/local/tmp/bb.txt | while read p; do cmd package install-existing $p; done; rm -f /data/local/tmp/aa.txt /data/local/tmp/bb.txt'
 ```
+
+**一键解除所有限制**：
+
+```bash
+adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; done'
+```
+
+> 上面两条用单引号包裹，macOS / Linux / Git Bash / PowerShell 可直接使用。
+> Windows CMD 请把外层单引号换成双引号（CMD 不展开 `$`，效果相同）。
 
 **因使用不当造成的数据丢失或设备异常，作者不承担责任。**

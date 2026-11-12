@@ -113,7 +113,7 @@ screen off.**
 | Feature | What it does |
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, and its **launcher icon disappears entirely** (MIUI / HyperOS doesn't render a greyed-out state) |
-| **Restrict** | `appops RUN_IN_BACKGROUND` — restricts background activity; milder than freezing, the app can still be launched |
+| **Restrict** | `am set-inactive` (tombstone) — background processes are frozen by the system (zero CPU, no network, no push) and resume **in the same process** when you open the app. Milder than archiving: the app still launches normally and keeps its launcher icon |
 | **App finder** (new and refined in 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
 | **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling. **State is auto-detected**: after a reinstall or data wipe it reads back which apps are already AOT-compiled from `dumpsys package dexopt`, so the UI shows the truth instead of starting from zero |
@@ -131,11 +131,14 @@ screen off.**
 >
 > | Where you touch it | What it actually changes | Which layer it governs |
 > |---|---|---|
-> | This app → **Restrict** | `appops RUN_IN_BACKGROUND` | Whether the app may run in the background |
+> | This app → **Restrict** | `am set-inactive` (tombstone), plus `appops` as a marker only | Background processes get frozen; foreground use is unaffected and opening the app unfreezes it |
 > | This app → **Allowlist** | The system doze / standby allowlist (`EXEMPTED`) | Whether the system throttles it |
 > | MIUI Settings → **Battery saver** | Private state kept by `com.miui.powerkeeper` | MIUI's own power logic |
 >
-> The first two don't override each other, so **an app can be both Restricted and Allowlisted**.
+> The first two are independent states and can coexist (an app can be both Restricted and
+> Allowlisted). They pull in opposite directions though — **the allowlist loosens, Restrict
+> tightens** — so if you want something running in the background, don't restrict it.
+>
 > The third one we cannot write — to make MIUI's UI show "No restrictions", pick it once on the
 > app-info page.
 
@@ -387,14 +390,11 @@ MineApp/
 > distribution ran the app as a Termux + Python script without root. It now only holds the
 > front-end source and is no longer shipped.
 
-## Extension: multi-channel edition (Root / Shizuku), released separately
+## Extended edition: multi-channel, released as a separate APK
 
-`ext-lsposed/` holds the source of an **LSPosed module** by the GitHub developer
-[MiaoluoYuanlina](https://github.com/MiaoluoYuanlina). The multi-channel edition references part of it
-([upstream repo](https://github.com/MiaoluoYuanlina/MineApp-LSPosed)) as a third-party component.
-
-Compared with the standard edition, the multi-channel edition adds two options under
-"Settings → Execution channel":
+The multi-channel edition (which references part of a repo by the GitHub developer
+[MiaoluoYuanlina](https://github.com/MiaoluoYuanlina) — [upstream](https://github.com/MiaoluoYuanlina/MineApp-LSPosed))
+adds two options under "Settings → Execution channel" compared with the standard edition:
 
 | Option | What it does |
 |---|---|
@@ -404,8 +404,8 @@ Compared with the standard edition, the multi-channel edition adds two options u
 
 Either channel removes the need for `adb tcpip 5555`, and it survives a reboot.
 
-The multi-channel edition is published under its own `multi-v*` tag; the two channels never
-overwrite each other.
+Both editions share the same tag and ship as two APKs under one Release; the package names differ,
+so neither overwrites the other.
 
 Attribution:
 
@@ -489,23 +489,32 @@ This app drives the system `pm` / `am` / `cmd` commands directly through ADB —
 **Do not freeze or restrict components the system depends on** (Clock, the launcher, the keyboard,
 Phone / Messaging, …). Doing so can stop alarms, break the home screen, block incoming calls, and more.
 
-**The risk of restricting system apps is unknown — evaluate carefully before doing it.**
+**The risk of restricting or archiving system apps is unknown — evaluate carefully before doing it.**
 
 If you lock yourself out and the app can no longer be opened, connect the phone to a PC:
 
 ```bash
-# Archive (component disabled, icon gone)
+# Undo an archive
 adb shell pm enable <package>
 
-# Restrict (tombstone)
+# Undo a restriction
 adb shell am set-inactive --user 0 <package> false
 adb shell cmd appops set <package> RUN_IN_BACKGROUND allow
 ```
 
-Lift every restriction at once (runs on any desktop platform):
+**Restore every archived app** (covers both archive methods — disabled and removed-for-user):
 
 ```bash
-adb shell "cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 \$p false; cmd appops set \$p RUN_IN_BACKGROUND allow; done"
+adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable $p; done; pm list packages -u --user 0 | sed "s/package://" | sort > /data/local/tmp/aa.txt; pm list packages --user 0 | sed "s/package://" | sort > /data/local/tmp/bb.txt; comm -23 /data/local/tmp/aa.txt /data/local/tmp/bb.txt | while read p; do cmd package install-existing $p; done; rm -f /data/local/tmp/aa.txt /data/local/tmp/bb.txt'
 ```
+
+**Lift every restriction**:
+
+```bash
+adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; done'
+```
+
+> Both commands are wrapped in single quotes, so they work as-is in macOS / Linux / Git Bash / PowerShell.
+> On Windows CMD, swap the outer single quotes for double quotes (CMD does not expand `$`, so the effect is the same).
 
 **The author is not liable for data loss or device misbehaviour caused by misuse.**
