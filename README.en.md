@@ -10,7 +10,7 @@
 
 <p align="center">
   <img alt="version" src="https://img.shields.io/badge/version-3.9.7-0F6E56">
-  <img alt="APK" src="https://img.shields.io/badge/APK-553%20KB-0F6E56">
+  <img alt="APK" src="https://img.shields.io/badge/APK-648%20KB-0F6E56">
   <img alt="minSdk" src="https://img.shields.io/badge/minSdk-26-0F6E56">
   <img alt="targetSdk" src="https://img.shields.io/badge/targetSdk-35-0F6E56">
   <img alt="license" src="https://img.shields.io/badge/license-GPL--3.0-0F6E56">
@@ -48,8 +48,8 @@ that single `adb tcpip` keeps working. After a reboot, every restriction stays i
 you re-authorise — you just cannot refresh the app list until you run it once more at your convenience,
 **so rebooting often is nothing to worry about**.
 
-**One app, and that is the whole setup.** A single 553 KB APK with zero third-party dependencies:
-no Shizuku, no Ice Box, no Hail, no resident daemon, no extra permissions.
+**One app, and that is the whole setup.** A single 648 KB APK with zero third-party dependencies:
+no Shizuku, no Ice Box, no Hail, no third-party daemon, no extra permissions — just one ongoing notification that shows battery and memory.
 
 <p align="center">
   <img src="docs/main-en.jpg" width="320" alt="Main screen">
@@ -99,7 +99,7 @@ screen off.**
 | Needs root | **No** | No | No | No |
 | Requires Shizuku | **No ✓** | No | Yes | Yes |
 | Ships its own ADB client | **Yes ✓** | — | No (uses Shizuku) | No (uses Shizuku) |
-| Needs a background daemon | **No ✓** | No | Yes (Shizuku running) | Yes (Shizuku running) |
+| Needs a background daemon | **Notification only ✓** | No | Yes (Shizuku running) | Yes (Shizuku running) |
 | APK size | **< 1MB ✓** | Built in | Several MB | Several MB |
 | Batch freeze / unfreeze | **Yes** | — | Yes | Yes |
 | Survives a reboot | **Yes** | No | Yes | Yes |
@@ -119,14 +119,15 @@ screen off.**
 | Feature | What it does |
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, and its **launcher icon disappears entirely** (MIUI / HyperOS doesn't render a greyed-out state) |
-| **Restrict** | `am set-inactive` (tombstone) — background processes are frozen by the system (zero CPU, no network, no push) and resume **in the same process** when you open the app. Milder than archiving: the app still launches normally and keeps its launcher icon |
-| **App finder** (new and refined in 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
+| **Restrict** | `am set-inactive` (tombstone) — background processes are frozen by the system, and resume **in the same process** when you open the app. Milder than archiving: the app still launches normally and keeps its launcher icon. Some high-privilege apps may still keep a few processes alive — see Known limitations |
+| **Process details** (5.0) | Multi-process apps show `4procs ›` after the timestamp; tap it to see each process: sub-process name, cumulative CPU time, memory, system oom level, and which ones are still active. Processes in a dual-app / cloned profile are tagged `·dual`. **Queried only on expand — never polled in the background** |
+| **App finder** (since 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
 | **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling. **State is auto-detected**: after a reinstall or data wipe it reads back which apps are already AOT-compiled from `dumpsys package dexopt`, so the UI shows the truth instead of starting from zero |
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
 | **Memory sort** | Sort by PSS to see exactly what is eating RAM; the footer shows live system-wide memory usage |
-| **Activity monitor** | A **pulsing green dot** on the memory line marks apps that are actually running (based on the system's oom adj — plain cached processes and "recently used, now in background" do not count) |
-| **Per-app cleanup** | An **×** on every row runs `am kill` — clears background processes only. **Auto-start and enabled state are untouched**, so the next launch is a normal cold start. It also reports how much memory was actually freed |
+| **Activity monitor** | A **pulsing green dot** on the memory line marks apps that are actually running (based on the system's oom adj — only pure cached processes are excluded) |
+| **Per-app cleanup** | An **×** on every row runs `am force-stop`, stopping **every** process of that app and clearing its recents card too (`am stack remove`). The label clears instantly, the row leaves the list after 0.8 s, and the kill runs asynchronously in the background |
 | **Real app names** | Resolved in two passes — launcher-activity labels, then application labels — so every installed app shows its real name instead of its package name |
 | **Batch actions** | Select many apps, then archive / restore / restrict / unrestrict in one go |
 | **Ongoing notification** | Battery health, memory usage and archive count in the status bar; memory reads a system API (no shell) every 3 s while the screen is on and 60 s while off, battery/counts every 3 min / 30 min — almost no standby cost |
@@ -193,7 +194,8 @@ screen off.**
 
 ## Install
 
-1. Grab `app-manager.apk` (~553 KB) from [Releases](https://github.com/henry-97/MineApp/releases)
+1. Grab the right APK (~650 KB) from [Releases](https://github.com/henry-97/MineApp/releases):
+   standard `MineApp-X.Y.apk` or multi-channel `MineApp-X.Y-multi.apk` — see "Extended edition" below for the difference
 2. Or build it yourself (see below)
 
 ### First-time setup (once only)
@@ -375,9 +377,11 @@ MineApp/
 │   ├── src/java/.../
 │   │   ├── AdbClient.java        ADB protocol (CNXN/AUTH/OPEN/WRTE/OKAY/CLSE)
 │   │   ├── AdbService.java       Business layer: list, freeze, restrict, AOT, battery, memory
+│   │   ├── A11yService.java      Accessibility service: home-screen index / app finder
 │   │   ├── Bridge.java           JS ↔ Java bridge, two pools (normal / long-running)
 │   │   ├── MainActivity.java     WebView host
-│   │   └── KeepAliveService.java Ongoing notification
+│   │   ├── OpHistory.java        Operation history (archive / restore / restrict / unrestrict)
+│   │   └── KeepAliveService.java Ongoing notification + tombstone re-assert
 │   ├── res/                      Resources (icons generated by tools/gen_icon.py)
 │   ├── assets/                   Front-end bundled into the APK (generated, don't edit)
 │   └── tools/
@@ -452,13 +456,6 @@ Attribution:
   If an app misbehaves after being restricted (missing messages, broken background tasks), tap
   "Unrestrict" in the app. Freezing only affects the background — opening and using the app works
   normally.
-
-- **Process counts are visible and expandable** (5.0).
-  Multi-process apps show `4procs ›` after the timestamp; tap it to see that app's processes:
-  sub-process name, cumulative CPU time, memory, system oom level, and which ones are still active.
-  Processes belonging to a dual-app / cloned profile are tagged `·dual` (the same app runs a full set
-  in each user space, with identical process names — without the tag they look duplicated).
-  Data is queried only when you expand, never polled in the background.
 
 - **Never approve an unexpected "Allow USB debugging?" dialog on a public network.**
   `adb tcpip 5555` makes adbd listen on all interfaces, so anyone on the same network can trigger
