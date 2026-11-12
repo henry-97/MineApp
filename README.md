@@ -476,9 +476,12 @@ adb shell "pm enable <包名>; cmd package install-existing <包名>"
 > `cmd appops` 是索引层——本 App 靠 `appops query-op` 一条命令查出所有被限制的应用。
 > 只解冻不清标记的话，应用会一直留在「一键解除」的名单里。
 >
-> **归档为什么两条都跑**：`pm disable-user` 直接禁用；系统应用不允许禁用时会退回
-> `pm uninstall --user 0` 只移除当前用户（APK 仍在系统分区）。前者用 `pm enable` 还原，
-> 后者只能用 `cmd package install-existing`。两条都执行是幂等的，跑错的那条直接报错、不改状态。
+> **归档为什么两条都跑**：`pm disable-user` 直接禁用，用 `pm enable` 还原；
+> 系统应用不允许禁用时会退回 `pm uninstall --user 0` 只移除当前用户（APK 仍在系统分区），
+> 这种**只能用 `cmd package install-existing`**。
+>
+> ⚠️ 对「已移除当前用户」的包执行 `pm enable` 会**假成功**——回一句 `new state: enabled`，
+> 但当前用户依然看不到它（实测）。所以两条都要执行，不能只跑 `pm enable`。
 
 **一键还原所有归档**：
 
