@@ -454,7 +454,7 @@ Attribution:
   greyed-out disabled state). That's system behaviour, not an uninstall — tap "Restore" in the
   app and it returns to its original spot.
 
-- **Since 4.9.3, the function behind the "Restrict" button uses a tombstone-like (App Inactive) mechanism.**
+- **Since 4.9.3, the function behind the "Restrict" button uses the Tombstone (App Inactive) mechanism.**
   Earlier builds relied on the standard AppOps background restriction, but **some Chinese OEM ROMs
   simply ignore it** — after setting `RUN_IN_BACKGROUND=ignore` the app keeps running in the
   background (measured after a full day: process still alive, oomAdj identical to an unrestricted
