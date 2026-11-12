@@ -461,9 +461,9 @@ Attribution:
   app). So it now uses `am set-inactive`: background processes are frozen (zero CPU, no network, no
   push) and resume **in the same process** when you open the app — state intact, no cold start.
 
-  To be clear: **some high-privilege apps — or apps that just returned to the background — may still keep a few processes alive.** This app maintains
-  the restriction state only within a low-power budget — those apps stay significantly quieter than
-  when unrestricted, but complete stillness is not guaranteed.
+  To be clear: **some high-privilege apps — or apps that just returned to the background — may still keep a few processes alive.**
+  This app will try to maintain the restriction state within a low-power budget — those apps stay
+  significantly quieter than when unrestricted, but complete stillness is not guaranteed.
 
   **Restrictions set under the old mechanism are migrated automatically** after upgrading; you don't
   need to re-apply anything. The migration runs exactly once and never repeats, regardless of which
@@ -524,11 +524,11 @@ Phone / Messaging, …). Doing so can stop alarms, break the home screen, block 
 If you lock yourself out and the app can no longer be opened, connect the phone to a PC:
 
 ```bash
-# Undo a restriction (one command: unfreeze + revert every switch set by Restrict)
-adb shell "am set-inactive --user 0 <package> false; cmd appops set <package> START_FOREGROUND default; cmd appops set <package> WAKE_LOCK default; cmd appops set <package> RUN_IN_BACKGROUND allow"
+# Undo a restriction (package name appears once)
+adb shell 'P=<package>; am set-inactive --user 0 $P false; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
 
-# Undo an archive (one command: attempts both restore methods)
-adb shell "pm enable <package>; cmd package install-existing <package>"
+# Undo an archive (package name appears once, attempts both restore methods)
+adb shell 'P=<package>; pm enable $P; cmd package install-existing $P'
 ```
 
 > **Why a restriction needs two layers cleared**: `am set-inactive` is the layer that actually takes
@@ -553,7 +553,8 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; cmd appops set $p RUN_IN_BACKGROUND allow; done'
 ```
 
-> Both commands are wrapped in single quotes, so they work as-is in PowerShell / macOS / Linux / Git Bash.
-> On Windows CMD, swap the outer single quotes for double quotes.
+> `$P` is a variable for the **phone-side** shell; the outer quotes keep your local terminal from
+> expanding it. Use single quotes in PowerShell / macOS / Linux / Git Bash; on Windows CMD swap them
+> for double quotes.
 
 **The author is not liable for data loss or device misbehaviour caused by misuse.**

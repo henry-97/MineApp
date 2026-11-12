@@ -422,7 +422,7 @@ MineApp/
   oomAdj 与未限制时完全一致）。所以改成 `am set-inactive`：后台进程会被系统冻结，
   点开时自动解冻、**同一个进程原地复活**，状态不丢。
 
-  需要说明的是：**部分高权限应用，或刚切回后台的应用仍可能保留少量进程**。本 App 只在低能耗前提下
+  需要说明的是：**部分高权限应用，或刚切回后台的应用仍可能保留少量进程**。本 App 会在低能耗前提下
   尽量维持限制状态——它们的后台活跃水平会显著低于未限制时，但不保证完全静止。
 
   **升级后旧限制名单里的应用会自动迁移到墓碑机制**，不需要重新限制一遍。
@@ -480,11 +480,11 @@ MineApp/
 如果不慎误操作、且本软件已经无法打开，可以用数据线连电脑恢复：
 
 ```bash
-# 限制后解限（一条命令：解冻 + 把限制时设的开关全部撤回）
-adb shell "am set-inactive --user 0 <包名> false; cmd appops set <包名> START_FOREGROUND default; cmd appops set <包名> WAKE_LOCK default; cmd appops set <包名> RUN_IN_BACKGROUND allow"
+# 限制后解限（包名只写一次）
+adb shell 'P=<包名>; am set-inactive --user 0 $P false; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
 
-# 归档后还原（一条命令：两种归档方式一起尝试还原）
-adb shell "pm enable <包名>; cmd package install-existing <包名>"
+# 归档后还原（包名只写一次，两种归档方式一起尝试）
+adb shell 'P=<包名>; pm enable $P; cmd package install-existing $P'
 ```
 
 > **解限为什么要清两层**：`am set-inactive` 是真正生效的那层（解除冻结），
@@ -507,7 +507,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; cmd appops set $p RUN_IN_BACKGROUND allow; done'
 ```
 
-> 上面两条用单引号包裹，PowerShell / macOS / Linux / Git Bash 可直接使用。
-> Windows CMD 请把外层单引号换成双引号。
+> 命令里的 `$P` 是**手机端 shell** 的变量，靠外层引号保护，不会被本地终端展开。
+> PowerShell / macOS / Linux / Git Bash 用单引号直接跑；Windows CMD 把外层单引号换成双引号即可。
 
 **因使用不当造成的数据丢失或设备异常，作者不承担责任。**
