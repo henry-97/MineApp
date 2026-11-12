@@ -3217,6 +3217,18 @@ public class Bridge {
      * 用户过段时间打开就被再弹一次（实测被反馈）。这里额外存一份 SharedPreferences，
      * 那是 App 私有数据，不受 WebView 清理影响。
      */
+    /** 某个应用的进程明细（PID / 子进程名 / CPU 时间 / 内存 / oom），供列表展开用。 */
+    @JavascriptInterface
+    public void procs(int id, String arg) {
+        String r;
+        try {
+            r = service.procsJson(arg == null ? "" : arg.trim());
+        } catch (Throwable e) {
+            r = "{\"ok\":false,\"msg\":\"" + e + "\"}";
+        }
+        replyNow(id, r);
+    }
+
     @JavascriptInterface
     public void riskok(int id, String arg) {
         boolean ok = false;

@@ -74,6 +74,8 @@ public class AdbService {
 
     private final AdbClient.Log log;
     private AdbClient.KeyMaterial key;
+    /** 最近一次全量刷新读到的限制名单，供补做复用一个来源，不重复跑 appops 查询 */
+    private Set<String> lastRestricted = new HashSet<String>();
 
     public AdbService(AdbClient.Log log) {
         this.log = log;
@@ -412,12 +414,11 @@ public class AdbService {
             if (old == null || kb < old) pssByPid.put(pid, kb);
             pkgByPid.put(pid, base);
             // meminfo -c 的第 2 个字段是系统给的 oom 档位：
-            //   fore / vis / percept / service* / home / pers … = 还在活动
-            //   cached / empty                                  = 只是被缓存着
-            //   prev = 刚用完退到后台、为快速恢复保留着 —— 进程还在但没做事，
-            //          按「活动」算会让人困惑（明明没动却有绿点），这里排除
-            boolean live = !(cat.equals("cached") || cat.equals("empty")
-                    || cat.equals("prev"));
+            //   fore / vis / percept / service* / home / pers / prev … = 进程还在跑
+            //   cached / empty                                        = 只是被缓存着
+            // 🔴 prev（刚用完退到后台）也算活动：进程列表里它是活的（oom < 900），
+            //    应用行不亮就会出现「进程有绿点、包名没绿点」的矛盾。
+            boolean live = !(cat.equals("cached") || cat.equals("empty"));
             Boolean was = liveByPid.get(pid);
             liveByPid.put(pid, was == null ? live : (was || live));
         }
@@ -725,7 +726,8 @@ public class AdbService {
                 if (!active.contains(p)) archived.add(p);
             }
             o.put("archived", archived.size());
-            o.put("restricted", getRestricted().size());
+            lastRestricted = getRestricted();
+            o.put("restricted", lastRestricted.size());
             putMem(o);
         } catch (Exception e) {
             Log.w(TAG, "summary 失败: " + e);
@@ -905,29 +907,59 @@ public class AdbService {
      */
     public String killApp(String pkg, long beforeKb) {
         JSONObject o = new JSONObject();
+        // beforeKb < 0：前端只要「杀掉」，不要释放量。
+        // 这时跳过 pssOf（全量 meminfo，1~2 秒）和轮询等待，kill 完直接返回。
+        boolean calcFreed = beforeKb >= 0;
         try {
             // 「清理前」直接用列表里已经显示的那个 PSS —— 用户点之前看到的就是它，
             // 释放量跟屏幕上的数字自然对得上。省掉一次全量 meminfo（约 0.5s）。
-            long before = beforeKb > 0 ? beforeKb : pssOf(pkg);
+            long before = calcFreed ? (beforeKb > 0 ? beforeKb : pssOf(pkg)) : 0L;
 
-            sh("am kill " + pkg);
+            // 🔴 用 am force-stop 而不是 kill -9 / am kill：
+            //    - kill -9 对别的 uid 直接 Operation not permitted（实测），
+            //      shell 用户无权杀其他应用的进程；
+            //    - am kill 只杀得掉「后台」进程，带 started service 的会留下来
+            //      （实测菜鸟 4 个进程只掉了 1 个）；
+            //    - am force-stop 走 AMS，能把这个应用的所有进程、服务、闹钟
+            //      一起停掉（实测 4 个进程全部消失）。
+            sh("am force-stop " + pkg);
 
-            // 轮询等进程退出，而不是死等 700ms：通常 100~300ms 就干净了
+            // 🔴 force-stop 只杀进程，最近任务里的卡片还留着（实测：进程 0 个，
+            //    多任务界面仍有它）。这里按包名找出该应用的 taskId 再删掉。
+            //    `am stack remove <taskId>` 是唯一可用的公开命令（am task remove 不存在）。
+            try {
+                String rec = sh("dumpsys activity recents 2>/dev/null");
+                java.util.regex.Matcher tm = java.util.regex.Pattern
+                        .compile("Task\\{[0-9a-f]+ #(\\d+) type=[^ ]* A=\\d+:"
+                                + java.util.regex.Pattern.quote(pkg) + "\\}")
+                        .matcher(rec);
+                StringBuilder rm = new StringBuilder();
+                while (tm.find()) rm.append("am stack remove ").append(tm.group(1)).append(";");
+                if (rm.length() > 0) sh(rm.toString());
+            } catch (Throwable ignored) { }
+
+            // 轮询等进程退出，而不是死等：通常 100~300ms 就干净了。
+            // 这里用 ps 判断而不是 pidof —— pidof 按进程名精确匹配，看不到 :pushservice。
             boolean gone = false;
-            for (int i = 0; i < 8; i++) {
-                try { Thread.sleep(100); } catch (InterruptedException ignored) { }
-                String pids;
-                try {
-                    pids = sh("pidof " + pkg);
-                } catch (Exception e) {
-                    // 个别 ROM 没有 pidof —— 当作还活着，退回实测路径，别让整个清理失败
-                    break;
+            if (calcFreed) {
+                for (int i = 0; i < 8; i++) {
+                    try { Thread.sleep(100); } catch (InterruptedException ignored) { }
+                    boolean any = false;
+                    try {
+                        for (String line : sh("ps -A -o NAME 2>/dev/null").split("\n")) {
+                            String s = line.trim();
+                            if (s.equals(pkg) || s.startsWith(pkg + ":")) { any = true; break; }
+                        }
+                    } catch (Exception e) {
+                        break;                  // 读不到就当还活着，退回实测路径
+                    }
+                    if (!any) { gone = true; break; }
                 }
-                if (pids == null || pids.trim().isEmpty()) { gone = true; break; }
             }
 
             // 进程全没了 → 释放的就是清理前那些；还有存活进程才实测一次
-            long freed = gone ? before : Math.max(0, before - pssOf(pkg));
+            long freed = !calcFreed ? 0L
+                    : (gone ? before : Math.max(0, before - pssOf(pkg)));
 
             o.put("ok", true);
             o.put("pkg", pkg);
@@ -1352,6 +1384,21 @@ public class AdbService {
         Set<String> restricted = getRestricted();
         Map<String, String> labels = labelMap(all.size());
 
+        // 每个应用当前有几个进程。多进程通常意味着它在后台挂了常驻组件
+        // （:pushservice / :channel / :widget / :longlink…），是「偷偷活动」的直接证据。
+        // 一次 ps 就够，约 0.5 秒；比前面几条 pm 查询便宜。
+        Map<String, Integer> procCnt = new HashMap<String, Integer>();
+        try {
+            for (String line : sh("ps -A -o NAME 2>/dev/null").split("\n")) {
+                String n = line.trim();
+                if (n.isEmpty() || "NAME".equals(n)) continue;      // 表头
+                int c = n.indexOf(':');
+                String p = c > 0 ? n.substring(0, c) : n;
+                Integer old = procCnt.get(p);
+                procCnt.put(p, old == null ? 1 : old + 1);
+            }
+        } catch (Exception ignored) { }
+
         List<JSONObject> apps = new ArrayList<JSONObject>();
         List<String> sortedPkgs = new ArrayList<String>(all);
         Collections.sort(sortedPkgs);
@@ -1390,6 +1437,9 @@ public class AdbService {
                 a.put("pss", v == null ? 0 : v);
                 a.put("active", pssInfo.active.contains(pkg));
                 a.put("restricted", restricted.contains(pkg));
+                // 只在多进程时才带这个字段：单进程是常态，全量下发只会让前端做无用判断
+                Integer pc = procCnt.get(pkg);
+                if (pc != null && pc.intValue() > 1) a.put("procs", pc.intValue());
                 // 只有桌面能放图标的才显示「定位」按钮；纯服务类应用没有启动入口
                 a.put("launcher", launchableSet != null && launchableSet.contains(pkg));
                 // 桌面索引里没有这个名字 = 桌面上没有它的图标，定位必然失败 → 不显示按钮
@@ -1595,6 +1645,140 @@ public class AdbService {
             Log.w(TAG, "操作失败 " + p + ": " + e);
         }
         return false;
+    }
+
+    /**
+     * 某个应用的进程明细：PID / 子进程名 / 累计 CPU 时间 / 内存 / 优先级。
+     *
+     * 两条命令就够，不用 dumpsys activity processes（那玩意几 MB，解析也慢）：
+     *   ps -A -o PID,NAME,TIME,RSS      一次拿到全部进程（约 0.5 秒）
+     *   echo $p $(cat /proc/$p/oom_score_adj)   一条 shell 批量读优先级（几十毫秒）
+     *
+     * oom_score_adj < 900 视为「还活着」，900+ 是缓存（随时可回收）——
+     * 前端用它决定要不要点亮呼吸绿点。
+     */
+    public String procsJson(String pkg) {
+        JSONObject o = new JSONObject();
+        try {
+            JSONArray arr = new JSONArray();
+            java.util.List<Integer> pids = new ArrayList<Integer>();
+            java.util.List<String[]> rows = new ArrayList<String[]>();
+
+            for (String line : sh("ps -A -o PID,USER,NAME,TIME,RSS 2>/dev/null").split("\n")) {
+                String s = line.trim();
+                if (s.isEmpty() || s.startsWith("PID")) continue;
+                String[] f = s.split("\\s+");
+                if (f.length < 5) continue;
+                String name = f[2];
+                if (!name.equals(pkg) && !name.startsWith(pkg + ":")) continue;
+                int pid;
+                try { pid = Integer.parseInt(f[0]); } catch (Throwable e) { continue; }
+                pids.add(Integer.valueOf(pid));
+                // user 列形如 u0_a279 / u999_a279：数字段就是空间号（0 = 机主，999 = 分身）
+                rows.add(new String[]{String.valueOf(pid), name, f[3], f[4], f[1]});
+            }
+            if (rows.isEmpty()) {
+                o.put("ok", true);
+                o.put("procs", arr);
+                return o.toString();
+            }
+
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < pids.size(); i++) {
+                int pid = pids.get(i).intValue();
+                sb.append("echo ").append(pid).append(" $(cat /proc/")
+                  .append(pid).append("/oom_score_adj 2>/dev/null);");
+            }
+            Map<Integer, Integer> oomMap = new HashMap<Integer, Integer>();
+            for (String line : sh(sb.toString()).split("\n")) {
+                String s = line.trim();
+                int sp = s.indexOf(' ');
+                if (sp <= 0) continue;
+                try {
+                    oomMap.put(Integer.valueOf(s.substring(0, sp).trim()),
+                            Integer.valueOf(s.substring(sp + 1).trim()));
+                } catch (Throwable ignored) { }
+            }
+
+            for (String[] r : rows) {
+                int pid = Integer.parseInt(r[0]);
+                JSONObject p = new JSONObject();
+                p.put("pid", pid);
+                // 主进程名字就是包名，子进程只取冒号后面那段（pushservice / channel）
+                p.put("name", r[1].equals(pkg) ? "" : r[1].substring(pkg.length() + 1));
+                p.put("cpu", r[2]);
+                long kb = 0;
+                try { kb = Long.parseLong(r[3]); } catch (Throwable ignored) { }
+                p.put("mem", kb * 1024L);
+                // 非 0 号空间的进程 = 应用双开 / 手机分身，前端标「·多开」
+                try {
+                    java.util.regex.Matcher um = java.util.regex.Pattern
+                            .compile("^u(\\d+)_").matcher(r[4]);
+                    if (um.find() && !"0".equals(um.group(1))) p.put("multi", true);
+                } catch (Throwable ignored) { }
+                Integer oom = oomMap.get(Integer.valueOf(pid));
+                if (oom != null) {
+                    p.put("oom", oom.intValue());
+                    p.put("active", oom.intValue() < 900);
+                } else {
+                    p.put("active", false);
+                }
+                arr.put(p);
+            }
+            o.put("ok", true);
+            o.put("procs", arr);
+        } catch (Throwable e) {
+            try {
+                o.put("ok", false);
+                o.put("msg", String.valueOf(e));
+            } catch (Throwable ignored) { }
+        }
+        return o.toString();
+    }
+
+    /**
+     * 对「已限制 且 当前有进程在跑」的包重新执行 set-inactive。
+     *
+     * 🔴 为什么必须补：setAppInactive 是「用户不活跃」标记，AMS 在用户主动
+     *    启动应用时会自动清除它 —— 也就是用户打开过一次，限制就失效了。
+     *    不补的话界面还显示「已限制」，实际早就不生效（实测：重新打开退出后
+     *    oomAdj 是 701 而不是墓碑应有的 900+）。
+     *
+     * 只处理有进程的包：没进程的包执行 set-inactive 是纯浪费 —— 实测 95 个
+     * 全做要 5.2 秒，而当前有进程的通常只有 40 个左右，做 40 个约 2.2 秒。
+     * 全部拼成一条 shell 批量执行，比逐条快 3 倍（实测 10 个：895ms vs 3251ms）。
+     *
+     * 🔴 调用时机跟着**全量刷新**走，不在这里定义间隔 ——
+     *    以后调整 full 频率时这里自动同步，不会出现两处周期不一致。
+     */
+    void reassertRestrictions() {
+        try {
+            Set<String> restr = lastRestricted;
+            if (restr == null || restr.isEmpty()) return;
+
+            Set<String> running = new HashSet<String>();
+            for (String line : sh("ps -A -o NAME 2>/dev/null").split("\n")) {
+                String n = line.trim();
+                if (n.isEmpty() || "NAME".equals(n)) continue;    // 表头
+                int c = n.indexOf(':');                            // 多进程：pkg:sub
+                running.add(c > 0 ? n.substring(0, c) : n);
+            }
+            if (running.isEmpty()) return;
+
+            StringBuilder sb = new StringBuilder();
+            int n = 0;
+            for (String p : restr) {
+                if (!running.contains(p)) continue;
+                sb.append("am set-inactive --user 0 ").append(p).append(" true;");
+                n++;
+            }
+            if (n == 0) return;
+            long t0 = System.currentTimeMillis();
+            sh(sb.toString());
+            Log.i(TAG, "补做限制: " + n + " 个, 耗时 " + (System.currentTimeMillis() - t0) + "ms");
+        } catch (Throwable e) {
+            Log.w(TAG, "补做限制失败: " + e);
+        }
     }
 
     /**

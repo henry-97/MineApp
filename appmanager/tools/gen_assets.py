@@ -76,6 +76,7 @@ SHIM = r"""
     else if (url.indexOf('/api/setnight') === 0) p = call('setnight', body.dark ? '1' : '0');
     else if (url.indexOf('/api/refreshstat') === 0) p = call('refreshstat', '');
     else if (url.indexOf('/api/riskok') === 0) p = call('riskok', '');
+    else if (url.indexOf('/api/procs') === 0) p = call('procs', String(body.pkg || ''));
     else if (url.indexOf('/api/riskagree') === 0) p = call('riskagree', '');
     // 注意顺序：historylimit / historyclear 必须先于 history 匹配，
     // 否则会被 '/api/history' 前缀吃掉

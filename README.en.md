@@ -63,9 +63,9 @@ A resident tool is at risk of becoming the very thing it is meant to fix. Mine A
 | Frequency | What is fetched | How |
 |---|---|---|
 | **Every 3 s while the screen is on / every 60 s while off** | Memory usage | `ActivityManager.MemoryInfo` — **no shell command at all** |
-| **Every 3 min while the screen is on / every 30 min while off** | Battery health, archive count, restriction count | `dumpsys battery` + `dumpsys batterystats` + four `pm` / `appops` calls |
+| **Every 3 min while the screen is on / every 30 min while off** | Battery health, archive count, restriction count, **tombstone re-assert** | `dumpsys battery` + `dumpsys batterystats` + four `pm` / `appops` calls + one `ps` + batched `am set-inactive` |
 
-Three notes:
+Four notes:
 
 - **Memory no longer goes through a shell.** Earlier builds ran `cat /proc/meminfo` every 3 s — over
   Shizuku / ADB that means forking a process every 3 s, which was the single biggest standby drain.
@@ -76,6 +76,12 @@ Three notes:
   triggers an immediate refresh — you never see a stale number.
 - **Heavy work stays rare.** Battery health and archive/restriction counts need `dumpsys` and `pm`,
   so they run every 3 minutes on-screen and every 30 minutes off-screen.
+- **The tombstone re-assert rides the full refresh.** `setAppInactive` is cleared automatically when
+  you launch an app — one launch and the restriction silently stops working. So every full refresh
+  re-marks each **restricted app that currently has a process**. Typically around 40 packages, batched
+  into a single shell call, roughly 2 s. Packages with no running process are skipped (running the
+  command on them is pure waste). There is **no separate timer** here — change `FULL_GAP` and this
+  follows automatically.
 
 Turning the screen back on also refreshes immediately, so you will never be looking at pre-sleep numbers.
 
@@ -429,11 +435,15 @@ Attribution:
   app and it returns to its original spot.
 
 - **Since 4.9.3, "Restrict" uses the Tombstone (App Inactive) mechanism.**
-  Some Chinese OEM ROMs ignore the standard AppOps background restriction — after setting
-  `RUN_IN_BACKGROUND=ignore` the app keeps running in the background (measured after a full day:
-  process still alive, oomAdj identical to an unrestricted app). So it now uses `am set-inactive`:
-  background processes are frozen (zero CPU, no network, no push) and resume **in the same process**
-  when you open the app — state intact, no cold start.
+  Earlier builds relied on the standard AppOps background restriction, but **some Chinese OEM ROMs
+  simply ignore it** — after setting `RUN_IN_BACKGROUND=ignore` the app keeps running in the
+  background (measured after a full day: process still alive, oomAdj identical to an unrestricted
+  app). So it now uses `am set-inactive`: background processes are frozen (zero CPU, no network, no
+  push) and resume **in the same process** when you open the app — state intact, no cold start.
+
+  To be clear: **some high-privilege apps may still keep a few processes alive.** This app maintains
+  the restriction state only within a low-power budget — those apps stay significantly quieter than
+  when unrestricted, but complete stillness is not guaranteed.
 
   **Restrictions set under the old mechanism are migrated automatically** after upgrading; you don't
   need to re-apply anything. The migration runs exactly once and never repeats, regardless of which
@@ -442,6 +452,13 @@ Attribution:
   If an app misbehaves after being restricted (missing messages, broken background tasks), tap
   "Unrestrict" in the app. Freezing only affects the background — opening and using the app works
   normally.
+
+- **Process counts are visible and expandable** (5.0).
+  Multi-process apps show `4procs ›` after the timestamp; tap it to see that app's processes:
+  sub-process name, cumulative CPU time, memory, system oom level, and which ones are still active.
+  Processes belonging to a dual-app / cloned profile are tagged `·dual` (the same app runs a full set
+  in each user space, with identical process names — without the tag they look duplicated).
+  Data is queried only when you expand, never polled in the background.
 
 - **Never approve an unexpected "Allow USB debugging?" dialog on a public network.**
   `adb tcpip 5555` makes adbd listen on all interfaces, so anyone on the same network can trigger

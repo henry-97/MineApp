@@ -238,9 +238,37 @@ li.on .chk{background:var(--blue);border-color:var(--blue)}
 .pkg{font-size:12.5px;color:var(--ink3);font-family:ui-monospace,monospace;white-space:nowrap;
 overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .mem{position:relative;font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap}
-/* 文本单独包一层：省略号在这里做，.mem 本身不裁切，绿点才能画到左侧空隙里 */
-.mem-t{display:block;overflow:hidden;text-overflow:ellipsis}
+/* 文本单独包一层：省略号只在左边文字上做，右侧「N 进程 ›」永远完整显示 */
+.mem-t{display:flex;align-items:center;min-width:0}
+.mem-x{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mem .ago{color:var(--ink3);font-family:ui-monospace,monospace}
+/* 多进程标记：蓝色可点，点开看进程明细。
+   用 inline-flex 让文字和箭头自动垂直居中 —— 之前靠 vertical-align 微调，
+   不同字号下总会差一点；flex 的 align-items:center 是真正的中线对齐 */
+.mem .proc-btn{display:inline-flex;align-items:center;flex:none;white-space:nowrap;
+color:var(--blue);font-family:ui-monospace,monospace;cursor:pointer}
+.mem .proc-btn .chev{width:12px;height:12px;margin-left:2px;flex:none;
+transition:transform .15s}
+.mem .sep{flex:none;margin:0 4px;color:var(--ink3)}
+.mem .proc-btn.open{color:var(--ink3)}
+.mem .proc-btn.open .chev{transform:rotate(90deg)}
+/* 进程展开区：必须 display:block —— 全局 li 是 flex，不覆盖的话
+   几行进程会被横向并排，超出部分直接看不见 */
+.proc-wrap{display:block;list-style:none;background:var(--card);
+padding:4px 14px 8px 44px;position:relative}
+/* 用 grid 定列：名称吃剩余宽度，时间/内存/oom 按内容自适应 ——
+   max-content 会取该列所有行里最宽的内容，所以多行之间照样对齐，
+   又不会像固定宽度那样留出一大块空白 */
+.proc-row{display:grid;grid-template-columns:6px minmax(0,1fr) max-content max-content max-content;
+gap:10px;align-items:center;padding:5px 0;font-size:12px;
+font-family:ui-monospace,monospace;color:var(--ink3)}
+.proc-dot{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.proc-dot.live{background:#12b76a;box-shadow:0 0 0 2px rgba(18,183,106,.16);
+animation:dotPulse 2.2s ease-in-out infinite}
+.proc-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
+.proc-cpu{text-align:right;color:var(--ink3)}
+.proc-mem{text-align:right;color:var(--ink3)}
+.proc-oom{text-align:right;color:var(--ink3)}
 .msearch{padding:10px 16px 0}
 .tag{flex:none;font-size:12px;padding:4px 10px;border-radius:20px;background:var(--bg);color:var(--ink3)}
 .tag.f{background:#f9dcdc;color:var(--red);border:0.5px solid #eec2c2}
@@ -736,7 +764,12 @@ var I18N = {
     milletNow: '当前名单 {n} 个',
     milletNote: '把应用加进系统的 doze / standby 白名单（MILLET_NO_RESTRICT_APP），系统不再按「长时间未使用」压制它的后台活动。注意：这不改变 MIUI 界面里的「省电策略」—— 那个开关是 powerkeeper 自己维护的另一套状态，需要到应用信息页单独设成「无限制」。',
     cfmMillet: '保存后白名单会从 {a} 个变成 {b} 个（整体覆盖），确定吗？',
-    agoNever: '24h 以上',
+    agoNever: '>24h',
+    procs: '进程',
+    procMain: '主进程',
+    procMulti: '多开',
+    procLoading: '加载中…',
+    procNone: '没有进程',
     bannerOff: '等待调试通道连接后即可刷新应用列表', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip {p}',
     bannerOffSafe: '已设置的归档与限制依然生效，待方便时再授权即可',
     bannerUnauth: '确认授权中', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
@@ -780,10 +813,10 @@ var I18N = {
     tAlready: '已经是 AOT 状态，无需重复编译',
     tNotAot: '本来就没有全量编译，无需取消',
     cfmAotTimeout: '「{n}」上次全量编译超时了（系统上限 9.5 分钟，这个应用太大编不完）。\n系统默认的 speed-profile 已经在生效，不影响日常使用。\n再试一次吗？',
-    tLowMem: '可用内存只剩 {n}MB，全量编译几乎一定失败，请先清理后台',
+    tLowMem: '可用内存只剩 {n}M，全量编译几乎一定失败，请先清理后台',
     cfmKill: '清理「{n}」的后台进程？仅清理后台，不影响应用自启动。',
     killDontAsk: '下次不再提示',
-    tKilled: '已清理「{n}」，释放 {m} MB · 稍后列表自动刷新',
+    tKilled: '已清理「{n}」，释放 {m}M · 稍后列表自动刷新',
     tKilledZero: '已清理「{n}」，未释放运存 · 稍后列表自动刷新',
     tKillIdle: '「{n}」当前没有后台进程',
     tKillFail: '清理失败：{m}',
@@ -910,6 +943,11 @@ var I18N = {
     milletNote: 'Adds the app to the system doze / standby allowlist (MILLET_NO_RESTRICT_APP) so the OS stops throttling it as "unused". Note: this does NOT change the battery policy in MIUI\'s UI — that toggle is separate state kept by powerkeeper and has to be set to "No restrictions" on the app-info page.',
     cfmMillet: 'Saving replaces the allowlist: {a} → {b}. Continue?',
     agoNever: '>24h',
+    procs: 'procs',
+    procMain: 'main',
+    procMulti: 'dual',
+    procLoading: 'Loading…',
+    procNone: 'No processes',
     bannerOff: 'Waiting for the ADB channel — the list refreshes once connected', bannerOffHint: 'After reboot, run on a PC: adb tcpip {p}',
     bannerOffSafe: 'Your archives and restrictions stay in effect — re-authorise whenever convenient',
     bannerUnauth: 'Authorizing…', bannerUnauthHint: 'Unlock the phone, tick "Always allow from this computer" then tap Allow',
@@ -950,10 +988,10 @@ var I18N = {
     tAlready: 'Already AOT-compiled, nothing to do',
     tNotAot: 'Not AOT-compiled, nothing to undo',
     cfmAotTimeout: '"{n}" timed out last time (the system cap is 9.5 min; this app is too big).\nThe default speed-profile is already active, so nothing is broken.\nTry again anyway?',
-    tLowMem: 'Only {n}MB free — full compilation will almost certainly fail. Close some apps first.',
+    tLowMem: 'Only {n}M free — full compilation will almost certainly fail. Close some apps first.',
     cfmKill: 'Clear background processes of "{n}"? Background only — auto-start is unaffected.',
     killDontAsk: "Don't ask again",
-    tKilled: 'Cleared "{n}", freed {m} MB · list refreshes shortly',
+    tKilled: 'Cleared "{n}", freed {m}M · list refreshes shortly',
     tKilledZero: 'Cleared "{n}", no memory freed · list refreshes shortly',
     tKillIdle: '"{n}" has no background processes right now',
     tKillFail: 'Failed: {m}',
@@ -1590,12 +1628,12 @@ function fmtAgo(ts){
   if (!ts) return '';
   var s = Math.round((Date.now() - ts) / 1000);
   if (s < 0) s = 0;
-  if (s < 60) return s + ' s';
+  if (s < 60) return s + 's';
   var m = Math.floor(s / 60);
-  if (m < 60) return m + ' m';
+  if (m < 60) return m + 'm';
   var h = Math.floor(m / 60);
-  if (h < 24) return h + ' h';
-  return Math.floor(h / 24) + ' d';
+  if (h < 24) return h + 'h';
+  return '>24h';
 }
 
 /* 副行：运存占用 + 上次打开时间（主列表与白名单共用） */
@@ -1603,7 +1641,7 @@ function subline(a){
   var mb = Math.round((a.pss || 0) / 1024);
   var h = '';
   if (mb > 0){
-    h = mb + ' MB';
+    h = mb + 'M';
     var pct = memTotal ? (a.pss * 100.0 / memTotal) : 0;
     if (pct >= 0.1) h += ' · ' + pct.toFixed(1) + '%';
   }
@@ -1611,13 +1649,94 @@ function subline(a){
     var ago = fmtAgo(idleMap[a.pkg]) || T('agoNever');
     h += (h ? ' · ' : '') + '<span class="ago">' + ago + '</span>';
   }
-  if (!h) return '';
-  // 绿点 = 真正还在活动：有内存占用、未被归档、未被限制后台，且系统里还有
-  // cached/empty 之外的进程（只被缓存着的应用不点绿点，避免满屏都是点）。
-  // 绝对定位到左侧空隙，不占文本流 —— 数字与上方应用名左对齐。
-  var live = mb > 0 && a.active && !a.frozen && !a.restricted;
+  // 多进程 = 这个应用在后台挂了常驻组件（:pushservice / :channel / :widget…），
+  // 单进程是常态，只在多开时才提示。点击可展开进程明细（按需查询，后台不刷）。
+  // 单独拿出来而不是拼进 h：前面文字可以省略，这个标记必须完整显示。
+  var btn = '';
+  if (a.procs > 1){
+    btn = (h ? '<span class="sep">·</span>' : '') + '<span class="proc-btn" data-procbtn="' + a.pkg + '">'
+        + a.procs + T('procs')
+        + '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+        +   ' stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        +   '<path d="M9 5l7 7-7 7"/></svg></span>';
+  }
+  if (!h && !btn) return '';
+  // 绿点 = 真正还在活动：有内存占用、未被归档，且系统里还有 cached/empty
+  // 之外的进程（只被缓存着的应用不点绿点，避免满屏都是点）。
+  // 🔴 不再排除「已限制」的应用：限制只是压后台，它现在有进程在跑就是活动，
+  //    不亮会出现「进程有绿点、包名没绿点」的矛盾。
+  var live = mb > 0 && a.active && !a.frozen;
   return '<div class="mem">' + (live ? '<i class="dot-live"></i>' : '')
-       + '<span class="mem-t">' + h + '</span></div>';
+       + '<span class="mem-t"><span class="mem-x">' + h + '</span>' + btn + '</span></div>';
+}
+
+/* ---- 进程明细：点「N 进程 ›」才查，后台不主动刷 ---- */
+function fmtProcMem(b){
+  if (!b) return '—';
+  var mb = b / 1048576;
+  return (mb >= 100 ? Math.round(mb) : mb.toFixed(1)) + 'M';
+}
+
+/* CPU 累计时间：按分钟展示。< 1m / 46m / 1h2m / >24h */
+function fmtCpu(s){
+  if (!s) return '—';
+  var p = String(s).split(':');
+  var sec = -1;
+  if (p.length === 3) sec = (+p[0]) * 3600 + (+p[1]) * 60 + (+p[2]);
+  else if (p.length === 2) sec = (+p[0]) * 60 + (+p[1]);
+  if (sec < 0 || isNaN(sec)) return s;
+  if (sec >= 86400) return '>24h';
+  if (sec < 60) return '<1m';
+  var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return h + 'h' + m + 'm';
+  return m + 'm';
+}
+
+function procsHtml(list){
+  var h = '';
+  for (var i = 0; i < list.length; i++){
+    var p = list[i];
+    // 双开 / 手机分身的进程同名，标一个「·多开」才分得清
+    var nm = (p.name || T('procMain')) + (p.multi ? '·' + T('procMulti') : '');
+    h += '<div class="proc-row">'
+       + '<i class="proc-dot' + (p.active ? ' live' : '') + '"></i>'
+       + '<span class="proc-nm">' + nm + '</span>'
+       + '<span class="proc-cpu">' + fmtCpu(p.cpu) + '</span>'
+       + '<span class="proc-mem">' + fmtProcMem(p.mem) + '</span>'
+       + '<span class="proc-oom">oom' + (p.oom == null ? '—' : p.oom) + '</span>'
+       + '</div>';
+  }
+  return h;
+}
+
+function toggleProcs(pkg, btn){
+  var li = btn.closest('li');
+  if (!li) return;
+  var nxt = li.nextElementSibling;
+  if (nxt && nxt.classList.contains('proc-wrap')){   // 已展开 → 收起
+    nxt.parentNode.removeChild(nxt);
+    btn.classList.remove('open');
+    return;
+  }
+  if (!adbOk){ toast(T('tAdbOff')); return; }
+  btn.classList.add('open');
+  var wrap = document.createElement('li');
+  wrap.className = 'proc-wrap';
+  wrap.innerHTML = '<div class="proc-row"><span class="proc-nm">' + T('procLoading') + '</span></div>';
+  li.parentNode.insertBefore(wrap, li.nextSibling);
+  fetch('/api/procs', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({pkg: pkg})})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok || !d.procs || !d.procs.length){
+        wrap.innerHTML = '<div class="proc-row"><span class="proc-nm">' + T('procNone') + '</span></div>';
+        return;
+      }
+      wrap.innerHTML = procsHtml(d.procs);
+    })
+    .catch(function(){
+      wrap.innerHTML = '<div class="proc-row"><span class="proc-nm">' + T('tUnknown') + '</span></div>';
+    });
 }
 
 /* 系统标记：小号，紧跟应用名，不占右下角 */
@@ -2099,11 +2218,21 @@ document.getElementById('list').addEventListener('click', function(e){
   if (e.target.closest('.aot-sw')) return;   // AOT 开关走单独的处理
   if (e.target.closest('.kill-x')) return;   // 清理按钮也走单独的处理
   if (e.target.closest('.loc-btn')) return;  // 定位按钮：只定位，不勾选这个应用
+  if (e.target.closest('.proc-btn')) return; // 展开进程明细：不勾选
+  if (e.target.closest('.proc-wrap')) return;// 进程面板内部的点击不勾选
   var li = e.target.closest('li');
   if (!li || busy) return;
   var pkg = li.getAttribute('data-pkg');
   if (keep.has(pkg)) keep.delete(pkg); else keep.add(pkg);
   saveKeep(); render();
+});
+
+/* 进程明细：展开 / 收起。面板里的 × 已移除 —— 无 root 时杀不了单个子进程，
+   留着会让人以为「只关这一个」，实际是应用级的。 */
+document.getElementById('list').addEventListener('click', function(e){
+  var b = e.target.closest('.proc-btn');
+  if (!b) return;
+  toggleProcs(b.getAttribute('data-procbtn'), b);
 });
 
 /* 单应用清理：am kill 只杀后台进程，不动自启动，也不改启用状态 */
@@ -2128,16 +2257,33 @@ document.getElementById('list').addEventListener('click', function(e){
   if (!kx) return;
   if (!adbOk){ toast(T('tAdbOff')); return; }
   var pkg = kx.getAttribute('data-kill');
-  var one = null;
-  for (var i = 0; i < apps.length; i++) if (apps[i].pkg === pkg){ one = apps[i]; break; }
-  var nm = one ? one.label : pkg;
-  // 运存为 0 = 当前没有后台进程，am kill 什么也杀不到，别假装清理成功
-  if (one && one.pss <= 0){ toast(T2('tKillIdle', {n: nm})); return; }
-  var pss = one ? one.pss : 0;
-  if (localStorage.getItem(killNoAsk) === '1'){ doKill(pkg, nm, pss); return; }
-  askConfirm(T2('cfmKill', {n: nm}),
-             function(){ doKill(pkg, nm, pss); },
-             {text: T('killDontAsk'), key: killNoAsk});
+  // 两段式反馈：
+  //   ① 立刻把「N 进程 ›」标注摘掉（后台已经 force-stop，不必等列表刷新）
+  //   ② 0.8 秒后整行滑出列表 —— 留这一下让用户看清是哪一行被处理了
+  // 下次刷新时后端如实返回（该应用没进程了就不会再带 procs 字段）。
+  var li = kx.closest('li');
+  if (li){
+    var pb = li.querySelector('.proc-btn');
+    if (pb){
+      var sp = pb.previousElementSibling;
+      if (sp && sp.className === 'sep') sp.parentNode.removeChild(sp);
+      pb.parentNode.removeChild(pb);
+    }
+    // 展开着的进程面板一起收起：进程都没了，还挂着一堆明细没意义
+    var nx = li.nextElementSibling;
+    if (nx && nx.classList.contains('proc-wrap')) nx.parentNode.removeChild(nx);
+  }
+  for (var i = 0; i < apps.length; i++){
+    if (apps[i].pkg === pkg){ apps[i].procs = 0; break; }
+  }
+  setTimeout(function(){
+    if (li && li.parentNode) li.parentNode.removeChild(li);
+    for (var j = 0; j < apps.length; j++){
+      if (apps[j].pkg === pkg){ apps.splice(j, 1); break; }
+    }
+  }, 800);
+  fetch('/api/kill', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({pkg: pkg, pss: -1})}).catch(function(){});
 });
 
 /* AOT 预编译：点开关 → 轨道变成进度条（秒数同步显示在标签上），完成后就地刷新 */

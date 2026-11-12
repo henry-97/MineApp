@@ -262,6 +262,9 @@ public class KeepAliveService extends Service {
                 cachedBattery = s.optJSONObject("battery");
                 cachedArchived = s.optInt("archived", -1);
                 cachedRestricted = s.optInt("restricted", -1);
+                // 限制补做紧跟全量刷新，不单独定时：以后调 FULL_GAP 时这里自动同步。
+                // setAppInactive 会被「用户打开应用」清除，不补的话限制会静默失效。
+                service.reassertRestrictions();
             }
             JSONObject b = cachedBattery;
             if (b == null) {
