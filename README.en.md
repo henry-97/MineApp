@@ -527,7 +527,7 @@ If you lock yourself out and the app can no longer be opened, connect the phone 
 # Undo a restriction (package name appears once)
 adb shell 'P=<package>; am set-inactive --user 0 $P false; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
 
-# Undo an archive (package name appears once, attempts both restore methods)
+# Undo an archive (package name appears once)
 adb shell 'P=<package>; pm enable $P; cmd package install-existing $P'
 ```
 

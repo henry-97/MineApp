@@ -483,7 +483,7 @@ MineApp/
 # 限制后解限（包名只写一次）
 adb shell 'P=<包名>; am set-inactive --user 0 $P false; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
 
-# 归档后还原（包名只写一次，两种归档方式一起尝试）
+# 归档后还原（包名只写一次）
 adb shell 'P=<包名>; pm enable $P; cmd package install-existing $P'
 ```
 
