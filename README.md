@@ -382,8 +382,8 @@ MineApp/
 
 引用说明：
 
-- **关于第三方组件**：本仓库整体采用 GPL-3.0（见根目录 `LICENSE`）；`ext-lsposed/` 是其作者的独立作品，
-  使用它请遵守其原始授权条款。第三方组件清单见 `THIRD-PARTY-NOTICES.md`。
+- **关于第三方组件**：本仓库整体采用 GPL-3.0（见根目录 `LICENSE`）；而第三方组件是其作者的独立作品，
+  使用第三方组件的内容请遵守其原始授权条款。第三方组件清单见 `THIRD-PARTY-NOTICES.md`。
 
 ## 已知限制
 
@@ -465,7 +465,7 @@ adb shell am set-inactive --user 0 <包名> false
 adb shell cmd appops set <包名> RUN_IN_BACKGROUND allow
 ```
 
-**一键还原所有归档**（两种归档方式都覆盖：禁用、移除当前用户）：
+**一键还原所有归档**：
 
 ```bash
 adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable $p; done; pm list packages -u --user 0 | sed "s/package://" | sort > /data/local/tmp/aa.txt; pm list packages --user 0 | sed "s/package://" | sort > /data/local/tmp/bb.txt; comm -23 /data/local/tmp/aa.txt /data/local/tmp/bb.txt | while read p; do cmd package install-existing $p; done; rm -f /data/local/tmp/aa.txt /data/local/tmp/bb.txt'
@@ -477,7 +477,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; done'
 ```
 
-> 上面两条用单引号包裹，macOS / Linux / Git Bash / PowerShell 可直接使用。
-> Windows CMD 请把外层单引号换成双引号（CMD 不展开 `$`，效果相同）。
+> 上面两条用单引号包裹，PowerShell / macOS / Linux / Git Bash 可直接使用。
+> Windows CMD 请把外层单引号换成双引号。
 
 **因使用不当造成的数据丢失或设备异常，作者不承担责任。**

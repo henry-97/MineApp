@@ -409,8 +409,8 @@ so neither overwrites the other.
 
 Attribution:
 
-- **Third-party component**: this repository as a whole is GPL-3.0 (see the root `LICENSE`);
-  `ext-lsposed/` is an independent work by its author — use of it is subject to that licence.
+- **Third-party components**: this repository as a whole is GPL-3.0 (see the root `LICENSE`); third-party
+  components are independent works by their authors — using their content is subject to their original licences.
   See `THIRD-PARTY-NOTICES.md` for the third-party inventory.
 
 ## Known limitations
@@ -502,7 +502,7 @@ adb shell am set-inactive --user 0 <package> false
 adb shell cmd appops set <package> RUN_IN_BACKGROUND allow
 ```
 
-**Restore every archived app** (covers both archive methods — disabled and removed-for-user):
+**Restore every archived app**:
 
 ```bash
 adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable $p; done; pm list packages -u --user 0 | sed "s/package://" | sort > /data/local/tmp/aa.txt; pm list packages --user 0 | sed "s/package://" | sort > /data/local/tmp/bb.txt; comm -23 /data/local/tmp/aa.txt /data/local/tmp/bb.txt | while read p; do cmd package install-existing $p; done; rm -f /data/local/tmp/aa.txt /data/local/tmp/bb.txt'
@@ -514,7 +514,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; done'
 ```
 
-> Both commands are wrapped in single quotes, so they work as-is in macOS / Linux / Git Bash / PowerShell.
-> On Windows CMD, swap the outer single quotes for double quotes (CMD does not expand `$`, so the effect is the same).
+> Both commands are wrapped in single quotes, so they work as-is in PowerShell / macOS / Linux / Git Bash.
+> On Windows CMD, swap the outer single quotes for double quotes.
 
 **The author is not liable for data loss or device misbehaviour caused by misuse.**
