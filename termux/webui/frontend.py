@@ -277,6 +277,8 @@ animation:dotPulse 2.2s ease-in-out infinite}
 .proc-cpu{text-align:right;color:var(--ink3)}
 .proc-mem{text-align:right;color:var(--ink3)}
 .proc-oom{text-align:right;color:var(--ink3)}
+/* 空状态：整行一个文本，不套 grid —— 套了会被压进 6px 的第一列，只剩半个字 */
+.proc-empty{padding:5px 0;font-size:12px;font-family:ui-monospace,monospace;color:var(--ink3)}
 .msearch{padding:10px 16px 0}
 .tag{flex:none;font-size:12px;padding:4px 10px;border-radius:20px;background:var(--bg);color:var(--ink3)}
 .tag.f{background:#f9dcdc;color:var(--red);border:0.5px solid #eec2c2}
@@ -777,7 +779,7 @@ var I18N = {
     procMain: '主进程',
     procMulti: '多开',
     procLoading: '加载中…',
-    procNone: '没有进程',
+    procNone: '无进程',
     bannerOff: '等待调试通道连接后即可刷新应用列表', bannerOffHint: '手机重启后需在电脑上执行：adb tcpip {p}',
     bannerOffSafe: '已设置的归档与限制依然生效，待方便时再授权即可',
     bannerUnauth: '确认授权中', bannerUnauthHint: '解锁手机，勾选「一律允许使用这台计算机进行调试」再点「允许」',
@@ -1735,7 +1737,7 @@ function toggleProcs(pkg, btn){
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d || !d.ok || !d.procs || !d.procs.length){
-        wrap.innerHTML = '<div class="proc-row"><span class="proc-nm">' + T('procNone') + '</span></div>';
+        wrap.innerHTML = '<div class="proc-empty">' + T('procNone') + '</div>';
         return;
       }
       wrap.innerHTML = procsHtml(d.procs);
@@ -2118,6 +2120,9 @@ function restoreCache(allowStale){
     if (!d || !d.t) return 0;
     var fresh = (Date.now() - d.t) <= CACHE_TTL;
     if (!fresh && !allowStale) return 0;
+    // 缓存里的进程数是旧快照：先不显示，等这一轮刷新拿到新数据再显示。
+    // 否则用户点开「N进程」看到的是一个已经过时的列表。
+    if (d.apps) for (var i = 0; i < d.apps.length; i++) d.apps[i].procs = 0;
     applyData(d);
     return fresh ? 1 : 2;
   } catch (e) { return 0; }
