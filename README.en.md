@@ -511,7 +511,7 @@ If you lock yourself out and the app can no longer be opened, connect the phone 
 # Undo a restriction (one command: unfreeze + clear the marker)
 adb shell "am set-inactive --user 0 <package> false; cmd appops set <package> RUN_IN_BACKGROUND allow"
 
-# Undo an archive (one command: tries both archive methods; the wrong one just errors out)
+# Undo an archive (one command: attempts both restore methods)
 adb shell "pm enable <package>; cmd package install-existing <package>"
 ```
 
