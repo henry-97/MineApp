@@ -1220,6 +1220,10 @@ public class AdbService {
     public String listJson(boolean withPss) {
         String st = state();
         if (!"ok".equals(st)) return errorPayload(st, withPss);
+        // 🔴 每次拉全量列表前先补一次墓碑（手动刷新、切回前台都走这里）。
+        //    用户看到「已限制」的那一刻，限制应该是真的在生效的 ——
+        //    不能等后台那个 3 分钟的 full 周期。约 2 秒，只对有进程的包执行。
+        try { reassertRestrictions(); } catch (Throwable ignored) { }
         try {
             return buildList(withPss);
         } catch (Exception e) {
@@ -1768,6 +1772,11 @@ public class AdbService {
     void reassertRestrictions() {
         try {
             Set<String> restr = lastRestricted;
+            if (restr == null || restr.isEmpty()) {
+                // 前台拉列表时可能还没跑过 full，名单是空的 —— 现查一次（约 0.5 秒）
+                restr = getRestricted();
+                lastRestricted = restr;
+            }
             if (restr == null || restr.isEmpty()) return;
 
             Set<String> running = new HashSet<String>();
