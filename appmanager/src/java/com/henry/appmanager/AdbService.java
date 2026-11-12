@@ -1813,15 +1813,16 @@ public class AdbService {
                     android.content.SharedPreferences sp = appCtx.getSharedPreferences(
                             "app", android.content.Context.MODE_PRIVATE);
                     if (sp.getBoolean("deepRestrictMigrated", false)) return;
-                    // 🔴 循环等通道就绪，最多 10 秒。Shizuku 的 binder 冷启动比
-                    //    「启动后 3 秒」慢，只在固定时刻查一次会让首次安装白跑一趟
-                    //    （实测：装完第一次启动跳过，第二次才迁成功）。
-                    int tries = 0;
-                    while (tries < 5 && !"ok".equals(state())) {
-                        try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
-                        tries++;
+                    // 🔴 一直等到通道就绪再迁移 —— 首次安装时 Shizuku 的 binder
+                    //    可能十几秒才到，等几秒就放弃会让用户「装了没生效」。
+                    //    间隔逐步拉长（2s → 5s → 30s），避免长时间空转。
+                    int waited = 0;
+                    while (!"ok".equals(state())) {
+                        if (waited >= 1800) return;         // 半小时还没通道 = 根本没配
+                        int step = waited < 10 ? 2 : (waited < 60 ? 5 : 30);
+                        try { Thread.sleep(step * 1000L); } catch (InterruptedException ignored) { }
+                        waited += step;
                     }
-                    if (!"ok".equals(state())) return;      // 真没通道，下次启动再来
 
                     java.util.Set<String> olds = getRestricted();
                     if (olds.isEmpty()) {
@@ -1876,14 +1877,14 @@ public class AdbService {
                         return;
                     }
 
-                    // 循环等通道就绪，最多 10 秒（同 migrateDeepRestrictOnce：
-                    // 固定时刻只查一次会让首次安装白跑一趟）
-                    int tries = 0;
-                    while (tries < 5 && !"ok".equals(state())) {
-                        try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
-                        tries++;
+                    // 一直等到通道就绪再迁移（同 migrateDeepRestrictOnce）
+                    int waited = 0;
+                    while (!"ok".equals(state())) {
+                        if (waited >= 1800) return;
+                        int step = waited < 10 ? 2 : (waited < 60 ? 5 : 30);
+                        try { Thread.sleep(step * 1000L); } catch (InterruptedException ignored) { }
+                        waited += step;
                     }
-                    if (!"ok".equals(state())) return;          // 真没通道，下次启动再来
 
                     java.util.Set<String> olds = getRestricted();
                     boolean allOk = true;
