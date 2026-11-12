@@ -1636,8 +1636,8 @@ public class AdbService {
                 //
                 //  2 和 3 是持久的 AppOps 设置（存系统数据库，重启也在），
                 //  不像 set-inactive 会被「用户打开应用」清掉，所以不用每次补做。
-                sh("am set-inactive --user 0 " + p + " true"
-                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND ignore"
+                sh("cmd appops set " + p + " RUN_IN_BACKGROUND ignore"
+                        + "; am set-inactive --user 0 " + p + " true"
                         + "; cmd appops set " + p + " START_FOREGROUND ignore"
                         + "; cmd appops set " + p + " WAKE_LOCK ignore");
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("ignore");
@@ -1647,10 +1647,12 @@ public class AdbService {
                 // 但应用还是启动不了前台服务 / 还是拿不到唤醒锁」的怪状态。
                 // START_FOREGROUND 和 WAKE_LOCK 用 default（恢复系统默认）而不是 allow，
                 // 避免把本来就被系统限制的应用改成完全放行。
+                // 索引标记排最后撤：它是一键解除的入口（appops query-op 靠它列出名单），
+                // 先撤掉的话后面哪一步失败，这个应用就从名单里消失了，再也没法重试。
                 sh("am set-inactive --user 0 " + p + " false"
-                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND allow"
                         + "; cmd appops set " + p + " START_FOREGROUND default"
-                        + "; cmd appops set " + p + " WAKE_LOCK default");
+                        + "; cmd appops set " + p + " WAKE_LOCK default"
+                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND allow");
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("allow");
             }
         } catch (Exception e) {
@@ -1807,11 +1809,19 @@ public class AdbService {
         new Thread(new Runnable() {
             @Override public void run() {
                 try {
-                    Thread.sleep(3500);
+                    Thread.sleep(2500);
                     android.content.SharedPreferences sp = appCtx.getSharedPreferences(
                             "app", android.content.Context.MODE_PRIVATE);
                     if (sp.getBoolean("deepRestrictMigrated", false)) return;
-                    if (!"ok".equals(state())) return;      // 没通道，下次启动再来
+                    // 🔴 循环等通道就绪，最多 10 秒。Shizuku 的 binder 冷启动比
+                    //    「启动后 3 秒」慢，只在固定时刻查一次会让首次安装白跑一趟
+                    //    （实测：装完第一次启动跳过，第二次才迁成功）。
+                    int tries = 0;
+                    while (tries < 5 && !"ok".equals(state())) {
+                        try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
+                        tries++;
+                    }
+                    if (!"ok".equals(state())) return;      // 真没通道，下次启动再来
 
                     java.util.Set<String> olds = getRestricted();
                     if (olds.isEmpty()) {
@@ -1866,7 +1876,14 @@ public class AdbService {
                         return;
                     }
 
-                    if (!"ok".equals(state())) return;          // 没通道，下次启动再来
+                    // 循环等通道就绪，最多 10 秒（同 migrateDeepRestrictOnce：
+                    // 固定时刻只查一次会让首次安装白跑一趟）
+                    int tries = 0;
+                    while (tries < 5 && !"ok".equals(state())) {
+                        try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
+                        tries++;
+                    }
+                    if (!"ok".equals(state())) return;          // 真没通道，下次启动再来
 
                     java.util.Set<String> olds = getRestricted();
                     boolean allOk = true;

@@ -509,7 +509,7 @@ If you lock yourself out and the app can no longer be opened, connect the phone 
 
 ```bash
 # Undo a restriction (one command: unfreeze + revert every switch set by Restrict)
-adb shell "am set-inactive --user 0 <package> false; cmd appops set <package> RUN_IN_BACKGROUND allow; cmd appops set <package> START_FOREGROUND default; cmd appops set <package> WAKE_LOCK default"
+adb shell "am set-inactive --user 0 <package> false; cmd appops set <package> START_FOREGROUND default; cmd appops set <package> WAKE_LOCK default; cmd appops set <package> RUN_IN_BACKGROUND allow"
 
 # Undo an archive (one command: attempts both restore methods)
 adb shell "pm enable <package>; cmd package install-existing <package>"
@@ -534,7 +534,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 **Lift every restriction**:
 
 ```bash
-adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; done'
+adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; cmd appops set $p RUN_IN_BACKGROUND allow; done'
 ```
 
 > Both commands are wrapped in single quotes, so they work as-is in PowerShell / macOS / Linux / Git Bash.

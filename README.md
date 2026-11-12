@@ -466,7 +466,7 @@ MineApp/
 
 ```bash
 # 限制后解限（一条命令：解冻 + 把限制时设的开关全部撤回）
-adb shell "am set-inactive --user 0 <包名> false; cmd appops set <包名> RUN_IN_BACKGROUND allow; cmd appops set <包名> START_FOREGROUND default; cmd appops set <包名> WAKE_LOCK default"
+adb shell "am set-inactive --user 0 <包名> false; cmd appops set <包名> START_FOREGROUND default; cmd appops set <包名> WAKE_LOCK default; cmd appops set <包名> RUN_IN_BACKGROUND allow"
 
 # 归档后还原（一条命令：两种归档方式一起尝试还原）
 adb shell "pm enable <包名>; cmd package install-existing <包名>"
@@ -489,7 +489,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 **一键解除所有限制**：
 
 ```bash
-adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p RUN_IN_BACKGROUND allow; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; done'
+adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; cmd appops set $p RUN_IN_BACKGROUND allow; done'
 ```
 
 > 上面两条用单引号包裹，PowerShell / macOS / Linux / Git Bash 可直接使用。
