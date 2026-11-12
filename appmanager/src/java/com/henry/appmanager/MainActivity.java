@@ -153,6 +153,8 @@ public class MainActivity extends Activity {
 
         bridge = new Bridge(service, web);
         web.addJavascriptInterface(bridge, "Bridge");
+        // 覆盖安装会把无障碍解绑，用户不会想到是它导致「查找应用」失灵
+        healA11yBinding();
         // 覆盖安装后 manifest 里的 alias 会重置成默认，这里把用户选过的名称/图标重新落回去
         bridge.restoreAlias();
 
@@ -317,6 +319,37 @@ public class MainActivity extends Activity {
             out.close();
             in.close();
         }
+    }
+
+    /**
+     * 覆盖安装后自动补回无障碍服务绑定。
+     *
+     * 🔴 系统在应用覆盖安装时会解绑它的无障碍服务，用户必须自己进「设置 → 无障碍」
+     *    重新打开。不补的后果：点「开始」建索引时日志只写一句「无无障碍」，
+     *    「应用查找」整体不可用，而用户完全不会联想到是升级导致的（实测反复踩）。
+     *
+     * 只在下面两条同时成立时才动手，避免擅自改系统开关：
+     *  1. 建过索引（locIndexAt > 0）—— 说明这个功能是他在用的；
+     *  2. 当前绑定为空 —— 用户开着 TalkBack 等别的服务时绝不覆盖。
+     */
+    private void healA11yBinding() {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    Thread.sleep(2500);                     // 别和首屏抢资源
+                    if (A11yService.ready()) return;         // 还开着，没事
+                    if (getSharedPreferences("app", 0).getLong("locIndexAt", 0L) <= 0L) return;
+                    if (service == null || !"ok".equals(service.state())) return;
+                    String cur = service.shellQuick(
+                            "settings get secure enabled_accessibility_services", 3000);
+                    cur = cur == null ? "" : cur.trim();
+                    if (!cur.isEmpty() && !"null".equals(cur)) return;   // 已有别的服务，不碰
+                    String comp = getPackageName() + "/" + A11yService.class.getName();
+                    service.shellLong("settings put secure enabled_accessibility_services " + comp);
+                    service.shellLong("settings put secure accessibility_enabled 1");
+                } catch (Throwable ignored) { }
+            }
+        }).start();
     }
 
     private void showFatal(String msg) {

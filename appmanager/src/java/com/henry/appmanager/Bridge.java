@@ -488,6 +488,7 @@ public class Bridge {
             if (!b.find()) continue;
             int x1 = Integer.parseInt(b.group(1)), y1 = Integer.parseInt(b.group(2));
             int x2 = Integer.parseInt(b.group(3)), y2 = Integer.parseInt(b.group(4));
+            if (!onScreen(x1, y1, x2, y2)) continue;   // 相邻页的节点，不在本屏
             return new int[]{(x1 + x2) / 2, (y1 + y2) / 2};
         }
         return null;
@@ -515,6 +516,7 @@ public class Bridge {
             if (!b.find()) continue;
             int x1 = Integer.parseInt(b.group(1)), y1 = Integer.parseInt(b.group(2));
             int x2 = Integer.parseInt(b.group(3)), y2 = Integer.parseInt(b.group(4));
+            if (!onScreen(x1, y1, x2, y2)) continue;   // 相邻页的节点，不在本屏
             return new int[]{(x1 + x2) / 2, (y1 + y2) / 2};
         }
         return null;
@@ -639,6 +641,23 @@ public class Bridge {
 
     /** 当前屏幕尺寸，用来过滤掉「相邻页面」的节点（见 findFoldersNamed 的注释） */
     private static int SW = 0, SH = 0;
+
+    /**
+     * 节点是否真的落在**当前屏幕**上。
+     *
+     * 🔴 无障碍树是整棵视图树：桌面用 ViewPager 预加载相邻页，那些页面的
+     *    图标节点也在树里，只是 x 坐标超出屏宽（实测下一页图标在 x=1096，
+     *    屏幕只有 1080 宽）。uiautomator 会裁掉它们，getRootInActiveWindow 不会。
+     *
+     *    不过滤的后果（实测）：第 1 页的树里带着第 3 页的「博看书苑」，
+     *    索引把它记成第 1 页；定位跳第 1 页再在屏幕外的坐标长按，
+     *    表现就是「一搜索就回到第一页，然后什么都不发生」。
+     */
+    private static boolean onScreen(int x1, int y1, int x2, int y2) {
+        if (SW <= 0 || SH <= 0) return true;      // 尺寸未知时不过滤：宁可多收，别漏
+        int cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+        return cx >= 0 && cx < SW && cy >= 0 && cy < SH;
+    }
 
     private static java.util.List<Object[]> findFoldersNamed(String xml) {
         java.util.List<Object[]> out = new java.util.ArrayList<Object[]>();
@@ -838,6 +857,16 @@ public class Bridge {
             // 有圆点：直接点
             doTap(pager[idx], pager[idx + 1]);
             try { Thread.sleep(400); } catch (InterruptedException ignored) { }
+            // 🔴 点圆点不等于切页成功：坐标偏一点、圆点被组件遮挡、命中区太小都会点空。
+            //    以前这里直接 return true，点空了也没人知道 —— 后续 dump 到的还是原页，
+            //    索引却按目标页记录，于是「所有应用都指向同一页」，定位跳过去当然找不到。
+            //    所以必须回读一次真实页码；不对就退回逐页滑动。
+            int[] after = parsePager(dumpHome(true));
+            dbg("圆点跳页: 目标 " + page + " 实际 " + (after.length > 0 ? after[0] : -1));
+            if (after[0] > 0 && after[0] != page) {
+                dbg("圆点跳页失败：目标第 " + page + " 页，实际第 " + after[0] + " 页，改用滑动");
+                return jumpToPageBySwipe(page);
+            }
             return true;
         }
         // 没圆点：按「当前页 → 目标页」的差值滑。
@@ -1117,6 +1146,17 @@ public class Bridge {
     }
 
     private String dumpHome(boolean needPager) {
+        // 🔴 屏幕尺寸必须先就位：indexPage / findNode 靠它筛掉相邻页的节点。
+        //    以前只在建索引时赋值，用户直接点定位（没建过索引）时是 0，
+        //    过滤条件失效，第 1 页又会「找到」第 3 页的应用。
+        if (SW <= 0 || SH <= 0) {
+            try {
+                android.util.DisplayMetrics dm =
+                        web.getContext().getResources().getDisplayMetrics();
+                if (dm.widthPixels > 0) SW = dm.widthPixels;
+                if (dm.heightPixels > 0) SH = dm.heightPixels;
+            } catch (Throwable ignored) { }
+        }
         // 🔴 必须用 --compressed。
         //
         // 桌面只要有一个动态组件（快递卡片、天气动画、音乐播放条），
@@ -1828,6 +1868,8 @@ public class Bridge {
                     notifyLocate(resumePage > 1
                             ? "从第 " + resumePage + "/" + total + " 页继续索引"
                             : "开始遍历桌面 · 共 " + total + " 页 · 可随时打断", false);
+                    dbg("索引开始：total=" + total + " resume=" + resumePage
+                            + " sweep=" + sweepMode + " 圆点数=" + ((pager.length - 2) / 2));
                     // 上限 20 页：只为防「页数算错导致死循环」，正常桌面远小于此。
                     // 以前写死 8 页，桌面超过 8 页时后面几页永远索引不到。
                     for (; page <= total && page <= 20; page++) {
@@ -1841,10 +1883,36 @@ public class Bridge {
                                 sweepCur++;
                             }
                         } else {
-                            jumpToPage(pager, page);
+                            boolean jumped = jumpToPage(pager, page);
+                            // 🔴 跳页失败不能照记：dump 到的是别的页，按 page 落库就会
+                            //    「所有应用都指向某一页」，定位跳过去当然找不到。
+                            //    失败先重试一次，仍失败就跳过本页（宁可少收，不要记错）。
+                            if (!jumped) {
+                                dbg("第 " + page + " 页跳页失败，重试一次");
+                                jumped = jumpToPage(pager, page);
+                            }
+                            if (!jumped) {
+                                dbg("第 " + page + " 页仍跳不过去，跳过本页");
+                                continue;
+                            }
                         }
                         String xml = dumpHome(false);
-                        added += indexPage(index, xml, page, "");
+                        // 🔴 必须以「实际停在第几页」为准，不能相信循环变量。
+                        //    跳页可能没生效（圆点没点中、滑动被吞、页面还在动画），
+                        //    那样 dump 到的还是上一页的内容，按 page 落库就会把
+                        //    别的页的应用全部记到同一页 —— 表现就是「定位跳到首页说已找到」。
+                        //
+                        //    🔴 页码和内容必须取自**同一份 XML**：无障碍路径返回的
+                        //    完整树本身就是带页码的，直接解析它即可，不用再 dump 一次
+                        //    （再 dump 一次既慢，两次之间页面还可能变，导致页码与内容错位）。
+                        int[] real = parsePager(xml);
+                        int recPage = (real[0] > 0) ? real[0] : page;
+                        dbg("第 " + page + " 页：real=" + real[0] + " total=" + (real.length > 1 ? real[1] : -9)
+                                + " rec=" + recPage + " 长度=" + xml.length());
+                        if (recPage != page) {
+                            dbg("第 " + page + " 页实际停在第 " + recPage + " 页，按实际记录");
+                        }
+                        added += indexPage(index, xml, recPage, "");
                         // 该页的文件夹（带名字：定位时能直接打开目标文件夹，不用逐个试）
                         java.util.List<Object[]> folders = findFoldersNamed(xml);
                         // 🔴 有的桌面（Pixel / AOSP）所有文件夹的无障碍名**完全一样**
@@ -1961,6 +2029,16 @@ public class Bridge {
             if (desc == null || desc.isEmpty()) continue;
             String cls = nodeAttr(tag, "class");
             if (cls == null || !cls.endsWith("TextView")) continue;   // 只收应用图标
+            // 🔴 只收本屏可见的图标：无障碍树带着相邻页的节点，
+            //    不过滤就会把第 3 页的应用记成第 1 页（实测「博看书苑」）。
+            String bd = nodeAttr(tag, "bounds");
+            if (bd != null) {
+                java.util.regex.Matcher bm = java.util.regex.Pattern
+                        .compile("\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]").matcher(bd);
+                if (!bm.find()) continue;
+                if (!onScreen(Integer.parseInt(bm.group(1)), Integer.parseInt(bm.group(2)),
+                        Integer.parseInt(bm.group(3)), Integer.parseInt(bm.group(4)))) continue;
+            }
             // 去掉角标后缀：「微信，3 条通知」→「微信」
             String name = desc;
             int cut = -1;
