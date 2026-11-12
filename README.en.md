@@ -522,12 +522,8 @@ adb shell "pm enable <package>; cmd package install-existing <package>"
 >
 > **Why an archive tries both**: `pm disable-user` disables the app outright, undone with `pm enable`;
 > when the ROM refuses to disable a system app it falls back to `pm uninstall --user 0`, which only
-> removes it for the current user (the APK stays in the system partition) — that one **can only be
-> restored with `cmd package install-existing`**.
->
-> ⚠️ Running `pm enable` on a "removed for user" package **silently pretends to work** — it prints
-> `new state: enabled` while the current user still cannot see the app (measured). So run both lines;
-> `pm enable` alone is not enough.
+> removes it for the current user (the APK stays in the system partition) — that one is restored with
+> `cmd package install-existing`. Running both covers either case.
 
 **Restore every archived app**:
 
