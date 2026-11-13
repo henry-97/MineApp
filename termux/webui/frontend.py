@@ -1442,10 +1442,11 @@ function loadHistory(){
     });
 }
 
-/* 应用名用本地已经拿到的 apps 补：后端只存包名，逐条查 shell 太慢 */
+/* 应用名用本地已经拿到的 apps 补：后端只存包名，逐条查 shell 太慢。
+   🔴 字段名是 pkg 不是 package —— 写错过一次，导致历史里全显示包名。 */
 function appLabelOf(pkg){
   for (var i = 0; i < apps.length; i++){
-    if (apps[i].package === pkg) return apps[i].label || pkg;
+    if (apps[i].pkg === pkg) return apps[i].label || pkg;
   }
   return pkg;
 }
@@ -1458,7 +1459,11 @@ function fmtHisTime(ms){
        + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
 
+/* 最近一次渲染的历史条目：列表后到、面板已开时用它补渲染名字 */
+var hisCache = [];
+
 function renderHistory(items){
+  hisCache = items || [];
   var box = document.getElementById('hisList');
   if (!box) return;
   if (!items.length){
@@ -2041,6 +2046,10 @@ function applyData(d){
   }
   document.getElementById('perfChk').checked = (d.perf === true) || perfWanted;
   apps = d.apps || [];
+  // 历史面板可能比列表先打开（冷启动直接点开），那时 apps 还是空的，
+  // 名字只能回落到包名。列表一到就补渲染一次，避免「历史里全是包名」的错觉。
+  var his = document.getElementById('history');
+  if (his && his.classList.contains('show')) renderHistory(hisCache);
   if (apps.length) idxReady = !!apps[0].idx_ready;
   idxPartial = !!(d && d.idx_partial);
   adbPort = (d && d.adb_port) || 5555;
