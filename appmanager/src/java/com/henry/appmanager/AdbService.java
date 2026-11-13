@@ -1626,37 +1626,73 @@ public class AdbService {
                     Log.w(TAG, "拒绝限制本应用: " + p);
                     return false;
                 }
-                // 🔴 一次连接把四件事都做完（逐条连接每次多 ~300ms 往返）：
+                // 🔴 一次连接把五件事都做完（逐条连接每次多 ~300ms 往返）：
                 //
-                //  1) set-inactive —— 真正生效的那层：后台进程降到 cached 并交给
-                //     cgroup freezer 冻结（实测 CPU 时间零增长），点图标时 AMS 自动
-                //     解冻、同一个 PID 原地复活。旧的 RUN_IN_BACKGROUND=ignore 在
-                //     HyperOS 上实测完全无效（设满一天进程照跑），只留作标记。
+                //  1) 踢出电池优化白名单 —— 不做这一步，后面全是空转：
+                //     白名单应用的 standby 分组恒为 EXEMPTED(5)，此时
+                //     set-standby-bucket / set-inactive 一律**静默失败**（命令无报错、
+                //     状态纹丝不动）。实测 org.jellyfin.mobile：留在白名单里怎么设都不动，
+                //     移出后 5→45 立刻生效。
                 //
-                //  2) START_FOREGROUND=ignore —— 禁止它启动前台服务。很多国产应用靠
-                //     「我是前台服务」躲过后台清理，堵掉这条路之后 set-inactive 才压得实。
+                //  2) set-standby-bucket restricted —— 系统最严档（bucket 45）：
+                //     后台网络、JobScheduler、闹钟全部受限，进程也会被 cgroup freezer
+                //     冻结。5.0.8 起直接跳这一档，不再先写 RARE(40)。
+                //     🔴 旧写法 `am set-inactive true` 实际就是把分组写成 40，
+                //        会和 45 互相覆盖，所以补做逻辑也一并改掉了。
                 //
-                //  3) WAKE_LOCK=ignore —— 禁止持有唤醒锁，待机时不会把 CPU 拽醒。
+                //  3) RUN_ANY_IN_BACKGROUND=ignore —— 这一条是**兜底**：
+                //     系统给 45 档自动配的就是它（实测 bucket=45 的应用这条全是 ignore），
+                //     而 ROM 会拒绝把刚用过的应用降进 45 档（ACTIVE=10 / WORKING_SET=20 /
+                //     FREQUENT=30 推不动，60 个第三方里卡了 16 个）。这种时候
+                //     bucket 写不进去，但这条 op 写得进去且不被回滚 —— 后台起服务、
+                //     拉闹钟的执法点就是它，所以该拦的还能拦住。
                 //
-                //  2 和 3 是持久的 AppOps 设置（存系统数据库，重启也在），
-                //  不像 set-inactive 会被「用户打开应用」清掉，所以不用每次补做。
-                sh("cmd appops set " + p + " RUN_IN_BACKGROUND ignore"
-                        + "; am set-inactive --user 0 " + p + " true"
+                //  4) RUN_IN_BACKGROUND=ignore —— 这条在 HyperOS 上实测无效，只作索引：
+                //     appops query-op 靠它列出整个限制名单。注意它和上面那条是**两个不同的 op**。
+                //
+                //  5) START_FOREGROUND=ignore —— 禁止它启动前台服务，堵掉
+                //     「我是前台服务」这条躲过后台清理的路。
+                //
+                //  6) WAKE_LOCK=ignore —— 禁止持有唤醒锁，待机时不会把 CPU 拽醒。
+                //
+                // 3/4/5/6 是持久 AppOps 设置（存系统库，重启也在），不用每次补做；
+                // 2 会被「用户打开应用」清掉，由 reassertRestrictions 周期补。
+                //
+                // 回读 bucket 只为日志：刚用过的应用（ACTIVE=10 / WORKING_SET=20）
+                // 系统会拒绝降档，此时限制实际没落地 —— 留痕方便排查，不改界面判定。
+                String out = sh("cmd deviceidle whitelist -" + p
+                        + "; am set-standby-bucket " + p + " restricted"
+                        + "; cmd appops set " + p + " RUN_ANY_IN_BACKGROUND ignore"
+                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND ignore"
                         + "; cmd appops set " + p + " START_FOREGROUND ignore"
-                        + "; cmd appops set " + p + " WAKE_LOCK ignore");
+                        + "; cmd appops set " + p + " WAKE_LOCK ignore"
+                        + "; echo BUCKET=$(am get-standby-bucket " + p + ")");
+                if (out != null && out.contains("Removed:")) rememberWhitelistRemoved(p);
+                if (out != null && !out.contains("BUCKET=45")) {
+                    Log.w(TAG, "限制未落地（分组没到 45，应用可能刚用过）: " + p
+                            + " → " + out.trim().replace('\n', ' '));
+                }
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("ignore");
             }
             if ("unrestrict".equals(action)) {
-                // 解限必须把限制时设的四项全撤回，否则会出现「界面已解除，
+                // 解限必须把限制时设的全撤回，否则会出现「界面已解除，
                 // 但应用还是启动不了前台服务 / 还是拿不到唤醒锁」的怪状态。
                 // START_FOREGROUND 和 WAKE_LOCK 用 default（恢复系统默认）而不是 allow，
                 // 避免把本来就被系统限制的应用改成完全放行。
                 // 索引标记排最后撤：它是一键解除的入口（appops query-op 靠它列出名单），
                 // 先撤掉的话后面哪一步失败，这个应用就从名单里消失了，再也没法重试。
-                sh("am set-inactive --user 0 " + p + " false"
+                sh("am set-standby-bucket " + p + " active"
+                        + "; cmd appops set " + p + " RUN_ANY_IN_BACKGROUND allow"
                         + "; cmd appops set " + p + " START_FOREGROUND default"
                         + "; cmd appops set " + p + " WAKE_LOCK default"
                         + "; cmd appops set " + p + " RUN_IN_BACKGROUND allow");
+                // 白名单只在「当初是我们踢出去的」时候才加回去 —— 否则会把
+                // 用户从没设过「无限制」的应用也塞进白名单，变成反向的过度放行。
+                // 放最后做：加白名单会立刻把分组写成 EXEMPTED(5)，盖掉前面的 active。
+                if (isWhitelistRemoved(p)) {
+                    sh("cmd deviceidle whitelist +" + p);
+                    forgetWhitelistRemoved(p);
+                }
                 return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("allow");
             }
         } catch (Exception e) {
@@ -1755,14 +1791,17 @@ public class AdbService {
     }
 
     /**
-     * 对「已限制 且 当前有进程在跑」的包重新执行 set-inactive。
+     * 对「已限制 且 当前有进程在跑」的包重新写一遍最严档分组。
      *
-     * 🔴 为什么必须补：setAppInactive 是「用户不活跃」标记，AMS 在用户主动
-     *    启动应用时会自动清除它 —— 也就是用户打开过一次，限制就失效了。
-     *    不补的话界面还显示「已限制」，实际早就不生效（实测：重新打开退出后
-     *    oomAdj 是 701 而不是墓碑应有的 900+）。
+     * 🔴 为什么必须补：standby 分组会被「用户打开应用」重置成 ACTIVE(10) ——
+     *    用户打开过一次，限制就失效了。不补的话界面还显示「已限制」，
+     *    实际早就不生效。
      *
-     * 只处理有进程的包：没进程的包执行 set-inactive 是纯浪费 —— 实测 95 个
+     * 🔴 5.0.8 起补的是 `set-standby-bucket restricted`（45），不再是
+     *    `am set-inactive true`：后者写的是 RARE(40)，会把 45 降级回 40，
+     *    等于每 3 分钟替用户降一次档。两者必须统一，否则自相矛盾。
+     *
+     * 只处理有进程的包：没进程的包执行是纯浪费 —— 实测 95 个
      * 全做要 5.2 秒，而当前有进程的通常只有 40 个左右，做 40 个约 2.2 秒。
      * 全部拼成一条 shell 批量执行，比逐条快 3 倍（实测 10 个：895ms vs 3251ms）。
      *
@@ -1792,7 +1831,7 @@ public class AdbService {
             int n = 0;
             for (String p : restr) {
                 if (!running.contains(p)) continue;
-                sb.append("am set-inactive --user 0 ").append(p).append(" true;");
+                sb.append("am set-standby-bucket ").append(p).append(" restricted;");
                 n++;
             }
             if (n == 0) return;
@@ -1805,15 +1844,24 @@ public class AdbService {
     }
 
     /**
-     * 给旧版本留下的限制补上 START_FOREGROUND / WAKE_LOCK。
+     * 5.0.8 一次性迁移：把已有「限制」统一升到最严档。
      *
-     * 5.0.1 起「限制」多了这两项（禁止启动前台服务、禁止持有唤醒锁），
-     * 但升级前就存在的限制只有 set-inactive + appops 标记。这里跑一次补齐。
+     * 以前的限制是分三次叠上来的，每种都留了自己的布尔标记：
+     *   restrictMigrated       —— appops 标记 → am set-inactive（实际写 RARE=40）
+     *   deepRestrictMigrated   —— 补 START_FOREGROUND / WAKE_LOCK
      *
-     * 用**独立标记**：只补这两项，不重复 set-inactive（那个由 migrateRestrictOnce 管）。
-     * 95 个包 × 2 条拼成一条 shell 执行，约 5~10 秒，只跑一次。
+     * 🔴 5.0.8 起旧的那两次迁移**全部作废，也不再读它们的布尔值**：
+     *    哪怕那两项还是 false（老用户从没跑过、或者半路失败），也不补做 ——
+     *    这一轮的新方案把它们要的效果全覆盖了：
+     *    踢白名单 + 最严档 45 + 三个 appops 一次打齐。
+     *    反过来重跑旧方案只会写回 40，把 45 降回去、自己拆自己的台。
+     *
+     * 三个 appops 里 RUN_ANY_IN_BACKGROUND 是**兜底**：ROM 拒绝把刚用过的应用
+     * 降进 45 档时，bucket 写不进去，但这条写得进去 —— 45 档的后台拦截本来就是靠它。
+     *
+     * 只跑一次（strictBucketMigrated）。全部命令拼成一条 shell：几十个包约 5~10 秒。
      */
-    void migrateDeepRestrictOnce() {
+    void migrateStrictBucketOnce() {
         if (appCtx == null) return;
         new Thread(new Runnable() {
             @Override public void run() {
@@ -1821,7 +1869,7 @@ public class AdbService {
                     Thread.sleep(2500);
                     android.content.SharedPreferences sp = appCtx.getSharedPreferences(
                             "app", android.content.Context.MODE_PRIVATE);
-                    if (sp.getBoolean("deepRestrictMigrated", false)) return;
+                    if (sp.getBoolean("strictBucketMigrated", false)) return;
                     // 🔴 一直等到通道就绪再迁移 —— 首次安装时 Shizuku 的 binder
                     //    可能十几秒才到，等几秒就放弃会让用户「装了没生效」。
                     //    间隔逐步拉长（2s → 5s → 30s），避免长时间空转。
@@ -1833,89 +1881,84 @@ public class AdbService {
                         waited += step;
                     }
 
-                    java.util.Set<String> olds = getRestricted();
+                    Set<String> olds = getRestricted();
                     if (olds.isEmpty()) {
-                        sp.edit().putBoolean("deepRestrictMigrated", true).apply();
+                        sp.edit().putBoolean("strictBucketMigrated", true).apply();
                         return;
                     }
                     StringBuilder sb = new StringBuilder();
                     for (String p : olds) {
+                        sb.append("cmd deviceidle whitelist -").append(p).append(";");
+                        sb.append("am set-standby-bucket ").append(p).append(" restricted;");
+                        sb.append("cmd appops set ").append(p).append(" RUN_ANY_IN_BACKGROUND ignore;");
                         sb.append("cmd appops set ").append(p).append(" START_FOREGROUND ignore;");
                         sb.append("cmd appops set ").append(p).append(" WAKE_LOCK ignore;");
                     }
                     String out = sh(sb.toString());
                     boolean allOk = out == null || !out.toLowerCase().contains("error");
-                    Log.i(TAG, "深度限制补做: " + olds.size() + " 个, allOk=" + allOk);
-                    if (allOk) sp.edit().putBoolean("deepRestrictMigrated", true).apply();
+                    // 记下这次被踢出白名单的包：解除限制时要按名单加回去，
+                    // 否则用户原来设的「无限制」就永久丢了。
+                    if (out != null) rememberWhitelistRemovedFromOutput(out);
+                    Log.i(TAG, "最严档迁移: " + olds.size() + " 个, allOk=" + allOk);
+                    if (allOk) sp.edit().putBoolean("strictBucketMigrated", true).apply();
                 } catch (Throwable ignored) { }
             }
         }).start();
+    }
+
+    // ---------- 电池优化白名单的增删记录 ----------
+    //
+    // 限制时要把应用从白名单踢出去（不踢，分组写不进 45）；
+    // 用户点「解除限制」时要能原样加回来。但绝不能对从没进过白名单的
+    // 应用乱加（那等于反向过度放行），所以这里记一份「我们踢过谁」。
+    private static final String PREF_WL_REMOVED = "wlRemovedPkgs";
+
+    private android.content.SharedPreferences prefs() {
+        return appCtx.getSharedPreferences("app", android.content.Context.MODE_PRIVATE);
+    }
+
+    private void rememberWhitelistRemoved(String p) {
+        Set<String> s = new HashSet<String>(prefs().getStringSet(PREF_WL_REMOVED,
+                Collections.<String>emptySet()));
+        if (s.add(p)) prefs().edit().putStringSet(PREF_WL_REMOVED, s).apply();
+    }
+
+    /** 从批量命令输出里捡出 `Removed: <pkg>` 行并记下来。 */
+    private void rememberWhitelistRemovedFromOutput(String out) {
+        Set<String> rm = new HashSet<String>();
+        for (String line : out.split("\n")) {
+            String s = line.trim();
+            if (s.startsWith("Removed:")) {
+                String q = s.substring("Removed:".length()).trim();
+                if (!q.isEmpty()) rm.add(q);
+            }
+        }
+        if (rm.isEmpty()) return;
+        Set<String> s = new HashSet<String>(prefs().getStringSet(PREF_WL_REMOVED,
+                Collections.<String>emptySet()));
+        if (s.addAll(rm)) prefs().edit().putStringSet(PREF_WL_REMOVED, s).apply();
+    }
+
+    private boolean isWhitelistRemoved(String p) {
+        return prefs().getStringSet(PREF_WL_REMOVED,
+                Collections.<String>emptySet()).contains(p);
+    }
+
+    private void forgetWhitelistRemoved(String p) {
+        Set<String> s = new HashSet<String>(prefs().getStringSet(PREF_WL_REMOVED,
+                Collections.<String>emptySet()));
+        if (s.remove(p)) prefs().edit().putStringSet(PREF_WL_REMOVED, s).apply();
     }
 
     /**
-     * 旧机制迁移：把「限制」从 appops 换成墓碑（am set-inactive）。
+     * 🔴 5.0.8 起这两个旧迁移已删除（migrateRestrictOnce / migrateDeepRestrictOnce）。
      *
-     * 以前只写 RUN_IN_BACKGROUND=ignore，在 HyperOS 上实测完全无效（设了之后
-     * 应用后台进程照样存活、oomAdj 与未限制时一致）。升级后给已标记的包补一次
-     * set-inactive，让它们真正进入墓碑。
-     *
-     * 🔴 用**持久化的布尔标记**，不用 versionCode：
-     *    拿版本号当判断依据的话，每次升级（4.9.3 → 5.0 → 6.0…）都会把
-     *    整个清单重迁一遍，几十条 shell 命令白跑。
-     *    这里和索引状态一样只记「迁过了」这一个事实，之后每次启动读到就返回，
-     *    开销只有一次 SharedPreferences 读取。
-     *
-     *    必须全部成功才写标记 —— 否则通道临时不可用会把这次迁移永久跳过。
+     * 它们分别写 RARE(40) 和两个 appops，效果已被 migrateStrictBucketOnce
+     * 的「白名单 + 45 + 两个 appops」完全覆盖。保留旧代码的唯一后果是：
+     * 谁要是又调一次，就会把 45 降回 40。
+     * 旧的布尔键 restrictMigrated / deepRestrictMigrated 不再读取，留在
+     * SharedPreferences 里也无害。
      */
-    void migrateRestrictOnce() {
-        if (appCtx == null) return;
-        new Thread(new Runnable() {
-            @Override public void run() {
-                try {
-                    // 等通道就绪：冷启动瞬间 Shizuku binder 可能还没送到
-                    Thread.sleep(3000);
-
-                    android.content.SharedPreferences sp = appCtx.getSharedPreferences(
-                            "app", android.content.Context.MODE_PRIVATE);
-                    if (sp.getBoolean("restrictMigrated", false)) return;   // 迁过了，什么都不做
-
-                    // 4.9.3 早期版本用 versionCode 记过迁移状态：已经迁过的直接补标记，
-                    // 避免这次升级又对几十个包重发一遍命令
-                    if (sp.getInt("restrictMigratedVer", 0) > 0) {
-                        sp.edit().putBoolean("restrictMigrated", true).apply();
-                        return;
-                    }
-
-                    // 一直等到通道就绪再迁移（同 migrateDeepRestrictOnce）
-                    int waited = 0;
-                    while (!"ok".equals(state())) {
-                        if (waited >= 1800) return;
-                        int step = waited < 10 ? 2 : (waited < 60 ? 5 : 30);
-                        try { Thread.sleep(step * 1000L); } catch (InterruptedException ignored) { }
-                        waited += step;
-                    }
-
-                    java.util.Set<String> olds = getRestricted();
-                    boolean allOk = true;
-                    int n = 0;
-                    for (String p : olds) {
-                        try {
-                            String r = sh("am set-inactive --user 0 " + p + " true");
-                            if (r != null && r.toLowerCase().contains("error")) allOk = false;
-                            else n++;
-                        } catch (Throwable e) {
-                            allOk = false;
-                        }
-                    }
-                    // 这台机器上 am get-inactive 恒返回 false（HyperOS 把它阉了），
-                    // 没法回读校验，所以留一条日志：adb logcat -s AdbService 可查
-                    Log.i(TAG, "限制机制迁移: 共 " + olds.size() + " 个, 成功 " + n
-                            + ", allOk=" + allOk);
-                    if (allOk) sp.edit().putBoolean("restrictMigrated", true).apply();
-                } catch (Throwable ignored) { }
-            }
-        }).start();
-    }
 
     public void close() {
         // 每条命令独立连接，无需在此释放
