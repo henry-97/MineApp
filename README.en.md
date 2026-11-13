@@ -63,7 +63,7 @@ A resident tool is at risk of becoming the very thing it is meant to fix. Mine A
 | Frequency | What is fetched | How |
 |---|---|---|
 | **Every 3 s while the screen is on / every 60 s while off** | Memory usage | `ActivityManager.MemoryInfo` — **no shell command at all** |
-| **Every 3 min while the screen is on / every 30 min while off** | Battery health, archive count, restriction count, **tombstone re-assert** | `dumpsys battery` + `dumpsys batterystats` + four `pm` / `appops` calls + one `ps` + batched `am set-inactive` |
+| **Every 3 min while the screen is on / every 30 min while off** | Battery health, archive count, restriction count, **restriction re-assert** | `dumpsys battery` + `dumpsys batterystats` + four `pm` / `appops` calls + one `ps` + batched `am set-standby-bucket` |
 
 Four notes:
 
@@ -76,12 +76,13 @@ Four notes:
   triggers an immediate refresh — you never see a stale number.
 - **Heavy work stays rare.** Battery health and archive/restriction counts need `dumpsys` and `pm`,
   so they run every 3 minutes on-screen and every 30 minutes off-screen.
-- **The tombstone re-assert rides the full refresh.** `setAppInactive` is cleared automatically when
-  you launch an app — one launch and the restriction silently stops working. So every full refresh
-  re-marks each **restricted app that currently has a process**. Typically around 40 packages, batched
-  into a single shell call, roughly 2 s. Packages with no running process are skipped (running the
-  command on them is pure waste). There is **no separate timer** here — change `FULL_GAP` and this
-  follows automatically.
+- **The restriction re-assert rides the full refresh.** An app's **standby bucket** is reset whenever
+  you launch it — one launch puts it back in an active bucket and the restriction silently stops
+  working. So every full refresh re-applies the strictest bucket to each **restricted app that
+  currently has a process**. Typically around 38 packages, batched into a single shell call, roughly
+  1.7 s. Packages with no running process are skipped (nothing is running, and the next round catches
+  them once they start). There is **no separate timer** here — change `FULL_GAP` and this follows
+  automatically.
 
 Turning the screen back on also refreshes immediately, so you will never be looking at pre-sleep numbers.
 
@@ -120,10 +121,10 @@ screen off.**
 | Feature | What it does |
 |---|---|
 | **Archive (freeze)** | `pm disable-user` — the app never runs, disappears from recents, and its **launcher icon disappears entirely** (MIUI / HyperOS doesn't render a greyed-out state) |
-| **Restrict** | `am set-inactive` (tombstone) freezes background processes, and also blocks the app from **starting foreground services** (`START_FOREGROUND`) and **holding wake locks** (`WAKE_LOCK`) — many apps hide behind "I'm a foreground service" to survive background cleanup, so closing that path is what makes the tombstone stick. Opening the app resumes **the same process**. Milder than archiving: it still launches and keeps its icon. Some high-privilege apps may keep a few processes — see Known limitations |
+| **Restrict** | Three steps in one go: **remove it from the system battery-optimisation allowlist** → write the system's **strictest background bucket** (`set-standby-bucket restricted`) → apply four background permissions (background run / run-any-in-background / start foreground service / wake lock). Skipping the allowlist removal makes everything else a no-op: an allowlisted app sits permanently in `EXEMPTED`, where every write **fails silently**. Opening the app resumes **the same process**. Milder than archiving: it still launches and keeps its icon. For a few recently-used apps the OS refuses to demote the bucket — the background permissions still cover it, see Known limitations |
 | **Process details** (5.0) | `Nprocs ›` after the timestamp; tap it to see each process: sub-process name, cumulative CPU time, memory, system oom level, and which ones are still active. Processes in a dual-app / cloned profile are tagged `·dual`. **Queried only on expand — never polled in the background** |
 | **App finder** (since 3.8) | Tap the locate button on any row and it jumps straight to that app's home-screen page and opens the folder — find any app no matter how many you have. The index only needs building once; if there is none yet, or it is incomplete, a hint above the list takes you to Settings to build it |
-| **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked |
+| **Allowlist (exempt)** | Adds an app to the system doze / standby allowlist (`MILLET_NO_RESTRICT_APP`), so the OS stops throttling it as "unused". **Note this is not the same as MIUI's *Battery saver → No restrictions*** — that toggle is separate state kept by `com.miui.powerkeeper`, cannot be written through `settings`, and has to be set on the app-info page. Allowlisted apps get a pill and sort to the top; the footer totals the PSS of everything you have ticked. **Hitting Restrict on an allowlisted app removes it from the allowlist first** (the restriction cannot be written otherwise); unrestricting adds it back |
 | **AOT compile** | `cmd package compile -m speed` — pre-compiles dex to native code for faster cold starts; **per-app or in bulk**, with a live elapsed-time readout while compiling. **State is auto-detected**: after a reinstall or data wipe it reads back which apps are already AOT-compiled from `dumpsys package dexopt`, so the UI shows the truth instead of starting from zero |
 | **Performance profile tuning** | One-tap system performance governor, automatically re-applied if the ROM reverts it |
 | **Memory sort** | Sort by PSS to see exactly what is eating RAM; the footer shows live system-wide memory usage |
@@ -139,13 +140,14 @@ screen off.**
 >
 > | Where you touch it | What it actually changes | Which layer it governs |
 > |---|---|---|
-> | This app → **Restrict** | `am set-inactive` (tombstone), plus `appops` as a marker only | Background processes get frozen; foreground use is unaffected and opening the app unfreezes it |
-> | This app → **Allowlist** | The system doze / standby allowlist (`EXEMPTED`) | Whether the system throttles it |
+> | This app → **Restrict** | Strictest standby bucket (`restricted`) + four background permissions | Background processes get frozen and background services / alarms cannot start; foreground use is unaffected |
+> | This app → **Allowlist** | The system doze / standby allowlist (`EXEMPTED`) | Whether the system throttles it as "unused" |
 > | MIUI Settings → **Battery saver** | Private state kept by `com.miui.powerkeeper` | MIUI's own power logic |
 >
-> The first two are independent states and can coexist (an app can be both Restricted and
-> Allowlisted). They pull in opposite directions though — **the allowlist loosens, Restrict
-> tightens** — so if you want something running in the background, don't restrict it.
+> The first two pull in opposite directions — **the allowlist loosens, Restrict tightens** — and
+> they are mutually exclusive: hitting Restrict on an allowlisted app removes it from the allowlist
+> first (the restriction cannot be written otherwise), and unrestricting adds it back. Only one of
+> them is ever in effect.
 >
 > The third one we cannot write — to make MIUI's UI show "No restrictions", pick it once on the
 > app-info page.
@@ -397,7 +399,7 @@ MineApp/
 │   │   ├── Bridge.java           JS ↔ Java bridge, two pools (normal / long-running)
 │   │   ├── MainActivity.java     WebView host
 │   │   ├── OpHistory.java        Operation history (archive / restore / restrict / unrestrict)
-│   │   └── KeepAliveService.java Ongoing notification + tombstone re-assert
+│   │   └── KeepAliveService.java Ongoing notification + restriction re-assert
 │   ├── res/                      Resources (icons generated by tools/gen_icon.py)
 │   ├── assets/                   Front-end bundled into the APK (generated, don't edit)
 │   └── tools/
@@ -454,24 +456,28 @@ Attribution:
   greyed-out disabled state). That's system behaviour, not an uninstall — tap "Restore" in the
   app and it returns to its original spot.
 
-- **Since 4.9.3, the function behind the "Restrict" button uses the Tombstone (App Inactive) mechanism.**
-  Earlier builds relied on the standard AppOps background restriction, but **some Chinese OEM ROMs
-  simply ignore it** — after setting `RUN_IN_BACKGROUND=ignore` the app keeps running in the
-  background (measured after a full day: process still alive, oomAdj identical to an unrestricted
-  app). So it now uses `am set-inactive`: background processes are frozen (zero CPU, no network, no
-  push) and resume **in the same process** when you open the app — state intact, no cold start.
+- **In 5.0.8 the "Restrict" button got a new implementation**, because the old approach had two
+  real-world traps. The old `am set-inactive` really just wrote the app's **standby bucket** to the
+  "rare" tier — but as long as the app is on the system **battery-optimisation allowlist** (you gave
+  it "No restrictions" somewhere), its bucket is pinned to `EXEMPTED` and every write afterwards
+  **fails silently**: no error, no state change, while the UI happily kept showing "Restricted".
 
-  To be clear: **some high-privilege apps — or apps that just returned to the background — may still keep a few processes alive.**
-  This app will try to maintain the restriction state within a low-power budget — those apps stay
-  significantly quieter than when unrestricted, but complete stillness is not guaranteed.
+  It now does three steps: remove the app from the battery-optimisation allowlist → write the
+  system's strictest tier (`restricted`) → apply four background permissions (background run /
+  run-any-in-background / start foreground service / wake lock). The system's own enforcement point
+  for the strictest tier is that run-any-in-background permission, so it doubles as the fallback.
 
-  **Restrictions set under the old mechanism are migrated automatically** after upgrading; you don't
-  need to re-apply anything. The migration runs exactly once and never repeats, regardless of which
-  version you upgrade to later.
+  Worth knowing: **the OS refuses to demote an app that was used within the last few minutes** — in
+  practice a dozen or so of 60 restricted apps never reach the strictest tier. In that case the
+  bucket write is dropped, but the background permissions still land and are not rolled back, so
+  background services and alarms stay blocked.
+
+  **Restrictions from the old mechanism are migrated automatically** after upgrading; you don't need
+  to re-apply anything. The migration runs exactly once and never repeats.
 
   If an app misbehaves after being restricted (missing messages, broken background tasks), tap
-  "Unrestrict" in the app. Freezing only affects the background — opening and using the app works
-  normally.
+  "Unrestrict" in the app. The restriction only affects the background — opening and using the app
+  works normally.
 
 - **Never approve an unexpected "Allow USB debugging?" dialog on a public network.**
   `adb tcpip 5555` makes adbd listen on all interfaces, so anyone on the same network can trigger
@@ -523,16 +529,20 @@ If you lock yourself out and the app can no longer be opened, connect the phone 
 
 ```bash
 # Undo a restriction (package name appears once)
-adb shell 'P=<package>; am set-inactive --user 0 $P false; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
+adb shell 'P=<package>; am set-standby-bucket $P active; cmd appops set $P RUN_ANY_IN_BACKGROUND allow; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
+
+# If it used to be on the battery-optimisation allowlist, add it back
+adb shell 'cmd deviceidle whitelist +<package>'
 
 # Undo an archive (package name appears once)
 adb shell 'P=<package>; pm enable $P; cmd package install-existing $P'
 ```
 
-> **Why a restriction needs two layers cleared**: `am set-inactive` is the layer that actually takes
-> effect (it unfreezes the app); `cmd appops` is the index layer — this app uses
-> `appops query-op` to list every restricted package in one command. Unfreezing without clearing the
-> marker leaves the app listed under "lift every restriction" forever.
+> **Why a restriction needs three layers cleared**: `set-standby-bucket active` puts the app back in
+> an active bucket (that is what unfreezes it), the four `appops` calls restore background
+> permissions, and `RUN_IN_BACKGROUND=allow` clears the index — this app uses `appops query-op` to
+> list every restricted package in one command. Unfreezing without clearing the marker leaves the app
+> listed under "lift every restriction" forever.
 >
 > **Why restoring tries both**: `pm disable-user` disables the app outright, undone with `pm enable`;
 > when the ROM refuses to disable a system app it falls back to `pm uninstall --user 0`, which only
@@ -548,7 +558,7 @@ adb shell 'pm list packages -d | sed "s/package://" | while read p; do pm enable
 **Lift every restriction**:
 
 ```bash
-adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-inactive --user 0 $p false; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; cmd appops set $p RUN_IN_BACKGROUND allow; done'
+adb shell 'cmd appops query-op RUN_IN_BACKGROUND ignore | while read p; do am set-standby-bucket $p active; cmd appops set $p RUN_ANY_IN_BACKGROUND allow; cmd appops set $p START_FOREGROUND default; cmd appops set $p WAKE_LOCK default; cmd appops set $p RUN_IN_BACKGROUND allow; done'
 ```
 
 > `$P` is a variable for the **phone-side** shell; the outer quotes keep your local terminal from

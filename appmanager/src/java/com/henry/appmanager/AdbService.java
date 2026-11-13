@@ -76,6 +76,8 @@ public class AdbService {
     private AdbClient.KeyMaterial key;
     /** 最近一次全量刷新读到的限制名单，供补做复用一个来源，不重复跑 appops 查询 */
     private Set<String> lastRestricted = new HashSet<String>();
+    /** 本地增删限制名单的版本号，防止并发查询用旧结果覆盖（见 markRestricted） */
+    private volatile int restrictEpoch = 0;
 
     public AdbService(AdbClient.Log log) {
         this.log = log;
@@ -726,8 +728,19 @@ public class AdbService {
                 if (!active.contains(p)) archived.add(p);
             }
             o.put("archived", archived.size());
-            lastRestricted = getRestricted();
-            o.put("restricted", lastRestricted.size());
+            // 🔴 带版本号写入：getRestricted() 要跑一次 shell（约 0.5 秒），
+            //    这期间用户可能刚好点了「限制 / 解限」，本地缓存已经改过。
+            //    这时如果无条件覆盖，刚做的改动就被这次查询的旧结果盖回去了
+            //    （表现为「解限后几秒又被复原」）。所以期间有本地改动就丢弃本次结果，
+            //    等下一轮 full 再对齐。
+            int ep = restrictEpoch;
+            Set<String> fresh = getRestricted();
+            if (ep == restrictEpoch) {
+                lastRestricted = fresh;
+                o.put("restricted", fresh.size());
+            } else {
+                o.put("restricted", lastRestricted.size());
+            }
             putMem(o);
         } catch (Exception e) {
             Log.w(TAG, "summary 失败: " + e);
@@ -1220,9 +1233,9 @@ public class AdbService {
     public String listJson(boolean withPss) {
         String st = state();
         if (!"ok".equals(st)) return errorPayload(st, withPss);
-        // 🔴 每次拉全量列表前先补一次墓碑（手动刷新、切回前台都走这里）。
+        // 🔴 每次拉全量列表前先补一次限制（手动刷新、切回前台都走这里）。
         //    用户看到「已限制」的那一刻，限制应该是真的在生效的 ——
-        //    不能等后台那个 3 分钟的 full 周期。约 2 秒，只对有进程的包执行。
+        //    不能等后台那个 3 分钟的 full 周期。约 1.7 秒，只对有进程的包执行。
         try { reassertRestrictions(); } catch (Throwable ignored) { }
         try {
             return buildList(withPss);
@@ -1658,21 +1671,33 @@ public class AdbService {
                 // 3/4/5/6 是持久 AppOps 设置（存系统库，重启也在），不用每次补做；
                 // 2 会被「用户打开应用」清掉，由 reassertRestrictions 周期补。
                 //
-                // 回读 bucket 只为日志：刚用过的应用（ACTIVE=10 / WORKING_SET=20）
-                // 系统会拒绝降档，此时限制实际没落地 —— 留痕方便排查，不改界面判定。
+                // 回读两项只为**判定与留痕**，不要求全部命中：
+                //   BUCKET —— 分组是否落到 45
+                //   INDEX  —— 索引标记是否写进去（appops query-op 靠它列名单）
+                // 不同 ROM 对个别命令的支持程度不一样（比如有的拦 doze 白名单、
+                // 有的拦 standby 分组），**任何一条成功就算限制成功** ——
+                // 已经成功的那条会一直生效，没成功的下次刷新会重来一遍。
                 String out = sh("cmd deviceidle whitelist -" + p
                         + "; am set-standby-bucket " + p + " restricted"
                         + "; cmd appops set " + p + " RUN_ANY_IN_BACKGROUND ignore"
                         + "; cmd appops set " + p + " RUN_IN_BACKGROUND ignore"
                         + "; cmd appops set " + p + " START_FOREGROUND ignore"
                         + "; cmd appops set " + p + " WAKE_LOCK ignore"
-                        + "; echo BUCKET=$(am get-standby-bucket " + p + ")");
-                if (out != null && out.contains("Removed:")) rememberWhitelistRemoved(p);
-                if (out != null && !out.contains("BUCKET=45")) {
-                    Log.w(TAG, "限制未落地（分组没到 45，应用可能刚用过）: " + p
+                        + "; echo BUCKET=$(am get-standby-bucket " + p + ")"
+                        + "; echo INDEX=$(cmd appops get " + p + " RUN_IN_BACKGROUND | head -1)");
+                if (out == null) return false;
+                boolean removed = out.contains("Removed:");
+                if (removed) rememberWhitelistRemoved(p);
+                boolean bucketOk = out.contains("BUCKET=45");
+                boolean indexOk = out.contains("ignore");          // 四条里任意一条写进去了
+                if (!bucketOk) {
+                    Log.w(TAG, "分组没到 45（应用可能刚用过，或 ROM 拦了这一步）: " + p
                             + " → " + out.trim().replace('\n', ' '));
                 }
-                return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("ignore");
+                // 白名单踢成功也算 —— 至少这一步生效了
+                boolean ok = indexOk || bucketOk || removed;
+                if (ok) markRestricted(p, true);
+                return ok;
             }
             if ("unrestrict".equals(action)) {
                 // 解限必须把限制时设的全撤回，否则会出现「界面已解除，
@@ -1681,11 +1706,13 @@ public class AdbService {
                 // 避免把本来就被系统限制的应用改成完全放行。
                 // 索引标记排最后撤：它是一键解除的入口（appops query-op 靠它列出名单），
                 // 先撤掉的话后面哪一步失败，这个应用就从名单里消失了，再也没法重试。
-                sh("am set-standby-bucket " + p + " active"
+                String out = sh("am set-standby-bucket " + p + " active"
                         + "; cmd appops set " + p + " RUN_ANY_IN_BACKGROUND allow"
                         + "; cmd appops set " + p + " START_FOREGROUND default"
                         + "; cmd appops set " + p + " WAKE_LOCK default"
-                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND allow");
+                        + "; cmd appops set " + p + " RUN_IN_BACKGROUND allow"
+                        + "; echo BUCKET=$(am get-standby-bucket " + p + ")"
+                        + "; echo INDEX=$(cmd appops get " + p + " RUN_IN_BACKGROUND | head -1)");
                 // 白名单只在「当初是我们踢出去的」时候才加回去 —— 否则会把
                 // 用户从没设过「无限制」的应用也塞进白名单，变成反向的过度放行。
                 // 放最后做：加白名单会立刻把分组写成 EXEMPTED(5)，盖掉前面的 active。
@@ -1693,7 +1720,12 @@ public class AdbService {
                     sh("cmd deviceidle whitelist +" + p);
                     forgetWhitelistRemoved(p);
                 }
-                return sh("cmd appops get " + p + " RUN_IN_BACKGROUND").contains("allow");
+                if (out == null) return false;
+                // 与「限制」同一原则：任意一项落地就算成功 ——
+                // 索引 allow 是名单的出口，分组不再是 45 说明确实放出来了。
+                boolean ok = out.contains("allow") || !out.contains("BUCKET=45");
+                if (ok) markRestricted(p, false);
+                return ok;
             }
         } catch (Exception e) {
             Log.w(TAG, "操作失败 " + p + ": " + e);
@@ -1841,6 +1873,26 @@ public class AdbService {
         } catch (Throwable e) {
             Log.w(TAG, "补做限制失败: " + e);
         }
+    }
+
+    /**
+     * 限制 / 解限之后立刻更新内存里的名单缓存。
+     *
+     * 🔴 不更新会出事：`reassertRestrictions` 读的是 `lastRestricted`，
+     *    而它只在 full 刷新时才重新查询。解限之后前端马上 `load(true)`，
+     *    紧接着的 `listJson` 会拿着**还没更新的旧名单**再补做一次，
+     *    把刚解除的限制原样打回去 —— 实测「解限成功、4 秒内又被限制」。
+     *
+     * 用「复制 + 换引用」而不是原地增删：这个集合会被别的线程读到，
+     * 原地改可能导致并发读写异常，换引用至少是原子的。
+     */
+    private void markRestricted(String p, boolean restricted) {
+        try {
+            Set<String> s = new HashSet<String>(lastRestricted);
+            if (restricted) s.add(p); else s.remove(p);
+            lastRestricted = s;
+            restrictEpoch++;
+        } catch (Throwable ignored) { }
     }
 
     /**
