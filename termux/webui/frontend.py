@@ -178,6 +178,13 @@ background:var(--card);border:0.5px solid var(--line);font-size:18px;color:var(-
 /* 操作历史列表 */
 .his-item{padding:10px 0;border-bottom:0.5px solid var(--line)}
 .his-item:last-child{border-bottom:0}
+/* 授权列表：一行一个应用 + 右侧开关 */
+.relay-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--line)}
+.relay-row:last-child{border-bottom:0}
+.relay-info{flex:1;min-width:0}
+.relay-name{font-size:14.5px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.relay-pkg{font-size:11.5px;color:var(--ink3);margin-top:2px;overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
 .his-l1{display:flex;align-items:center;gap:10px}
 .his-name{font-size:14.5px;color:var(--ink);flex:1;min-width:0;overflow:hidden;
 text-overflow:ellipsis;white-space:nowrap}
@@ -523,7 +530,10 @@ padding-top:10px;border-top:0.5px solid var(--line)}
 </div>
 <div id="settings" class="sheet">
   <div class="sheet-hd"><h2 data-t="settings">设置</h2>
-    <button class="close" id="setHistory" aria-label="history" style="margin-left:auto;padding:0;display:flex;align-items:center;justify-content:center">
+    <button class="close" id="setRelay" aria-label="relay" style="margin-left:auto;padding:0;display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path stroke-width="1.8" d="M12 2.4l7.4 2.8v5.5c0 4.4-3.1 8.3-7.4 9.5-4.3-1.2-7.4-5.1-7.4-9.5V5.2L12 2.4z"/><g stroke-width="1.15"><path d="M14.1 9.9H9.9"/><path d="M10.45 9.45L9.9 9.9l0.55 0.45"/><path d="M9.9 13.7h4.2"/><path d="M13.55 13.25l0.55 0.45-0.55 0.45"/></g></svg>
+    </button>
+    <button class="close" id="setHistory" aria-label="history" style="margin-left:16px;padding:0;display:flex;align-items:center;justify-content:center">
       <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
     </button>
     <button class="close" id="setClose" style="margin-left:16px">×</button></div>
@@ -531,8 +541,9 @@ padding-top:10px;border-top:0.5px solid var(--line)}
     <div class="setrow">
       <span class="setrow-lb" data-t="secName">应用名称</span>
       <div class="sortbar" id="nameBar">
-        <button class="seg" data-name="mine">Mine App</button>
-        <button class="seg" data-name="manager">应用管理器</button>
+        <button class="seg" data-name="auto" data-t="nameAuto">自动</button>
+        <button class="seg" data-name="zh">中文</button>
+        <button class="seg" data-name="en">English</button>
       </div>
     </div>
     <div class="setrow">
@@ -637,6 +648,17 @@ padding-top:10px;border-top:0.5px solid var(--line)}
             style="font-size:11.5px;color:var(--ink3);white-space:nowrap">0=不保存，最大值10000</span>
     </div>
     <div id="hisList" style="margin-top:12px"></div>
+  </div>
+</div>
+<div id="relay" class="sheet">
+  <div class="sheet-hd">
+    <h2 data-t="relayTitle">应用授权</h2>
+    <span data-t="relayNote"
+          style="margin-left:8px;flex:1;min-width:0;font-size:11.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">授权允许其他应用使用 MineApp</span>
+    <button class="close" id="relayClose" style="margin-left:12px">×</button>
+  </div>
+  <div class="sheet-body">
+    <div id="relayList" style="margin-top:6px"></div>
   </div>
 </div>
 <div id="risk" class="risk">
@@ -847,6 +869,11 @@ var I18N = {
     rtName: '实时调度 RT', tempLimit: '温度限制阈值', bootMode: '开机默认模式', governor: 'CPU 调度器',
     settings: '设置', secName: '应用名称', secTheme: '主题', secLang: '语言',
     hisTitle: '操作历史', hisLimitLb: '保存条数',
+    relayTitle: '应用授权', nameAuto: '自动',
+    relayNote: '授权允许其他应用使用 MineApp',
+    relayEmpty: '还没有授权任何应用',
+    relayOn: '已授权', relayOff: '已取消授权', relayFail: '授权失败',
+    relayNoSig: '读不到该应用的签名，无法授权',
     hisLimitNote: '0=不保存，最大值10000',
     hisEmpty: '还没有操作记录', hisClear: '清空',
     hisClearAsk: '确定清空全部操作记录？此操作不可撤销。',
@@ -1022,6 +1049,11 @@ var I18N = {
     rtName: 'Real-time scheduling', tempLimit: 'Temperature limits', bootMode: 'Default boot mode', governor: 'CPU governor',
     settings: 'Settings', secName: 'App name', secTheme: 'Theme', secLang: 'Language',
     hisTitle: 'Operation history', hisLimitLb: 'Keep entries',
+    relayTitle: 'App authorization', nameAuto: 'Auto',
+    relayNote: 'Allow other apps to use MineApp',
+    relayEmpty: 'No app authorized yet',
+    relayOn: 'Authorized', relayOff: 'Authorization removed', relayFail: 'Authorization failed',
+    relayNoSig: 'Cannot read this app\'s signature, authorization refused',
     hisLimitNote: '0=off, max 10000',
     hisEmpty: 'No operations recorded yet', hisClear: 'Clear',
     hisClearAsk: 'Clear all operation history? This cannot be undone.',
@@ -1180,7 +1212,17 @@ function applyExtLinks(){
 
 /* ---------- 名称与主题（设置页） ---------- */
 var APP_NAMES = { manager: '应用管理器', mine: 'Mine App' };
-var appName = localStorage.getItem('appName') === 'manager' ? 'manager' : 'mine';
+/* 「自动」档固定用哪套名称：'en' = 英文名，'zh' = 中文名。
+   🔴 发布时改这一处即可 —— gen_assets.py 会把它同步成 Java 常量 BuildCfg.AUTO_LANG，
+      桌面名称和界面标题永远一致，不会出现一边中文一边英文。 */
+var AUTO_LANG = 'en';
+var appName = (function(){
+  var v = localStorage.getItem('appName');
+  if (v === 'zh' || v === 'en' || v === 'auto') return v;
+  if (v === 'manager') return 'zh';      // 旧版本存的是名称键，迁移成语言键
+  if (v === 'mine') return 'en';
+  return 'auto';
+})();
 var themeMode = (function(){
   var t = localStorage.getItem('theme');
   return (t === 'light' || t === 'dark') ? t : 'auto';
@@ -1204,9 +1246,16 @@ function updateStat(){
   el.textContent = !adbOk ? T('adbOff') : T2('statArch', {a: lastFrozen, r: lastRestricted});
 }
 
+/* 语言选择 → 实际用哪套名称：auto 跟随系统语言 */
+function nameMode(){
+  if (appName === 'zh') return 'manager';
+  if (appName === 'en') return 'mine';
+  return AUTO_LANG === 'zh' ? 'manager' : 'mine';   // 自动 = 发布时定的那个
+}
+
 function applyName(){
   var el = document.getElementById('appNameTx') || document.getElementById('appTitle');
-  if (el) el.textContent = APP_NAMES[appName] || 'Mine App';
+  if (el) el.textContent = APP_NAMES[nameMode()] || 'Mine App';
 }
 
 function applyTip(){
@@ -1416,6 +1465,76 @@ function openSettings(){
 /* 关闭时只摘掉 show：位移动画由 CSS transition 负责，左滑退出与点 × 同一条路径 */
 function closeSettings(){
   document.getElementById('settings').classList.remove('show');
+}
+
+/* ---------- 应用授权（把 shell 能力借给第三方应用） ---------- */
+
+/* 只渲染「主动申请过」的应用：后端给的就是这份名单，不再拿全量应用表来筛 */
+var relayItems = [];
+
+function openRelay(){
+  document.getElementById('relay').classList.add('show');
+  loadRelay();
+}
+
+function closeRelay(){
+  document.getElementById('relay').classList.remove('show');
+}
+
+function loadRelay(){
+  fetch('/api/relaylist', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      relayItems = (d && d.items) || [];
+      renderRelay();
+    })
+    .catch(function(){ relayItems = []; renderRelay(); });
+}
+
+function renderRelay(){
+  var box = document.getElementById('relayList');
+  if (!box) return;
+  if (!relayItems.length){
+    box.innerHTML = '<p class="his-empty">' + escHtml(T('relayEmpty')) + '</p>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < relayItems.length; i++){
+    var it = relayItems[i] || {};
+    var pkg = it.pkg || '';
+    var on = !!it.granted;
+    var right = '<label class="switch"><input type="checkbox" data-pkg="' + escHtml(pkg) + '"'
+      + (on ? ' checked' : '') + '><span class="slider"></span></label>';
+    html += '<div class="relay-row">'
+          +   '<div class="relay-info">'
+          +     '<div class="relay-name">' + escHtml(it.label || pkg) + '</div>'
+          +     '<div class="relay-pkg">' + escHtml(pkg) + '</div>'
+          +   '</div>'
+          +   right
+          + '</div>';
+  }
+  box.innerHTML = html;
+  var els = box.querySelectorAll('input[data-pkg]');
+  for (var j = 0; j < els.length; j++){
+    els[j].onchange = function(){
+      var pkg = this.getAttribute('data-pkg');
+      var want = this.checked;
+      var el = this;
+      fetch('/api/relayset', {method:'POST', headers:{'Content-Type':'application/json'},
+                              body: JSON.stringify({pkg: pkg, on: want})})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if (!d || !d.ok || (want && !d.granted)){
+            el.checked = !want;
+            toast(d && d.err === 'nosig' ? T('relayNoSig') : T('relayFail'));
+            return;
+          }
+          toast(want ? T('relayOn') : T('relayOff'));
+          if (!want) loadRelay();   // 撤销后该条会从列表里消失，重新拉一次
+        })
+        .catch(function(){ el.checked = !want; toast(T('relayFail')); });
+    };
+  }
 }
 
 /* ---------- 操作历史 ---------- */
@@ -3051,6 +3170,8 @@ document.getElementById('setClose').onclick = closeSettings;
 
 /* 设置页右上角的时钟按钮 → 操作历史 */
 document.getElementById('setHistory').onclick = openHistory;
+document.getElementById('setRelay').onclick = openRelay;
+document.getElementById('relayClose').onclick = closeRelay;
 document.getElementById('hisClose').onclick = closeHistory;
 document.getElementById('hisClear').onclick = function(){
   askConfirm(T('hisClearAsk'), function(){

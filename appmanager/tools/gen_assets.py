@@ -83,6 +83,8 @@ SHIM = r"""
     else if (url.indexOf('/api/historylimit') === 0) p = call('historylimit', String(body.limit === undefined ? '' : body.limit));
     else if (url.indexOf('/api/historyclear') === 0) p = call('historyclear', '');
     else if (url.indexOf('/api/history') === 0) p = call('history', '');
+    else if (url.indexOf('/api/relaylist') === 0) p = call('relaylist', '');
+    else if (url.indexOf('/api/relayset') === 0) p = call('relayset', String((body.pkg || '') + '|' + (body.on ? '1' : '0')));
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
     else if (url.indexOf('/api/opensetting') === 0) p = call('opensetting', String(body.k || ''));
@@ -161,9 +163,27 @@ def main() -> int:
     os.makedirs(PKG_DIR, exist_ok=True)
     with open(os.path.join(PKG_DIR, "AppNames.java"), "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines))
+    # ---- 「自动」档语言：以 frontend.py 的 AUTO_LANG 为唯一真源 ----
+    ma = re.search(r"var AUTO_LANG = '(\w+)';", src)
+    auto_lang = ma.group(1) if ma else "en"
+    cfg = [
+        "package com.henry.appmanager;",
+        "",
+        "/** 由 tools/gen_assets.py 从 frontend.py 的 AUTO_LANG 自动生成，请勿手改。 */",
+        "public final class BuildCfg {",
+        "    /** 「自动」档固定用的名称语言：en = 英文名，zh = 中文名。发布时改 frontend.py */",
+        "    public static final String AUTO_LANG = \"%s\";" % auto_lang,
+        "",
+        "    private BuildCfg() { }",
+        "}",
+        "",
+    ]
+    with open(os.path.join(PKG_DIR, "BuildCfg.java"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(cfg))
 
     print("index.html   %d 字节" % len(html.encode("utf-8")))
     print("AppNames.java %d 条映射" % len(pairs))
+    print("BuildCfg.java AUTO_LANG=%s" % auto_lang)
     return 0
 
 

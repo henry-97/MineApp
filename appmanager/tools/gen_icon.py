@@ -72,6 +72,45 @@ WHITE = (255, 255, 255, 255)
 # 1 = 四叶草改白底彩叶（仅用于出对比图，不默认启用）
 INVERT = os.environ.get("ICON_INVERT") == "1"
 
+# 图案整体再缩一档：0.85 = 比原尺寸小 15%（底色 / 圆角底不变，只缩里面的白图案）。
+# 所有造型、所有尺寸都经过 scaled_content()，只在这里缩一次，保证六套图标比例一致。
+SHRINK = float(os.environ.get("ICON_SHRINK", "0.85"))
+
+# 四块方块的间距系数：1.0 = 原间距；1.05 = 每块朝外挪 5%（方块尺寸不变）。
+# 只影响「方块」造型，四叶草不经过 build_squares()。
+SEP = float(os.environ.get("ICON_SEP", "1.05"))
+
+# 四叶草的花瓣朝中心（锁）收拢的比例：0.95 = 每片沿半径内移 5%，叶片本身不变形。
+# 收进去之后，锁外面那圈背景色描边会多咬掉一点叶尖 —— 这是环形的必然结果，
+# 出图确认观感再定。
+CL_IN = float(os.environ.get("ICON_CL_IN", "0.90"))
+
+# 四叶草再单独缩一档（只作用于四叶草造型）。
+# 测过：收拢 + 放大锁之后，四叶草的白色外轮廓正好 71.5dp，自适应图标的可视区
+# 只有 72dp —— 等于顶满边框，任何掩码形状都会切到叶尖。所以单独再缩。
+CL_SCALE = float(os.environ.get("ICON_CL_SCALE", "0.75"))
+
+# 单片叶子的尺寸系数：1.05 = 叶片放大 5%。pad 是叶片外角的位置，
+# 所以放大是「往里长」—— 叶片之间靠得更近，外轮廓基本不动。
+LEAF_K = float(os.environ.get("ICON_LEAF_K", "1.10"))
+
+# 叶片的「凹口深度」：ck 越小，两侧咬掉的越少 → 叶片变宽、四片之间靠得更近。
+# 🔴 只放大 sq 是没用的：咬口圆的半径 r=hypot(ck*sq, sq/2) 也跟着放大，
+#    整片是自相似的，间隙的相对宽度一点没变（这就是「放大了 5% 却看不出更紧」的原因）。
+CL_CK = float(os.environ.get("ICON_CL_CK", "1.12"))
+
+# 中间的锁（含闪电）整体放大：1.05 = 比原来大 5%。两种造型共用同一把锁，
+# 所以放在 content_raw 里统一乘，不分别调各自的 s。
+LOCK_K = float(os.environ.get("ICON_LOCK_K", "1.05"))
+
+# 四叶草版：锁外面那圈「背景色描边」的粗细（dp）。原来是 1.8，
+# 加粗后锁和花瓣之间才分得开；太粗会把叶尖啃掉，出图看观感。
+# 2026-11-13 调整：1.8 → 2.6 → 3.4（无用）→ 7.5
+# 🔴 关键：花瓣和锁本来就留了约 4.5dp 的空档，描边小于这个值时整圈都落在
+#    空白里，改多少都看不出差别（2.6/3.4/4.2 三档的差异只有 40~90 个像素）。
+#    要真正加宽这圈「背景色」，必须让它超过空档、开始吃叶尖才有效果。
+HALO = float(os.environ.get("ICON_HALO", "5.25"))
+
 # 中心白垫（填补十字间隙，让锁的镂空轮廓完整）
 PLATE_W, PLATE_R = 26.0, 8.5
 PLATE_TOP = 34.0
@@ -115,12 +154,16 @@ def scale_mask(mask, s, cx=CX, cy=52.0, dy=0.0):
 
 
 def build_squares():
+    # 四块的位置以画布中心为基准向外扩 SEP 倍（方块本身尺寸不变）：
+    # SEP=1.05 就是每块朝外挪 5%，中间十字间隙从 9.2 涨到 12.3 —— 原来四块
+    # 贴得太紧，缩过 15% 之后更明显。
+    pad = CX - (CX - PAD) * SEP
     m = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(m)
-    x1, x2 = PAD, PAD + SQ
-    y1, y2 = PAD, PAD + SQ
-    x3, x4 = 108 - PAD - SQ, 108 - PAD
-    y3, y4 = 108 - PAD - SQ, 108 - PAD
+    x1, x2 = pad, pad + SQ
+    y1, y2 = pad, pad + SQ
+    x3, x4 = 108 - pad - SQ, 108 - pad
+    y3, y4 = 108 - pad - SQ, 108 - pad
     for (a, b, c, e) in ((x1, y1, x2, y2), (x3, y1, x4, y2),
                          (x1, y3, x2, y4), (x3, y3, x4, y4)):
         d.rounded_rectangle([u(a), u(b), u(c), u(e)], radius=u(RAD), fill=255)
@@ -191,7 +234,11 @@ def _one_leaf(cfg):
 def build_clover(shape="cl"):
     """一片叶旋转四次得到四叶草：圆头朝外、尖朝中心，中间留出镂空十字。不要茎。
     cl 再整体转 45°（花瓣挪到上下左右）；cl2 不转（花瓣留在四角）。"""
-    cfg = CL[shape]
+    cfg = dict(CL[shape])
+    # 叶片尺寸先放大，再决定往里收多少（收拢量按放大后的中心算，比例才不会跑偏）
+    cfg["sq"] *= LEAF_K
+    cfg["ck"] = CL_CK
+    cfg["pad"] += (CX - cfg["pad"] - cfg["sq"] / 2.0) * (1.0 - CL_IN)
     leaf = _one_leaf(cfg)
     m = Image.new("L", (S, S), 0)
     for ang in (0, 90, 180, 270):
@@ -235,8 +282,8 @@ def content_raw(shape, fg=WHITE):
     if shape in CL:
         # 四片花瓣 + 中心锁；锁外面先撑大一圈挖出底色描边，锁才不会和花瓣糊在一起
         cfg = CL[shape]
-        s = cfg["lock"]
-        halo = cfg["halo"]
+        s = cfg["lock"] * LOCK_K
+        halo = HALO
         alpha = build_clover(shape)
         alpha = ImageChops.subtract(alpha, build_lock(s, halo))
         alpha = ImageChops.lighter(alpha, build_lock(s))
@@ -244,8 +291,8 @@ def content_raw(shape, fg=WHITE):
     else:
         base = build_squares()
         plate = build_plate()
-        lock = build_lock()
-        bolt = build_bolt()
+        lock = build_lock(LOCK_K)
+        bolt = build_bolt(LOCK_K)
         alpha = ImageChops.lighter(base, plate)
         alpha = ImageChops.subtract(alpha, lock)
         alpha = ImageChops.lighter(alpha, bolt)
@@ -256,7 +303,9 @@ def content_raw(shape, fg=WHITE):
 
 def scaled_content(shape, k, fg=WHITE):
     c = content_raw(shape, fg)
-    w = int(round(S * k))
+    if shape in CL:
+        k *= CL_SCALE                  # 四叶草额外缩一档，别顶到图标边框
+    w = int(round(S * k * SHRINK))       # 统一缩 15%，自适应与传统图标共用这一处
     small = c.resize((w, w), Image.LANCZOS)
     out = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     o = (S - w) // 2

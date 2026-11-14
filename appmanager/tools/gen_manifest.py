@@ -25,8 +25,8 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="234"
-    android:versionName="5.1">
+    android:versionCode="235"
+    android:versionName="5.2">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -66,6 +66,28 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
             android:name="com.henry.appmanager.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 命令中继：给同签名的 Lighto 复用 shell 通道。
+             🔴 authority 只能各版本写一个（__RELAY_AUTHORITY__ 由脚本按版本拼）：
+                两个版本若声明同一个 authority，先装的会占住，后装的直接
+                INSTALL_FAILED_CONFLICTING_PROVIDER —— 而这两个版本本来是要共存的。
+             🔴 android:name 必须是全限定类名：多通道版走 aapt2 的 rename-manifest-package，
+                相对名会被改写成 com.henry.appmanager.multi.RelayProvider，类不存在。 -->
+        <provider
+            android:name="com.henry.appmanager.RelayProvider"
+            android:authorities="__RELAY_AUTHORITY__"
+            android:exported="true"
+            android:enabled="true" />
+
+        <!-- 同一个中继的「第三方授权」入口：不带清单权限，靠 RelayProvider 里的
+             运行期校验（包名在白名单 + 当前签名指纹与授权时一致）把关。
+             单独开一个 authority 而不是把上面那层的权限去掉，是为了保住
+             「同签名应用之外的调用连 Binder 都进不来」这道硬隔离。 -->
+        <provider
+            android:name="com.henry.appmanager.RelayOpenProvider"
+            android:authorities="__RELAY_OPEN_AUTHORITY__"
+            android:exported="true"
+            android:enabled="true" />
 
         <!-- 12 个桌面入口：名称 × 图标，同一时间只启用一个 -->
 '''
@@ -132,6 +154,8 @@ def main():
     # provider 的 authority 是字面量、不会被 rename 重写，所以在这里就按版本拼好。
     pkg = "com.henry.appmanager" + (".multi" if EDITION == "multi" else "")
     body = "".join(out).replace("__SHIZUKU_AUTHORITY__", pkg + ".shizuku")
+    body = body.replace("__RELAY_AUTHORITY__", pkg + ".relay")
+    body = body.replace("__RELAY_OPEN_AUTHORITY__", pkg + ".relay2")
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(body)
     print("manifest ok  aliases=%d  default=%s" % (len(NAMES) * len(KEYS), DEFAULT_ALIAS))

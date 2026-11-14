@@ -3211,6 +3211,90 @@ public class Bridge {
     }
 
     /**
+     * 已授权的第三方应用列表：{ok, items:[{pkg, valid}]}。
+     * valid = 当前签名是否仍与授权时记录的一致（装了重打包的假货就会变 false）。
+     */
+    @JavascriptInterface
+    public void relaylist(int id, String arg) {
+        JSONObject o = new JSONObject();
+        try {
+            android.content.Context c = web.getContext();
+            org.json.JSONObject req = RelayGrant.reqAll(c);
+            org.json.JSONObject granted = RelayGrant.all(c);
+            org.json.JSONArray arr = new org.json.JSONArray();
+            java.util.HashSet<String> seen = new java.util.HashSet<String>();
+            // 先列已授权的，再列只申请过还没批的
+            java.util.Iterator<String> ig = granted.keys();
+            while (ig.hasNext()) seen.add(ig.next());
+            java.util.Iterator<String> ir = req.keys();
+            while (ir.hasNext()) seen.add(ir.next());
+
+            java.util.ArrayList<String> list = new java.util.ArrayList<String>(seen);
+            java.util.Collections.sort(list);
+            for (String p : list) {
+                // 早期版本让 shell 也能申请，已经在名单里的顺手清掉
+                if ("com.android.shell".equals(p) || p.equals(c.getPackageName())) {
+                    RelayGrant.forgetRequest(c, p);
+                    continue;
+                }
+                org.json.JSONObject e = new org.json.JSONObject();
+                e.put("pkg", p);
+                e.put("granted", RelayGrant.allowed(c, p));
+                e.put("label", labelOf(c, p));
+                arr.put(e);
+            }
+            o.put("ok", true);
+            o.put("items", arr);
+        } catch (Throwable e) {
+            try { o.put("ok", false); } catch (Exception ignored) { }
+        }
+        replyNow(id, o.toString());
+    }
+
+    /** 应用名；已卸载就退回包名 */    private static String labelOf(android.content.Context c, String pkg) {
+        try {
+            android.content.pm.ApplicationInfo ai =
+                    c.getPackageManager().getApplicationInfo(pkg, 0);
+            CharSequence lb = c.getPackageManager().getApplicationLabel(ai);
+            return lb == null ? pkg : lb.toString();
+        } catch (Throwable e) {
+            return pkg;
+        }
+    }
+
+    /** 授权 / 取消授权，arg = "包名|1" 或 "包名|0" */
+    @JavascriptInterface
+    public void relayset(int id, String arg) {
+        JSONObject o = new JSONObject();
+        try {
+            String a = arg == null ? "" : arg;
+            int bar = a.lastIndexOf('|');
+            String pkg = bar < 0 ? a.trim() : a.substring(0, bar).trim();
+            boolean on = bar >= 0 && "1".equals(a.substring(bar + 1).trim());
+            android.content.Context c = web.getContext();
+            boolean ok;
+            if (on) {
+                ok = RelayGrant.grant(c, pkg);
+            } else {
+                RelayGrant.revoke(c, pkg);
+                // 一并移出申请名单：取消后它就从列表里消失，想再来一次得重新申请，
+                // 免得列表里一直挂着一条「撤销过的」让人以为还有效
+                RelayGrant.forgetRequest(c, pkg);
+                ok = true;
+            }
+            o.put("ok", ok);
+            o.put("pkg", pkg);
+            o.put("granted", on && ok);
+            // 授权失败最常见的原因是「读不到签名」：应用已卸载但残留、
+            // 或者是模块/APEX 包。给前端一个可区分的标记，别只报一句「失败」。
+            if (!ok) o.put("err", "nosig");
+        } catch (Throwable e) {
+            try { o.put("ok", false); } catch (Exception ignored) { }
+        }
+        replyNow(id, o.toString());
+    }
+
+    /**
      * 免责声明的「已同意」标记。
      *
      * 前端原来只存 localStorage —— 而 WebView 的存储会被系统在存储紧张时清掉，
@@ -3666,6 +3750,11 @@ public class Bridge {
      * 桌面入口 = 名称 × 图标，共 18 个 activity-alias。
      * 传 null 表示该项沿用已保存的偏好。先启用目标再停用其余，避免桌面出现「图标消失」的空档。
      */
+    /** 「自动」档是否用中文名 —— 由发布时定的 BuildCfg.AUTO_LANG 决定，不看系统语言 */
+    private static boolean autoIsChinese() {
+        return "zh".equals(BuildCfg.AUTO_LANG);
+    }
+
     private String setAlias(String which, String iconKey) {
         try {
             android.content.Context ctx = web.getContext();
@@ -3680,7 +3769,26 @@ public class Bridge {
             // setComponentEnabledSetting 抛异常，最后桌面上一个入口都不剩。
             if (!isKnownIcon(key)) key = ICON_KEYS[0];
 
-            if (which != null) mode = "manager".equals(which) ? "manager" : "mine";
+            // 名称档位：auto / zh / en（auto 跟随系统语言；旧的 mine/manager 仍然认）
+            String pref = sp.getString("name_pref", "");
+            if (which != null) {
+                boolean zh = "zh".equals(which);
+                if ("auto".equals(which)) {
+                    zh = autoIsChinese();
+                    pref = "auto";
+                } else if ("zh".equals(which) || "en".equals(which)) {
+                    pref = which;
+                } else {
+                    // 兼容老值：manager = 中文名，mine = 英文名
+                    pref = "manager".equals(which) ? "zh" : "en";
+                    zh = "zh".equals(pref);
+                }
+                mode = zh ? "manager" : "mine";
+                sp.edit().putString("name_pref", pref).apply();
+            } else if ("auto".equals(pref)) {
+                // 只切图标时，auto 也要重新按当前系统语言算一次
+                mode = autoIsChinese() ? "manager" : "mine";
+            }
             if (iconKey != null) {
                 if (!isKnownIcon(iconKey)) return "{\"ok\":false}";
                 key = iconKey;
