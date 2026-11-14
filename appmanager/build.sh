@@ -123,6 +123,7 @@ echo "== 6. zipalign =="
 
 echo "== 7. sign =="
 "$JAVA" -jar "$BT/lib/apksigner.jar" sign \
+  --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
   --ks "$KEYSTORE" --ks-pass "pass:$KS_PASS" \
   --key-pass "pass:$KEY_PASS" --ks-key-alias "$KEY_ALIAS" \
   --out "$OUT/$APK_NAME" "$BUILD/aligned.apk"

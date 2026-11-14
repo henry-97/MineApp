@@ -487,9 +487,6 @@ MineApp/
 # 限制后解限（包名只写一次）
 adb shell 'P=<包名>; am set-standby-bucket $P active; cmd appops set $P RUN_ANY_IN_BACKGROUND allow; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
 
-# 若它原来在「电池优化白名单」里，再加回去
-adb shell 'cmd deviceidle whitelist +<包名>'
-
 # 归档后还原（包名只写一次）
 adb shell 'P=<包名>; pm enable $P; cmd package install-existing $P'
 ```

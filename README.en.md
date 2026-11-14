@@ -531,9 +531,6 @@ If you lock yourself out and the app can no longer be opened, connect the phone 
 # Undo a restriction (package name appears once)
 adb shell 'P=<package>; am set-standby-bucket $P active; cmd appops set $P RUN_ANY_IN_BACKGROUND allow; cmd appops set $P START_FOREGROUND default; cmd appops set $P WAKE_LOCK default; cmd appops set $P RUN_IN_BACKGROUND allow'
 
-# If it used to be on the battery-optimisation allowlist, add it back
-adb shell 'cmd deviceidle whitelist +<package>'
-
 # Undo an archive (package name appears once)
 adb shell 'P=<package>; pm enable $P; cmd package install-existing $P'
 ```

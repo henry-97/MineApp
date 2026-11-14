@@ -3418,105 +3418,87 @@ public class Bridge {
 
     @JavascriptInterface
     public void update(int id, String arg) {
-        // 走独立线程：纯 HTTP，不该被「刷新列表」那种重活堵住
+        // 🔴 5.3 起只认固定标签 `next`。
+        //    6.0 MineApp NEXT 会把「全部通道 + 自研无线调试」合到一个包里，
+        //    不再区分普通版/多通道版，所以这里也不再按 tag 前缀挑通道、
+        //    不再比较多次 Release——只问一句「next 那个 Release 是什么版本」。
         dispatchNet(id, new Task() {
             @Override
             public String run() {
                 java.net.HttpURLConnection c = null;
                 try {
-                    // 🔴 不能用 /releases/latest：它只返回一条，两个发行通道没法分开。
-                    //    改成读列表，本地按 tag 前缀各挑各的。
                     java.net.URL u = new java.net.URL(
-                            "https://api.github.com/repos/henry-97/MineApp"
-                            + "/releases?per_page=30");
+                            "https://api.github.com/repos/henry-97/MineApp/releases/tags/next");
                     c = (java.net.HttpURLConnection) u.openConnection();
-                    // 这两个超时是 socket 层的：只在 connect / read 时计时，
-                    // 排队等待（哪怕在队列里排了几十秒）根本不进这个计时器，
-                    // 所以「前台刷列表导致检查更新超时」不会发生。
-                    // 给 15 秒是因为 GitHub 走代理偶尔会慢，8 秒偏紧。
                     c.setConnectTimeout(15000);
                     c.setReadTimeout(15000);
                     c.setRequestProperty("Accept", "application/vnd.github+json");
                     c.setRequestProperty("User-Agent", "MineApp");
                     int code = c.getResponseCode();
+
                     JSONObject o = new JSONObject();
-                    if (code != 200) {
-                        o.put("ok", false);
-                        o.put("code", code);
-                        return o.toString();
-                    }
-                    java.io.InputStream in = c.getInputStream();
-                    java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-                    in.close();
-                    String prefix = releasePrefix();
-                    boolean multi = prefix.startsWith("multi");
-                    org.json.JSONArray arr = new org.json.JSONArray(
-                            new String(bos.toByteArray(), "UTF-8"));
-
-                    // 挑版本：不再按 tag 前缀找通道，改成「先找编号最新的 Release，
-                    // 再看里面有没有我这个通道的包」。
-                    //
-                    // 4.6 起只发一个 vX 挂两个 APK，multi-vX 不会再出现，所以不需要
-                    // 「先找 multi-v、找不到再回落」那套了（那套还有个隐患：同时存在
-                    // multi-v4.6 和 v4.7 时会先命中较旧的 4.6）。
-                    String curVer = "";
-                    try {
-                        curVer = web.getContext().getPackageManager()
-                                .getPackageInfo(web.getContext().getPackageName(), 0).versionName;
-                    } catch (Throwable ignored) { }
-
-                    JSONObject latest = null;
-                    String latestVer = "";
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject x = arr.optJSONObject(i);
-                        if (x == null) continue;
-                        if (x.optBoolean("draft")) continue;
-                        if (!multi && x.optBoolean("prerelease")) continue;
-                        String v = verOfTag(x.optString("tag_name", ""));
-                        if (v.length() == 0) continue;
-                        if (latest == null || cmpVer(v, latestVer) > 0) {
-                            latest = x;
-                            latestVer = v;
-                        }
-                    }
-                    o.put("ok", true);
-                    // 条件不满足一律当「已是最新」，不报错、更不回退去找旧版本
-                    if (latest == null
-                            || cmpVer(latestVer, curVer) <= 0
-                            || !hasAssetFor(latest, multi)) {
+                    // 404 = 还没有 next 版本，按「已是最新」处理，不报错
+                    if (code == 404) {
+                        o.put("ok", true);
                         o.put("tag", "");
                         o.put("ver", "");
                         o.put("url", "");
                         o.put("name", "");
                         return o.toString();
                     }
-                    JSONObject r = latest;
-                    String tag = r.optString("tag_name", "");
-                    o.put("tag", tag);
-                    o.put("ver", latestVer);
-                    o.put("url", r.optString("html_url"));
-                    o.put("name", r.optString("name"));
-                    // 资产也要分开挑：主版本拿 MineApp-x.y.z.apk，
-                    // 多通道版拿文件名含 Multi 的那个。挑不到就留空，
-                    // 前端会退成「打开下载页」而不是装错包。
+                    if (code != 200) {
+                        o.put("ok", false);
+                        o.put("code", code);
+                        return o.toString();
+                    }
+
+                    java.io.InputStream in = c.getInputStream();
+                    java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                    in.close();
+
+                    JSONObject r = new JSONObject(new String(bos.toByteArray(), "UTF-8"));
+                    String curVer = "";
+                    try {
+                        curVer = web.getContext().getPackageManager()
+                                .getPackageInfo(web.getContext().getPackageName(), 0).versionName;
+                    } catch (Throwable ignored) { }
+
+                    String ver = verFromRelease(r);
+                    String apk = null;
+                    long size = 0;
                     org.json.JSONArray assets = r.optJSONArray("assets");
                     if (assets != null) {
                         for (int i = 0; i < assets.length(); i++) {
-                            org.json.JSONObject a = assets.optJSONObject(i);
+                            JSONObject a = assets.optJSONObject(i);
                             if (a == null) continue;
-                            String nm = a.optString("name");
-                            if (nm == null) continue;
-                            String low = nm.toLowerCase();
-                            if (!low.endsWith(".apk")) continue;
-                            if (low.contains("multi") != multi) continue;
-                            o.put("apk", a.optString("browser_download_url"));
-                            o.put("size", a.optLong("size"));
+                            if (!a.optString("name", "").toLowerCase().endsWith(".apk")) continue;
+                            apk = a.optString("browser_download_url");
+                            size = a.optLong("size");
                             break;
                         }
                     }
+
+                    // 版本读不出、没有 APK、或版本不比当前新 → 一律「已是最新」
+                    if (r.optBoolean("draft") || ver.length() == 0 || apk == null
+                            || cmpVer(ver, curVer) <= 0) {
+                        o.put("ok", true);
+                        o.put("tag", "");
+                        o.put("ver", "");
+                        o.put("url", "");
+                        o.put("name", "");
+                        return o.toString();
+                    }
+
+                    o.put("ok", true);
+                    o.put("tag", r.optString("tag_name", ""));
+                    o.put("ver", ver);
+                    o.put("url", r.optString("html_url"));
+                    o.put("name", r.optString("name"));
+                    o.put("apk", apk);
+                    o.put("size", size);
                     return o.toString();
                 } catch (Throwable e) {
                     try {
@@ -3532,6 +3514,36 @@ public class Bridge {
                 }
             }
         });
+    }
+
+    /**
+     * 从 next Release 里取版本号：先看标题（如「MineApp 6.0 NEXT」），
+     * 再看 APK 文件名（如 MineApp-6.0.apk）。都取不到就返回空串，
+     * 调用方会当成「已是最新」，避免装上一个比当前还旧的包。
+     */
+    private static String verFromRelease(JSONObject r) {
+        String v = headVersion(r.optString("name", ""));
+        if (v.length() > 0) return v;
+        org.json.JSONArray assets = r.optJSONArray("assets");
+        if (assets != null) {
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject a = assets.optJSONObject(i);
+                if (a == null) continue;
+                String nm = a.optString("name", "");
+                if (!nm.toLowerCase().endsWith(".apk")) continue;
+                v = headVersion(nm);
+                if (v.length() > 0) return v;
+            }
+        }
+        return "";
+    }
+
+    /** 从任意字符串里抓第一个 x.y[.z] 形态的版本号 */
+    private static String headVersion(String s) {
+        if (s == null) return "";
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(\\d+(?:\\.\\d+){1,3})").matcher(s);
+        return m.find() ? m.group(1) : "";
     }
 
     /**
