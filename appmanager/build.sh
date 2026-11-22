@@ -12,15 +12,20 @@
 # 也可以把上面这些写进 appmanager/local.env（该文件不进仓库）。
 set -euo pipefail
 
-# 发行版本：main（默认）/ multi（多通道版）
-#   bash build.sh          → out/app-manager.apk          com.henry.appmanager
-#   bash build.sh multi    → out/app-manager-multi.apk    com.henry.appmanager.multi
-# 两个包名不同，可以同时安装、各自独立更新。
+# 发行版本
+#   main  → com.henry.appmanager        普通版
+#   multi → com.henry.appmanager.multi  多通道版
+#   next  → com.henry.appmanager.next   6.0 起的统一版（落地包 / 正式版）
+#   mig1  → com.henry.appmanager        **迁移包**：包名同普通版，多一个自动迁移开关
+#   mig2  → com.henry.appmanager.multi  **迁移包**：包名同多通道版
 EDITION="${1:-${EDITION:-main}}"
 case "$EDITION" in
-  main)  RENAME_PKG=""                        ; APK_NAME="app-manager.apk" ;;
+  main)  RENAME_PKG=""                           ; APK_NAME="app-manager.apk" ;;
   multi) RENAME_PKG="com.henry.appmanager.multi" ; APK_NAME="app-manager-multi.apk" ;;
-  *) echo "未知版本：$EDITION（可用 main / multi）"; exit 1 ;;
+  next)  RENAME_PKG="com.henry.appmanager.next"  ; APK_NAME="app-manager-next.apk" ;;
+  mig1)  RENAME_PKG=""                           ; APK_NAME="app-manager-mig.apk" ;;
+  mig2)  RENAME_PKG="com.henry.appmanager.multi" ; APK_NAME="app-manager-mig-multi.apk" ;;
+  *) echo "未知版本：$EDITION（可用 main / multi / next / mig1 / mig2）"; exit 1 ;;
 esac
 
 BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,7 +73,7 @@ echo "== 0. 生成资源（从 frontend.py 提取 HTML 与名称映射） =="
 # 🔴 gen_manifest.py 必须排第一：gen_assets.py 要从 AndroidManifest.xml 读版本号
 #    注入前端。顺序反了会读到上一次构建的版本，界面显示的版本号永远慢一版。
 "$PYTHON" "$BASE/tools/gen_manifest.py" "$EDITION"
-"$PYTHON" "$BASE/tools/gen_assets.py"
+"$PYTHON" "$BASE/tools/gen_assets.py" "$EDITION"
 "$PYTHON" "$BASE/tools/gen_icon.py"
 
 echo "== 0.5 检查 JS 接口注解（漏一个就会「操作失败且无日志」） =="
@@ -99,6 +104,17 @@ fi
 
 echo "== 3. javac =="
 find "$BASE/src/java" -name "*.java" > "$BUILD/sources.txt"
+# 经典版（main / mig1）：用 stub 替换 Root/Shizuku 真实现。
+# 真实现只在多通道版 / next 编译；stub 不引用任何 moe.shizuku / rikka.shizuku 的类。
+# ⚠️ Bridge 仍直接引用 rikka.shizuku.Shizuku（7 处），所以 libs 里的 jar 暂不剥离，
+#    否则编译失败。要彻底去掉 jar 需先把这些引用改成反射或 BuildCfg 分支。
+if [ "$EDITION" = "main" ] || [ "$EDITION" = "mig1" ]; then
+  grep -v '/RootShell\.java$' "$BUILD/sources.txt" \
+    | grep -v '/ShizukuShell\.java$' > "$BUILD/sources.base.txt"
+  mv "$BUILD/sources.base.txt" "$BUILD/sources.txt"
+  find "$BASE/src/java-stub" -name "*.java" >> "$BUILD/sources.txt"
+  echo "   classic build: Root/Shizuku replaced by stub"
+fi
 find "$BUILD/gen" -name "*.java" >> "$BUILD/sources.txt"
 "$JAVAC" -source 8 -target 8 -encoding UTF-8 \
   -bootclasspath "$PLATFORM" \

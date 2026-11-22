@@ -25,8 +25,8 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="236"
-    android:versionName="5.3">
+    android:versionCode="241"
+    android:versionName="5.3.5">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -79,6 +79,16 @@ HEAD = '''<?xml version="1.0" encoding="utf-8"?>
             android:exported="true"
             android:enabled="true" />
 
+        <!-- 只服务一个文件：外部目录里的更新包。
+             系统安装器在 Android 11+ 只接受 content:// 方案（file:// 会 unable to resolve），
+             所以拉起安装器时由本 provider 提供 URI，用 URI 临时授权给安装器读。 -->
+        <provider
+            android:name="com.henry.appmanager.ApkProvider"
+            android:authorities="__APK_AUTHORITY__"
+            android:exported="false"
+            android:enabled="true"
+            android:grantUriPermissions="true" />
+
 
 
         <!-- 12 个桌面入口：名称 × 图标，同一时间只启用一个 -->
@@ -129,8 +139,19 @@ TAIL = '''
 
 
 EDITION = (sys.argv[1] if len(sys.argv) > 1 else "main").lower()
-if EDITION not in ("main", "multi"):
+if EDITION not in ("main", "multi", "next", "mig1", "mig2"):
     EDITION = "main"
+
+# 各版本最终包名（aapt2 rename 后）。mig1/mig2 是**迁移包**：
+# 包名和现役版完全一样（靠 pm install -r 覆盖安装溜进用户手机），
+# 只是多编译进一个「自动迁移到 .next」的开关（见 BuildCfg.MIGRATE）。
+PKG_OF = {
+    "main": "com.henry.appmanager",
+    "mig1": "com.henry.appmanager",
+    "multi": "com.henry.appmanager.multi",
+    "mig2": "com.henry.appmanager.multi",
+    "next": "com.henry.appmanager.next",
+}
 
 
 def main():
@@ -142,11 +163,13 @@ def main():
             out.append(ALIAS % (name, "true" if name == DEFAULT_ALIAS else "false",
                                 label, key, key))
     out.append(TAIL)
-    # 多通道版最终包名是 com.henry.appmanager.multi（aapt2 rename），
     # provider 的 authority 是字面量、不会被 rename 重写，所以在这里就按版本拼好。
-    pkg = "com.henry.appmanager" + (".multi" if EDITION == "multi" else "")
+    # 🔴 authority 必须跟着包名走：两个包同时装着时，同名 authority 会直接
+    #    INSTALL_FAILED_CONFLICTING_PROVIDER。
+    pkg = PKG_OF[EDITION]
     body = "".join(out).replace("__SHIZUKU_AUTHORITY__", pkg + ".shizuku")
     body = body.replace("__RELAY_AUTHORITY__", pkg + ".relay")
+    body = body.replace("__APK_AUTHORITY__", pkg + ".apk")
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(body)
     print("manifest ok  aliases=%d  default=%s" % (len(NAMES) * len(KEYS), DEFAULT_ALIAS))

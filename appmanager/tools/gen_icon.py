@@ -346,6 +346,18 @@ def main():
     dens = [("mdpi", 1), ("hdpi", 1.5), ("xhdpi", 2), ("xxhdpi", 3), ("xxxhdpi", 4)]
     ad = os.path.join(RES, "mipmap-anydpi-v26")
 
+    # 🔴 传统方图（ic_launcher_*.png，每档 48dp）一个都不生成。
+    #    minSdk=26，而 mipmap-anydpi-v26 里的 XML 在**所有**支持的系统上都优先于
+    #    任何密度桶，所以那 7 张/档的位图永远不会被解析到 —— 纯死重量（实测 164 KB）。
+    #    设置页预览图和 out/ 大图仍然用 legacy_master() 画，只是不写进 res。
+    for name, _ in dens:
+        d = os.path.join(RES, "mipmap-" + name)
+        if not os.path.isdir(d):
+            continue
+        for f in os.listdir(d):
+            if f.startswith("ic_launcher") and not f.startswith("ic_launcher_fg"):
+                os.remove(os.path.join(d, f))
+
     for shape in SHAPES:
         for cname, color in COLORS:
             key = "%s_%s" % (shape, cname)
@@ -356,7 +368,6 @@ def main():
 
             for name, k in dens:
                 d = os.path.join(RES, "mipmap-" + name)
-                save(leg, os.path.join(d, "ic_launcher_%s.png" % key), int(48 * k))
                 save(fg, os.path.join(d, "ic_launcher_fg_%s.png" % key), int(108 * k))
 
             os.makedirs(ad, exist_ok=True)
@@ -371,7 +382,6 @@ def main():
             if key == "sq_g":
                 for name, k in dens:
                     d = os.path.join(RES, "mipmap-" + name)
-                    save(leg, os.path.join(d, "ic_launcher.png"), int(48 * k))
                     save(fg, os.path.join(d, "ic_launcher_fg.png"), int(108 * k))
                 with open(os.path.join(ad, "ic_launcher.xml"),
                           "w", encoding="utf-8", newline="\n") as f:

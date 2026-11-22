@@ -2,8 +2,8 @@
 <!-- 由 tools/gen_manifest.py 生成，不要手改；改完跑一次 gen_manifest.py。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.henry.appmanager"
-    android:versionCode="236"
-    android:versionName="5.3">
+    android:versionCode="241"
+    android:versionName="5.3.5">
 
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
 
@@ -55,6 +55,16 @@
             android:authorities="com.henry.appmanager.relay"
             android:exported="true"
             android:enabled="true" />
+
+        <!-- 只服务一个文件：外部目录里的更新包。
+             系统安装器在 Android 11+ 只接受 content:// 方案（file:// 会 unable to resolve），
+             所以拉起安装器时由本 provider 提供 URI，用 URI 临时授权给安装器读。 -->
+        <provider
+            android:name="com.henry.appmanager.ApkProvider"
+            android:authorities="com.henry.appmanager.apk"
+            android:exported="false"
+            android:enabled="true"
+            android:grantUriPermissions="true" />
 
 
 

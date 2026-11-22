@@ -396,7 +396,7 @@ text-decoration:underline;font-size:12px;white-space:nowrap}
 .setrow-unit{flex:none;font-size:12px;color:var(--ink3)}
 .upd-auto{flex:1;min-width:0;margin-left:8px;text-align:right;font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 版本号与开源/打赏链接同行：左边版本、右边链接 */
-.ver-row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:11.5px;color:var(--ink3)}
+.ver-row{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:12px;color:var(--ink3)}
 .ver-links{margin-left:auto;flex:none;display:flex;align-items:center;gap:6px}
 .ver-links .ext{font-size:11.5px;padding:2px 0}
 .info-note a{color:#0f6e56;text-decoration:none}
@@ -621,7 +621,7 @@ padding-top:10px;border-top:0.5px solid var(--line)}
       <label class="switch"><input type="checkbox" id="updAutoChk"><span class="slider"></span></label>
     </div>
     <div class="ver-row">
-      <span data-t="updPermNote">更新可自动继承 adb 授权。</span>
+      <span id="noticeText" data-t="updPermNote" style="font-size:12px;color:var(--ink2);font-weight:500;line-height:1.5">反馈 QQ 群：106752430</span>
       <span class="ver-links">
         <a class="ext" id="lnkRepo" href="https://github.com/henry-97/MineApp">GitHub GPL-3.0 开源</a>
         <span class="ext-sep">|</span>
@@ -893,9 +893,11 @@ var I18N = {
     updLatestShort: '已是最新', updNewShort: '发现 v {v}',
     updFailShort: '检查失败', updCheckingShort: '检查中', updRestart: '将自动重启',
     updNew: '发现新版本 {v}', updOpen: '去下载', updFail: '检查失败，请检查网络',
-    updPermNote: '更新可自动继承 adb 授权。',
-    updInstall: '更新', updInstalling: '更新中', updFinishing: '完成', updDone: '完成',
+    updPermNote: '反馈 QQ 群：106752430',
+    updInstall: '更新', updInstalling: '更新中', updFinishing: '安装中', updDone: '完成',
     updInstallDone: '安装完成，应用即将重启', updInstallFail: '应用内安装失败，已改为浏览器下载',
+    updNeedAllow: '已打开系统安装器，请点「允许」完成安装',
+    updOpenIt: '已装好，请从桌面打开新版本',
     updAuto: '每 24 小时自动检查并更新',
     updAutoOn: '已开启自动检查更新', updAutoOff: '已关闭自动检查更新',
     extLicense: '本项目(GPL-3.0)禁止自行闭源分发；需商务合作请提 Issue。',
@@ -1073,9 +1075,11 @@ var I18N = {
     updLatestShort: 'Up to date', updNewShort: 'v {v} found',
     updFailShort: 'Check failed', updCheckingShort: 'Checking', updRestart: 'Will restart',
     updNew: 'New version {v} available', updOpen: 'Get it',
-    updPermNote: 'Updates inherit the ADB grant.',
-    updInstall: 'Update', updInstalling: 'Updating', updFinishing: 'Done', updDone: 'Done',
+    updPermNote: 'Feedback QQ group: 106752430',
+    updInstall: 'Update', updInstalling: 'Updating', updFinishing: 'Installing', updDone: 'Done',
     updInstallDone: 'Installed — the app will restart', updInstallFail: 'In-app install failed — opening the browser instead',
+    updNeedAllow: 'System installer opened — tap Allow to finish',
+    updOpenIt: 'Installed — open it from the launcher',
     updFail: 'Check failed — network problem?',
     updAuto: 'Auto-check daily',
     updAutoOn: 'Auto-check enabled', updAutoOff: 'Auto-check disabled',
@@ -1175,6 +1179,8 @@ function applyLang(){
   for (var i = 0; i < els.length; i++) {
     // 默认用 textContent（安全，不会被当成 HTML）；需要换行/加粗的文案标 data-html
     var k = els[i].getAttribute('data-t');
+    // 公告拉到后标记 data-notice，语言切换时不覆盖（否则退回 QQ 群文案）
+    if (els[i].getAttribute('data-notice') === '1') continue;
     if (els[i].hasAttribute('data-html')) els[i].innerHTML = T(k);
     else els[i].textContent = T(k);
   }
@@ -3266,6 +3272,7 @@ function renderKeep(){
 }
 
 function keepAliveInit(){
+  loadNotice();
   fetch('/api/keepalive', {method:'POST'})
     .then(function(r){ return r.json(); })
     .then(function(d){
@@ -3273,6 +3280,19 @@ function keepAliveInit(){
       keepHide = !!d.hide_recents; renderKeep();
       // 刚更新完 → 自动打开设置页（标记由 Java 侧读取后即清除）
       if (d.open_settings) setTimeout(function(){ openSettings(); }, 400);
+    })
+    .catch(function(){});
+}
+
+/* 设置页公告：仓库 docs/NOTICE.md（中文）/ NOTICE.en.md（英文）。
+   24 小时内由后端缓存；拉不到或内容为空时保持默认文案（反馈 QQ 群）。 */
+function loadNotice(){
+  fetch('/api/notice', {method:'POST'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok || !d.text) return;
+      var el = document.getElementById('noticeText');
+      if (el){ el.textContent = d.text; el.setAttribute('data-notice', '1'); }
     })
     .catch(function(){});
 }
@@ -3500,8 +3520,14 @@ function installUpdate(){
     .then(function(r){ return r.json(); })
     .then(function(d){
       pollProg();
-      if (d && d.ok){ toast(T('updInstallDone')); return; }   // 进程随后会被系统替换
+      if (d && d.ok){
+        // msg=installed：包装上了但没拉起前台（某些机型 am start 被挡）
+        toast(d.msg === 'installed' ? T('updOpenIt') : T('updInstallDone'));
+        return;
+      }
       stopProg(); clearProg();
+      // msg=restricted：系统安装器已经替我们弹出来了，别再把人送去浏览器
+      if (d && d.msg === 'restricted'){ toast(T('updNeedAllow')); return; }
       fallbackDownload();
     })
     .catch(function(){ stopProg(); clearProg(); fallbackDownload(); });

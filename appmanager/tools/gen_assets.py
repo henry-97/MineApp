@@ -86,6 +86,7 @@ SHIM = r"""
     else if (url.indexOf('/api/relaylist') === 0) p = call('relaylist', '');
     else if (url.indexOf('/api/relayset') === 0) p = call('relayset', String((body.pkg || '') + '|' + (body.on ? '1' : '0')));
     else if (url.indexOf('/api/update') === 0) p = call('update', '');
+    else if (url.indexOf('/api/notice') === 0) p = call('notice', '');
     else if (url.indexOf('/api/design') === 0) p = call('design', String(body.mah || 0));
     else if (url.indexOf('/api/opensetting') === 0) p = call('opensetting', String(body.k || ''));
     else if (url.indexOf('/api/battsettings') === 0) p = call('battSettings', '');
@@ -101,6 +102,27 @@ SHIM = r"""
 })();
 </script>
 """
+
+
+def minify(html: str) -> str:
+    """压缩写进 APK 的那份 HTML。
+
+    只做三件**不会改变语义**的事：去掉行首缩进、去掉空行、去掉独占一行的
+    `//` 注释。前端源码（termux/webui/frontend.py）一个字都不动 ——
+    那里的注释是我们自己的说明文档，压缩只发生在打包产物上。
+
+    为什么不做真正的 JS 压缩（去分号、改变量名）：这份 HTML 是 WebView 里
+    直接跑的唯一实现，压缩器一出错就是整页白屏，省下来的几 KB 不值得。
+    """
+    out = []
+    for line in html.split("\n"):
+        s = line.strip()
+        if not s:
+            continue
+        if s.startswith("//"):
+            continue          # 整行注释才删；行尾注释留着（可能是 URL 的一部分）
+        out.append(s)
+    return "\n".join(out)
 
 
 def main() -> int:
@@ -135,6 +157,10 @@ def main() -> int:
     html = html.replace("__VERSION_CODE__", mc.group(1) if mc else "0")
 
     os.makedirs(os.path.join(BASE, "assets"), exist_ok=True)
+    raw = len(html.encode("utf-8"))
+    html = minify(html)
+    print("index.html  %d -> %d 字节（省 %d）"
+          % (raw, len(html.encode("utf-8")), raw - len(html.encode("utf-8"))))
     with open(os.path.join(BASE, "assets", "index.html"), "w", encoding="utf-8", newline="\n") as f:
         f.write(html)
 
@@ -166,6 +192,9 @@ def main() -> int:
     # ---- 「自动」档语言：以 frontend.py 的 AUTO_LANG 为唯一真源 ----
     ma = re.search(r"var AUTO_LANG = '(\w+)';", src)
     auto_lang = ma.group(1) if ma else "en"
+    # 迁移包（mig1/mig2）：包名与现役版相同，开机后自动把自己迁到 .next
+    edition = (sys.argv[1] if len(sys.argv) > 1 else "main").lower()
+    migrate = edition in ("mig1", "mig2")
     cfg = [
         "package com.henry.appmanager;",
         "",
@@ -173,6 +202,9 @@ def main() -> int:
         "public final class BuildCfg {",
         "    /** 「自动」档固定用的名称语言：en = 英文名，zh = 中文名。发布时改 frontend.py */",
         "    public static final String AUTO_LANG = \"%s\";" % auto_lang,
+        "",
+        "    /** true = 迁移包（build.sh mig1 / mig2）：启动后自动把用户搬到 .next */",
+        "    public static final boolean MIGRATE = %s;" % ("true" if migrate else "false"),
         "",
         "    private BuildCfg() { }",
         "}",
@@ -183,7 +215,7 @@ def main() -> int:
 
     print("index.html   %d 字节" % len(html.encode("utf-8")))
     print("AppNames.java %d 条映射" % len(pairs))
-    print("BuildCfg.java AUTO_LANG=%s" % auto_lang)
+    print("BuildCfg.java AUTO_LANG=%s MIGRATE=%s" % (auto_lang, migrate))
     return 0
 
 

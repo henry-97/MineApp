@@ -69,6 +69,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // 跨包名升级的导入端（5.3.1 桥接版 → 6.0 NEXT）。必须赶在读任何偏好设置之前：
+        // 下面第一句 hide_recents 就是第一个消费者，晚一步就会先用默认值覆盖掉迁移结果。
+        Migrate.runIfNeeded(this, getIntent() == null
+                ? null : getIntent().getStringExtra("migrate"));
+
         // 默认隐藏：赶在任务进入最近任务之前设好（见 applyHideFromRecents 注释）
         boolean hide = getSharedPreferences("app", 0).getBoolean("hide_recents", true);
         applyHideFromRecents(this, hide);

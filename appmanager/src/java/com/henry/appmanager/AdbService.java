@@ -335,17 +335,6 @@ public class AdbService {
      * 实测：单条命令偶发被截断（如 pm list packages 返回 13824 而非 19703 字节），
      * 会导致统计严重偏差。截断时输出通常不以换行结尾，据此重试并取最长结果。
      */
-    private String shStable(String cmd) throws Exception {
-        String best = "";
-        for (int i = 0; i < 3; i++) {
-            String out = shR(cmd);
-            if (out.length() > best.length()) best = out;
-            if (out.endsWith("\n")) return out;
-        }
-        Log.w(TAG, "命令输出疑似截断，已重试: " + cmd + " len=" + best.length());
-        return best;
-    }
-
     /**
      * 取包名列表。
      *

@@ -47,6 +47,9 @@ public class Bridge {
         LIVE_WEB = new java.lang.ref.WeakReference<WebView>(web);
         initChannelOnce();      // 仅首次安装时自动判定，之后尊重用户选择
         syncChannel();
+        reuseChannelAfterMigrate();   // 跨包名升级后把旧通道接回来（见方法注释）
+        uninstallOldAfterMigrate();   // 迁移成功后由新包把旧包删掉
+        migrateIfNeeded();            // 迁移包：自动把自己换成 .next
         // 通知栏那个「停止」按钮按下来时，走广播把两个停止标志立起来。
         // 光靠「前台不是桌面就停」不够：用户只是想滑动桌面看看、或者把图标拖一下，
         // 前台一直是桌面，检测不到，所以必须给一个能按的开关。
@@ -319,16 +322,20 @@ public class Bridge {
     }
 
     /**
-     * 应用内静默安装更新。三步，缺一不可：
+     * 应用内静默安装更新。两条路径，按下载下来的 APK **包名**自动选：
      *
-     *   ① 下载 APK 到外部私有目录 getExternalFilesDir()
-     *   ② cp 到 /data/local/tmp/ —— 关键一步。实测 /sdcard 下的文件 system_server 打不开
-     *      （FUSE 挂载，报 "Failed to load asset path ... from fd"），pm install 直接失败；
-     *      /data/local/tmp 是 shell 可写、system_server 可读的位置，adb install 本来就用它。
-     *   ③ pm install -r —— 走自己的 ADB 通道，等价于 adb install，无系统安装器弹窗
+     *   ① 包名相同（日常的小版本更新）
+     *      下载 → cp 到 /data/local/tmp → `pm install -r` → setsid 拉起自己。
+     *      装完本进程会被系统杀掉，属正常现象（新版本随即启动）。
      *
-     * 装完本进程会被系统杀掉，属正常现象（新版本随即启动）。
-     * 前提是签名一致 —— 自己发的包必然一致；一旦换签名，这里会失败，退回浏览器下载。
+     *   ② 包名不同（5.3.1 桥接版装成 com.henry.appmanager.next）
+     *      走 {@link #crossInstall}：导出偏好 + ADB 密钥 → 搬进新包目录 →
+     *      `pm install`（不带 -r）→ 拉起新包 → 迁移成功后由新包卸载旧包。
+     *      这条路上本进程**不会**被杀（装的是另一个包），所以不需要 detached 循环。
+     *
+     * 两条路的公共前提：cp 必须落到 /data/local/tmp。实测 /sdcard 下的文件
+     * system_server 打不开（FUSE 挂载，报 "Failed to load asset path ... from fd"），
+     * pm install 直接失败；/data/local/tmp 是 shell 可写、system_server 可读的位置。
      */
     @JavascriptInterface
     public void installupdate(int id, String arg) {
@@ -374,12 +381,20 @@ public class Bridge {
                     instPhase = "finishing";
                     try { Thread.sleep(1000); } catch (InterruptedException ignored) { }
                     instPhase = "install";
-                    // 装完要自动回到设置页：先落一个标记（同一份 app 数据，覆盖安装后还在）
                     String pkg = web.getContext().getPackageName();
+                    String log = "/data/local/tmp/mineapp_update.log";
+
+                    // 🔴 目标包名可能和当前不同（5.3.1 桥接版装成 com.henry.appmanager.next）。
+                    //    那种情况 pm install -r 一定失败，而且必须先搬偏好设置 ——
+                    //    否则用户换到 NEXT 会连图标、名称、授权、布局一起丢。
+                    String tgt = ApkPkg.read(apk.getAbsolutePath());
+                    if (tgt.length() > 0 && !tgt.equals(pkg)) {
+                        return crossInstall(apk, tmp, pkg, tgt, total, log);
+                    }
+
+                    // 装完要自动回到设置页：先落一个标记（同一份 app 数据，覆盖安装后还在）
                     web.getContext().getSharedPreferences("app", 0).edit()
                             .putBoolean("open_settings_after_update", true).apply();
-
-                    String log = "/data/local/tmp/mineapp_update.log";
                     // 🔴 拉起必须「先脱离、再安装」。
                     // 直接把 am start 串在 pm install 后面是错的：安装过程中本进程被杀，
                     // 同一条 shell 里后面的 sleep/am start 也一起没了（实测：更新成功但停在桌面）。
@@ -408,16 +423,19 @@ public class Bridge {
                             + "sleep 0.2; "
                             + "done' >/dev/null 2>&1 &)";
 
-                    String res = service.shellLong("cp '" + apk.getAbsolutePath() + "' " + tmp
-                            + " ; echo '--- update '$(date) >> " + log
+                    // 🔴 日志必须截断重写（> 而不是 >>）：追加会让上一次更新留下的
+                    //    "Success" 混进这次的输出里，把失败误判成成功（已出过一次事故）。
+                    String res = service.shellQuick("cp '" + apk.getAbsolutePath() + "' " + tmp
+                            + " ; echo '--- update '$(date) > " + log
                             + " ; " + relaunch
                             + " ; echo 'relaunch detached' >> " + log
                             + " ; pm install -r " + tmp + " >> " + log + " 2>&1"
                             + " ; echo 'install returned' >> " + log
-                            + " ; cat " + log);
-                    service.shellLong("rm -f " + tmp);
+                            + " ; tail -c 4000 " + log, INSTALL_TIMEOUT);
+                    service.shellQuick("rm -f " + tmp, 10000);
 
-                    boolean ok = res != null && res.contains("Success");
+                    boolean ok = res != null && res.contains("Success")
+                            && !res.contains("Failure");
                     instPhase = ok ? "done" : "fail";
                     JSONObject o = new JSONObject();
                     o.put("ok", ok);
@@ -432,6 +450,262 @@ public class Bridge {
                 }
             }
         });
+    }
+
+    /**
+     * 通道预准备：尽量让新包开局就能走 ADB。
+     *
+     * ADB 的授权依据是**公钥**（adbd 的 adb_keys 里存的是公钥，跟包名、uid 都无关），
+     * 所以把 adbkey.* 三件套搬过去之后，新包就是「同一台电脑」，连上去不会再弹授权框 ——
+     * 这才是真正零设置的那条路。Shizuku / Root 的授权是按 uid 记的，搬不动。
+     *
+     * 两步：
+     *   ① 当前不是 adb 通道时，先把 adbd 拉到 TCP 模式。只有 root 能改这个系统属性，
+     *      Shizuku 是 shell uid，改了也静默失败 —— 没有副作用，所以直接试。
+     *      🔴 adb 通道下不能碰：restart adbd 会把我们自己这条连接掐断。
+     *   ② 真去 connect 一次端口，通了才算数（返回 true）；不通就别骗自己。
+     */
+    private boolean prepareAdbForNext(int port) {
+        try {
+            if (!"adb".equals(execChannel())) {
+                try {
+                    service.shellQuick("setprop service.adb.tcp.port " + port
+                            + " ; setprop ctl.restart adbd", 20000);
+                } catch (Throwable ignored) { }
+            }
+            for (int i = 0; i < 12; i++) {
+                java.net.Socket s = new java.net.Socket();
+                try {
+                    s.connect(new java.net.InetSocketAddress("127.0.0.1", port), 600);
+                    return true;
+                } catch (Throwable ignored) {
+                } finally {
+                    try { s.close(); } catch (Throwable ignored) { }
+                }
+                try { Thread.sleep(250); } catch (InterruptedException ignored) { }
+            }
+        } catch (Throwable ignored) { }
+        return false;
+    }
+
+    /**
+     * 跨包名升级：现役版本（com.henry.appmanager / .multi）换成 6.0 NEXT
+     * （com.henry.appmanager.next）时走这条路。
+     *
+     * 和同包名覆盖安装的每一点差别都有原因：
+     *   ① 数据不共享 —— 新包目录是空的，必须导出 → 搬运 → 导入三段式；
+     *   ② 装新包**不会**杀掉本进程（被杀的是同包名的旧进程），所以不需要那套
+     *      「等自己死掉再拉起」的 detached 循环，装完直接 am start 新包就行；
+     *   ③ 卸载旧包放到最后，而且必须等新包写下 migrated 标记才敢动 ——
+     *      导入没成功就卸载，用户两头落空。
+     */
+    private String crossInstall(java.io.File apk, String tmp, String cur, String tgt,
+                                long total, String log) {
+        JSONObject o = new JSONObject();
+        try {
+            // ① 导出：App 只能写自己的外部私有目录
+            java.io.File src = new java.io.File(
+                    web.getContext().getExternalFilesDir(null), Migrate.FILE);
+            String json = Migrate.exportJson(web.getContext());
+            if (json.length() == 0) {
+                instPhase = "fail";
+                o.put("ok", false);
+                o.put("msg", "export");
+                return o.toString();
+            }
+
+            // ② 通道预准备：争取让新包开局就走 ADB（唯一能做到「零设置」的路）。
+            //    adbd 认的是公钥不是包名，所以密钥搬过去 + 端口通 = 直接可用。
+            //    如果探测到 5555 其实没在监听（Shizuku 通道且从没开过 tcpip），
+            //    就不改通道，让新包照原通道去要授权（按 uid 记，用户点一次）。
+            int port = web.getContext().getSharedPreferences("app", 0)
+                    .getInt("adb_port", 5555);
+            if (port < 1024 || port > 65535) port = 5555;
+            if (prepareAdbForNext(port) && !"adb".equals(execChannel())) {
+                try {
+                    org.json.JSONObject r = new org.json.JSONObject(json);
+                    org.json.JSONObject pr = r.optJSONObject("prefs");
+                    if (pr == null) { pr = new org.json.JSONObject(); r.put("prefs", pr); }
+                    org.json.JSONObject ap = pr.optJSONObject("app");
+                    if (ap == null) { ap = new org.json.JSONObject(); pr.put("app", ap); }
+                    ap.put("execChannel", new org.json.JSONArray().put("s").put("adb"));
+                    json = r.toString();
+                    android.util.Log.i("Migrate", "adbd 可用，新包默认切到 ADB 通道");
+                } catch (Throwable ignored) { }
+            }
+
+            java.io.FileOutputStream fo = new java.io.FileOutputStream(src);
+            fo.write(json.getBytes("UTF-8"));
+            fo.close();
+
+            // ③ 搬运：shell 带 ext_data_rw，可以跨包写；App 自己没有这个权限
+            String dir = "/sdcard/Android/data/" + tgt + "/files";
+            String mark = dir + "/" + Migrate.MARK;
+            service.shellQuick("mkdir -p '" + dir + "'"
+                    + " ; cp -f '" + src.getAbsolutePath() + "' '" + dir + "/" + Migrate.FILE + "'"
+                    + " ; chmod 777 '" + dir + "'"
+                    + " ; chmod 666 '" + dir + "/" + Migrate.FILE + "'", 30000);
+            src.delete();
+
+            // 迁移数据的第二条通道：同一份 JSON 用 base64 拼进 am start 的 extra。
+            // 文件通道要穿过 FUSE（跨包读另一个应用的外部目录），某些 ROM 会拦；
+            // 这条路是我们自己把 Intent 递过去，不依赖文件系统。两条都用，幂等。
+            final String extra;
+            {
+                String e = "";
+                try {
+                    byte[] raw = json.getBytes("UTF-8");
+                    if (raw.length > 0 && raw.length <= 9000) {
+                        e = android.util.Base64.encodeToString(raw, android.util.Base64.NO_WRAP);
+                    }
+                } catch (Throwable ignored) { }
+                extra = e;
+            }
+            final String startCmd = "am start --activity-single-top -n " + tgt + "/" + MAIN_ACT_CLASS
+                    + (extra.length() > 0 ? " --es migrate '" + extra + "'" : "");
+
+            // ④ 装新包
+            //
+            // 🔴 判定成败**只看系统状态**（pm path），不看命令输出。
+            //    这里踩过一次线上事故：日志文件是追加写的，`cat log` 会把**上一次**更新
+            //    留下的 "Success" 一起打出来，于是 MIUI 上明明被 INSTALL_FAILED_USER_RESTRICTED
+            //    拦住了，代码却以为装成功 → 不弹安装器、不报错，界面卡在「完成」，
+            //    而新包一个字节都没装上。
+            //    现在：日志每次截断重写（> 而不是 >>），且成败以 pm path 为准。
+            // 🔴 目标包**已经存在**时改用 `pm install -r`（覆盖安装）：
+            //    MIUI 的闸门只拦"装新包"，覆盖安装一律放行。而不少用户之前装过
+            //    预览版 .next（没带数据），正属于这种情况 —— 用 -r 能直接修好，
+            //    连系统安装器都不用弹。
+            boolean pre = pkgInstalled(tgt);
+            if (pre) mlog(web.getContext(), "目标包已存在，改用 -r 覆盖安装");
+            String res = service.shellQuick("cp -f '" + apk.getAbsolutePath() + "' " + tmp
+                    + " ; echo '--- migrate '$(date) > " + log
+                    + " ; pm install " + (pre ? "-r " : "") + tmp + " >> " + log + " 2>&1"
+                    + " ; tail -c 4000 " + log, INSTALL_TIMEOUT);
+            boolean installed = pre
+                    ? (res != null && res.contains("Success") && !res.contains("Failure"))
+                    : pkgInstalled(tgt);
+            mlog(web.getContext(), "安装结果 pre=" + pre + " installed=" + installed
+                    + " out=" + (res == null ? "null" : res.trim()));
+            if (!installed) {
+                // MIUI / HyperOS 的「USB 安装」闸门拦的是**装新包**（覆盖安装不拦）。
+                // 退回系统安装器：用户点一次允许，同一个 APK 就能装上。
+                // 🔴 只要没装上，**一律**走系统安装器这条自救路径。
+                //    以前这里判断 `res.contains("USER_RESTRICTED")`，结果 MIUI 的拒绝文案是
+                //    中文提示「shell 没有权限安装」，匹配不上 → 安装器压根没弹 → 用户只看到
+                //    一句报错就卡死。各 ROM 的拒绝文案千奇百怪，不可能枚举全，
+                //    而"交给系统安装器让用户点一次允许"对任何失败原因都成立。
+                {
+                    // 🔴 必须由**本进程**发 Intent，并用 content:// 交给安装器：
+                    //    - Android 11+ 的安装器已经不接受 file:// 方案（am start 会 unable to resolve）
+                    //    - 走 shell 的 am start 也没法替我们做 URI 临时授权
+                    //    所以：把包复制到自己的外部目录 → ApkProvider 提供 URI → 带
+                    //    FLAG_GRANT_READ_URI_PERMISSION 拉起系统安装器，用户点一次「允许」即可。
+                    boolean shown = false;
+                    try {
+                        java.io.File dst = new java.io.File(
+                                web.getContext().getExternalFilesDir(null), ApkProvider.FILE);
+                        java.io.FileInputStream in = new java.io.FileInputStream(apk);
+                        java.io.FileOutputStream out = new java.io.FileOutputStream(dst);
+                        byte[] buf = new byte[16384];
+                        int n;
+                        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                        out.close();
+                        in.close();
+                        android.net.Uri uri = android.net.Uri.parse("content://"
+                                + web.getContext().getPackageName() + ".apk/" + ApkProvider.FILE);
+                        android.content.Intent it = new android.content.Intent(
+                                android.content.Intent.ACTION_VIEW);
+                        it.setDataAndType(uri, "application/vnd.android.package-archive");
+                        it.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                | android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                        web.getContext().startActivity(it);
+                        shown = true;
+                        mlog(web.getContext(), "已拉起系统安装器（content://）");
+                    } catch (Throwable t) {
+                        mlog(web.getContext(), "拉起安装器失败: " + t);
+                    }
+                    if (!shown) {
+                        // 老系统兜底：file:// 在 Android 10 及以下还能用
+                        String s2 = service.shellQuick("cp -f " + tmp + " /sdcard/Download/" + NEXT_APK
+                                + " ; am start -a android.intent.action.VIEW"
+                                + " -d file:///sdcard/Download/" + NEXT_APK
+                                + " -t application/vnd.android.package-archive", 20000);
+                        mlog(web.getContext(), "file:// 兜底: " + s2);
+                    }
+                    // 用户点完「允许」后新包才真正存在 —— 那一刻必须由**我们**把它拉起来，
+                    // 并且把迁移数据通过 Intent 递过去（文件通道此时未必读得到）。
+                    // 这条轮询放到后台线程，别挡住这次调用的返回。
+                    new Thread(new Runnable() {
+                        @Override public void run() {
+                            for (int i = 0; i < 150; i++) {
+                                try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
+                                if (pkgInstalled(tgt)) {
+                                    String s = service.shellQuick(startCmd, 20000);
+                                    mlog(web.getContext(), "手动安装完成，拉起新包: " + s);
+                                    return;
+                                }
+                            }
+                            mlog(web.getContext(), "等不到用户完成安装，放弃自动拉起");
+                        }
+                    }).start();
+                }
+                service.shellQuick("rm -f " + tmp, 10000);
+                instPhase = "fail";
+                o.put("ok", false);
+                o.put("bytes", total);
+                o.put("msg", "restricted");
+                return o.toString();
+            }
+            service.shellQuick("rm -f " + tmp, 10000);
+
+            // ⑤ 拉起新包
+            //
+            // 🔴 不要用 `dumpsys activity activities | grep -q` 轮询前台：
+            //    PTY 通道下 grep 提前退出会让 dumpsys 卡在写 pty 缓冲区，
+            //    整条 shell 命令永不返回（本项目其它地方也踩过）。
+            //    改成看 am start 自己的输出，一句话就知道有没有把 Intent 递出去。
+            boolean launched = false;
+            for (int i = 0; i < 8 && !launched; i++) {
+                String s = service.shellQuick(startCmd, 20000);
+                // 新起进程打 "Starting:"；已经在跑了会打 "Warning: Activity not started"
+                // —— 两种都算递到了
+                launched = s != null && (s.contains("Starting:")
+                        || s.contains("Warning: Activity not started"));
+                if (!launched) {
+                    try { Thread.sleep(400); } catch (InterruptedException ignored) { }
+                }
+            }
+
+            // ⑥ 兜底的卸载守护：新包起来后会自己把旧包删掉（uninstallOldAfterMigrate），
+            //    这里这条 detached 轮询只是某些机型上的补充，失败也无所谓。
+            service.shellQuick("(setsid sh -c '"
+                    + "n=0 ; while [ $n -lt 150 ] ; do [ -f " + mark + " ] && break ; "
+                    + "sleep 2 ; n=$((n+1)) ; done ; "
+                    + "[ -f " + mark + " ] && pm uninstall " + cur + " >> " + log + " 2>&1"
+                    + "' >/dev/null 2>&1 &)", 15000);
+
+            instPhase = "done";
+            o.put("ok", true);
+            o.put("bytes", total);
+            o.put("migrate", tgt);
+            // 装上了但没能拉到前台：让界面告诉用户「从桌面打开」，别骗他说要自动重启
+            if (!launched) o.put("msg", "installed");
+            return o.toString();
+        } catch (Throwable e) {
+            instPhase = "fail";
+            return err(String.valueOf(e.getMessage()));
+        }
+    }
+
+    /** 装没装上，只信系统：pm path 有输出才算有。 */
+    private boolean pkgInstalled(String pkg) {
+        try {
+            String s = service.shellQuick("pm path " + pkg, 15000);
+            return s != null && s.contains("package:");
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private String err(String msg) {
@@ -2456,6 +2730,17 @@ public class Bridge {
      *    否则会解析成 <新包名>.MainActivity —— 那个类不存在，拉不回前台。
      */
     private static final String MAIN_ACT_CLASS = "com.henry.appmanager.MainActivity";
+    /** 被 MIUI 拦下时丢到 Download 给用户手动装的包名（见 crossInstall） */
+    private static final String NEXT_APK = "mineapp-next.apk";
+
+    /**
+     * 安装类命令的超时。
+     *
+     * 🔴 shellLong 的读超时是 0（永不超时）—— 碰上 pm install 在系统弹窗后挂住，
+     *    整条调用就永远不返回，界面卡在「完成」且永远等不到回调。安装这类命令
+     *    必须有上限，超时就当失败，走兜底路径。
+     */
+    private static final int INSTALL_TIMEOUT = 180000;
     /**
      * activity-alias 所在的命名空间。
      *
@@ -2895,27 +3180,17 @@ public class Bridge {
     }
 
     /**
-     * 当前发行通道的 tag 前缀。
+     * 是否「全通道」版本：多通道版（.multi）和 6.0 起的统一版（.next）。
      *
-     * 靠**包名**判断，不用编译期开关：多通道版包名以 .multi 结尾，
-     * 以后 build.sh 只改 applicationId，这里自动走对通道，不会出现
-     * 「忘了定义宏，两个版本查到同一个 release」的事故。
+     * 普通版只有 ADB 一条路；这两个版本还额外提供 Shizuku / Root 通道，
+     * 界面上才会出现通道选择器与授权入口。
      *
-     *   主版本      com.henry.appmanager        → tag  v3.9.0
-     *   多通道版    com.henry.appmanager.multi  → tag  multi-v3.9.0
+     * 🔴 判断依据仍是**包名后缀**，不是编译期开关：build.sh 只改 applicationId，
+     *    这里自动跟上。新增发行版本时记得同步这里（漏了不会崩，只是通道选择器消失）。
      */
-    private String releasePrefix() {
-        try {
-            String pn = web.getContext().getPackageName();
-            if (pn != null && pn.endsWith(".multi")) return "multi-v";
-        } catch (Throwable ignored) { }
-        return "v";
-    }
-
-    /** 是否多通道版：只有它才有多通道授权能力 */
     private boolean isMulti() {
         String pn = web.getContext().getPackageName();
-        return pn != null && pn.endsWith(".multi");
+        return pn != null && (pn.endsWith(".multi") || pn.endsWith(".next"));
     }
 
     /**
@@ -2998,25 +3273,7 @@ public class Bridge {
                         o.put("ok", true); o.put("granted", true);
                         return o.toString();
                     }
-                    if (permListener == null) {
-                        permListener = new rikka.shizuku.Shizuku.OnRequestPermissionResultListener() {
-                            @Override
-                            public void onRequestPermissionResult(int requestCode, int grantResult) {
-                                // 授权回调在 binder 线程，摘监听要回主线程
-                                main.post(new Runnable() {
-                                    @Override public void run() {
-                                        try {
-                                            rikka.shizuku.Shizuku
-                                                    .removeRequestPermissionResultListener(permListener);
-                                        } catch (Throwable ignored) { }
-                                        permListener = null;
-                                    }
-                                });
-                            }
-                        };
-                        rikka.shizuku.Shizuku.addRequestPermissionResultListener(permListener);
-                    }
-                    rikka.shizuku.Shizuku.requestPermission(ShizukuShell.REQ_CODE);
+                    requestShizukuPermission();
                     o.put("ok", true);
                     o.put("asked", true);
                 } catch (Throwable e) {
@@ -3025,6 +3282,94 @@ public class Bridge {
                 return o.toString();
             }
         });
+    }
+
+    /**
+     * 迁移完成后，由**新包**去卸载旧包。
+     *
+     * 为什么不让旧包自己挂一个 detached 脚本去卸：实测那条路在 App 的 PTY 命令通道下
+     * 不可靠 —— 同样的命令用 adb 跑能成，走 App 通道就没了（setsid 起来的子进程
+     * 会随 adb shell 会话一起被回收）。而新包此刻就在前台，手里又拿着迁移过来的
+     * ADB 密钥，自己 pm uninstall 一步到位。
+     *
+     * 通道还没通就多试几次（新包刚装完，adbd 那边偶尔要等一下）；一直不通就把旧包
+     * 留着 —— 用户自己删即可，数据已经迁完，不会丢。
+     */
+    private void uninstallOldAfterMigrate() {
+        try {
+            final android.content.SharedPreferences sp =
+                    web.getContext().getSharedPreferences("app", 0);
+            final String from = sp.getString("migrated_from", "");
+            if (from.length() == 0 || from.equals(web.getContext().getPackageName())) return;
+            // 🔴 必须认 migrated_ok：迁移数据没解析成功时（sane=false）绝不能删旧包，
+            //    否则用户新包是空的、旧包也没了。
+            if (!sp.getBoolean("migrated_ok", false)) return;
+            if (sp.getBoolean("migrated_cleaned", false)) return;
+
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    for (int i = 0; i < 15; i++) {
+                        try { Thread.sleep(4000); } catch (Throwable ignored) { }
+                        String r = service.shellQuick("pm uninstall --user 0 " + from, 20000);
+                        if (r == null) continue;
+                        // Success / not installed 都算处理完（后者说明用户已经自己删了）
+                        if (r.contains("Success") || r.contains("not installed")
+                                || r.contains("Unknown package")) {
+                            sp.edit().putBoolean("migrated_cleaned", true).apply();
+                            android.util.Log.i("Migrate", "已卸载旧包 " + from);
+                            return;
+                        }
+                    }
+                    android.util.Log.w("Migrate", "旧包卸载未完成（通道不可用），保留旧包");
+                }
+            }).start();
+        } catch (Throwable ignored) { }
+    }
+
+    /** 真正去弹 Shizuku 授权框（调用前请自行确认 alive 且未授权） */
+    private void requestShizukuPermission() {
+        if (permListener == null) {
+            permListener = new rikka.shizuku.Shizuku.OnRequestPermissionResultListener() {
+                @Override
+                public void onRequestPermissionResult(int requestCode, int grantResult) {
+                    // 授权回调在 binder 线程，摘监听要回主线程
+                    main.post(new Runnable() {
+                        @Override public void run() {
+                            try {
+                                rikka.shizuku.Shizuku
+                                        .removeRequestPermissionResultListener(permListener);
+                            } catch (Throwable ignored) { }
+                            permListener = null;
+                        }
+                    });
+                }
+            };
+            rikka.shizuku.Shizuku.addRequestPermissionResultListener(permListener);
+        }
+        rikka.shizuku.Shizuku.requestPermission(ShizukuShell.REQ_CODE);
+    }
+
+    /**
+     * 跨包名升级之后，尽量把旧的执行通道接回来。
+     *
+     * - ADB：能真正复用。密钥（adbkey.*）和端口都随迁移搬过来了，adbd 认同一把公钥，
+     *   连上去不会再弹授权框 —— 用户升级完直接就能用。
+     * - Shizuku / Root：复用不了。两者的授权都按 **uid** 记，新包是新 uid，
+     *   旧的授权记录对它无效。这种情况不等用户去设置里翻，开局直接替他发一次申请，
+     *   点一下弹窗就恢复了；不发的话用户只会看到「命令失败」却不知道为什么。
+     */
+    private void reuseChannelAfterMigrate() {
+        try {
+            android.content.SharedPreferences sp =
+                    web.getContext().getSharedPreferences("app", 0);
+            if (!sp.getBoolean("channel_need_grant", false)) return;
+            sp.edit().putBoolean("channel_need_grant", false).apply();
+            if (!isMulti()) return;
+            if (!"shizuku".equals(execChannel())) return;   // root 由 su 自己弹
+            if (ShizukuShell.granted()) return;             // 已经授权过（用户手快点了）
+            if (!ShizukuShell.alive() && !ShizukuShell.waitAlive(600)) return;
+            requestShizukuPermission();
+        } catch (Throwable ignored) { }
     }
 
     /** 直接回结果，不排队（给毫秒级的偏好类接口用） */
@@ -3124,13 +3469,6 @@ public class Bridge {
         });
     }
 
-    /** 从 tag 里取版本号：v4.6 → 4.6，multi-v4.5 → 4.5，认不出来 → 空串 */
-    private static String verOfTag(String tag) {
-        if (tag.startsWith("multi-v")) return tag.substring("multi-v".length());
-        if (tag.startsWith("v") || tag.startsWith("V")) return tag.substring(1);
-        return "";
-    }
-
     /** 比较 "4.10" 与 "4.9"：按点分段转数字比，非数字尾巴直接忽略 */
     private static int cmpVer(String a, String b) {
         if (a == null) a = "";
@@ -3154,26 +3492,6 @@ public class Bridge {
             i++;
         }
         return v;
-    }
-
-    /**
-     * 这个 Release 里有没有指定通道的 APK。
-     *
-     * 多通道版只认文件名含 multi 的，标准版只认不含的 —— 这是防串包的最后一道闸：
-     * 最新版本如果只发了标准版包，多通道版会因这里返回 false 而显示「已是最新」，
-     * 绝不会退而求其次装成本标准版。
-     */
-    private static boolean hasAssetFor(JSONObject rel, boolean multi) {
-        org.json.JSONArray assets = rel.optJSONArray("assets");
-        if (assets == null) return false;
-        for (int i = 0; i < assets.length(); i++) {
-            JSONObject a = assets.optJSONObject(i);
-            if (a == null) continue;
-            String nm = a.optString("name", "").toLowerCase();
-            if (!nm.endsWith(".apk")) continue;
-            if (nm.contains("multi") == multi) return true;
-        }
-        return false;
     }
 
     /**
@@ -3251,7 +3569,8 @@ public class Bridge {
         replyNow(id, o.toString());
     }
 
-    /** 应用名；已卸载就退回包名 */    private static String labelOf(android.content.Context c, String pkg) {
+    /** 应用名；已卸载就退回包名 */
+    private static String labelOf(android.content.Context c, String pkg) {
         try {
             android.content.pm.ApplicationInfo ai =
                     c.getPackageManager().getApplicationInfo(pkg, 0);
@@ -3416,19 +3735,272 @@ public class Bridge {
         });
     }
 
+    /**
+     * 更新检查查哪个标签。三条互不干扰的轨道：
+     *
+     *   next     —— 迁移入口。旧包名（com.henry.appmanager / .multi）查这里，
+     *               发的是**同包名迁移包**（5.4），靠 pm install -r 覆盖安装溜进来。
+     *   next6pre —— 落地包。迁移包从这里取「要装成什么样」的 .next APK。
+     *   next6x   —— 正式车道。已经是 .next 的用户查这里，6.0 / 6.1 … 都往这里发。
+     *
+     * 🔴 为什么要拆三个：把 6.0 直接放 next 的话，还没迁移的旧用户点更新会拿到 6.0，
+     *    而 5.3 那套安装逻辑只会覆盖同包名 —— 新包装不上、数据也带不过去。
+     *    旧用户只能先拿迁移包，由迁移包（新代码）去完成换包。
+     */
+    private String updateTag() {
+        try {
+            String pn = web.getContext().getPackageName();
+            if (pn != null && pn.endsWith(".next")) return "next6x";
+        } catch (Throwable ignored) { }
+        return "next";
+    }
+
+    /** 迁移包要去哪儿找落地包（.next 的安装包） */
+    private static final String LANDING_TAG = "next6pre";
+
+    /** 从 next6pre 取落地包下载地址；拿不到返回空串。 */
+    private String landingUrl() {
+        java.net.HttpURLConnection c = null;
+        try {
+            java.net.URL u = new java.net.URL(
+                    "https://api.github.com/repos/henry-97/MineApp/releases/tags/" + LANDING_TAG);
+            c = (java.net.HttpURLConnection) u.openConnection();
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(15000);
+            c.setRequestProperty("Accept", "application/vnd.github+json");
+            c.setRequestProperty("User-Agent", "MineApp");
+            if (c.getResponseCode() != 200) return "";
+            java.io.InputStream in = c.getInputStream();
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            JSONObject r = new JSONObject(new String(bos.toByteArray(), "UTF-8"));
+            org.json.JSONArray assets = r.optJSONArray("assets");
+            if (assets == null) return "";
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject a = assets.optJSONObject(i);
+                if (a == null) continue;
+                if (!a.optString("name", "").toLowerCase().endsWith(".apk")) continue;
+                return a.optString("browser_download_url", "");
+            }
+        } catch (Throwable ignored) {
+        } finally {
+            if (c != null) c.disconnect();
+        }
+        return "";
+    }
+
+    /**
+     * 迁移包专用：把自己换成 .next。
+     *
+     * 设计原则（5.3.3 重做）：**一定要看得见**。上一版完全静默，出问题时用户和我们都
+     * 不知道卡在哪一步。现在：
+     *   - 启动 3 秒后弹一条 Toast「正在迁移到新版本」——哪怕后面失败，用户也知道发生了什么
+     *   - 每一步都写进 `Android/data/<包名>/files/migrate.log`，用户能直接把文件发给我们
+     *   - 落地包地址失败重试 3 次；整轮失败后再试 2 轮（共 3 轮）
+     *
+     * 🔴 5.3.3 去掉了「按安装时间戳判断是否覆盖更新」那道闸门：
+     *    部分 ROM 上 lastUpdateTime 与 firstInstallTime 会相等，导致**真正需要迁移的用户
+     *    被误判成"全新安装"而永远不迁移**（真机实测踩到）。代价是极少数"误装另一版"的
+     *    空壳可能自我迁移一次 —— 这个代价远小于"该迁的人迁不动"。
+     */
+    private void migrateIfNeeded() {
+        if (!BuildCfg.MIGRATE) return;
+        try {
+            final android.content.SharedPreferences sp =
+                    web.getContext().getSharedPreferences("app", 0);
+            // 🔴 进来先记一行，且**不再因为 mig_to_next_done 就静默返回**。
+            //    那个标记曾把一批设备坑死：5.3.2 用 `pm path` 判断"装上了没"，
+            //    只要 .next 存在就算成功 —— 而用户之前装过预览版 .next（没数据），
+            //    于是标记被置位，之后所有版本一律静默跳过，连日志都没有。
+            //    成功时旧包会被新包卸载，这个标记本来也留不下来，改成只写不判。
+            mlog(web.getContext(), "migrateIfNeeded 触发 done="
+                    + sp.getBoolean("mig_to_next_done", false));
+            if (sp.getBoolean("mig_to_next_running", false)) {
+                mlog(web.getContext(), "上一轮还在跑，跳过本次触发");
+                return;
+            }
+            sp.edit().putBoolean("mig_to_next_running", true).apply();
+
+            // 时间戳只记录不判断：真出问题时这一行就能看出是不是被误判过
+            try {
+                android.content.pm.PackageInfo pi = web.getContext().getPackageManager()
+                        .getPackageInfo(web.getContext().getPackageName(), 0);
+                mlog(web.getContext(), "迁移判定 ver=" + pi.versionName
+                        + " gap=" + (pi.lastUpdateTime - pi.firstInstallTime) + "ms");
+            } catch (Throwable ignored) { }
+
+            new Thread(new Runnable() {
+                @Override public void run() {
+                    try {
+                        Thread.sleep(3000);      // 先让界面画出来，别一进页面就被安装器盖住
+                        toastMigrate(3000);
+                        boolean ok = false;
+                        for (int round = 1; round <= 3 && !ok; round++) {
+                            String url = "";
+                            for (int i = 1; i <= 3 && url.length() == 0; i++) {
+                                url = landingUrl();
+                                if (url.length() == 0) {
+                                    mlog(web.getContext(), "取落地包地址失败（第 " + i + " 次）");
+                                    try { Thread.sleep(2000); } catch (InterruptedException ignored) { }
+                                }
+                            }
+                            if (url.length() == 0) {
+                                mlog(web.getContext(), "三次都取不到 next6pre 的包，放弃");
+                                break;
+                            }
+                            mlog(web.getContext(), "第 " + round + " 轮换包开始: " + url);
+                            installupdate(0, url);
+                            long t0 = System.currentTimeMillis();
+                            while (System.currentTimeMillis() - t0 < 300000) {
+                                String ph = instPhase;
+                                if ("done".equals(ph) || "fail".equals(ph)) break;
+                                try { Thread.sleep(300); } catch (InterruptedException ignored) { }
+                            }
+                            mlog(web.getContext(), "第 " + round + " 轮结果 phase=" + instPhase
+                                    + " 用时 " + (System.currentTimeMillis() - t0) + "ms");
+                            ok = "done".equals(instPhase);
+                            if (!ok) {
+                                try { Thread.sleep(15000); } catch (InterruptedException ignored) { }
+                            }
+                        }
+                        if (ok) {
+                            sp.edit().putBoolean("mig_to_next_done", true).apply();
+                            mlog(web.getContext(), "迁移完成");
+                        } else {
+                            mlog(web.getContext(), "迁移未完成，下次启动会再试");
+                        }
+                    } catch (Throwable t) {
+                        mlog(web.getContext(), "迁移异常: " + t);
+                    } finally {
+                        sp.edit().putBoolean("mig_to_next_running", false).apply();
+                    }
+                }
+            }).start();
+        } catch (Throwable ignored) { }
+    }
+
+    /** 迁移日志：进 logcat，也落到用户能取到的文件里（排障用） */
+    static void mlog(android.content.Context ctx, String msg) {
+        android.util.Log.i("Migrate", msg);
+        try {
+            java.io.File dir = ctx.getExternalFilesDir(null);
+            if (dir == null) return;
+            java.io.File f = new java.io.File(dir, "migrate.log");
+            if (f.length() > 64 * 1024) f.delete();
+            java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("MM-dd HH:mm:ss");
+            java.io.FileWriter w = new java.io.FileWriter(f, true);
+            w.write(fmt.format(new java.util.Date()) + "  " + msg + "\n");
+            w.close();
+        } catch (Throwable ignored) { }
+    }
+
+    /** 弹一条原生 Toast —— 迁移过程必须让用户看得见 */
+    private void toastMigrate(long delayMs) {
+        main.postDelayed(new Runnable() {
+            @Override public void run() {
+                try {
+                    boolean zh = java.util.Locale.getDefault().getLanguage().startsWith("zh");
+                    android.widget.Toast.makeText(web.getContext(),
+                            zh ? "正在迁移到新版本，请稍候…" : "Migrating to the new version…",
+                            android.widget.Toast.LENGTH_LONG).show();
+                } catch (Throwable ignored) { }
+            }
+        }, delayMs);
+    }
+
+    /**
+     * 设置页公告区：读仓库里的 docs/NOTICE.md。
+     *
+     * 规则：
+     *  - 24 小时内只请求一次（SharedPreferences 缓存 text + ts）；
+     *  - 文档通常只有一句紧急通知，取第一行非空文本，最多 200 字；
+     *  - 失败或为空时前端回退到默认文案（反馈 QQ 群）；
+     *  - 只做 GET，不上传任何东西。
+     */
+    @JavascriptInterface
+    public void notice(int id, String arg) {
+        dispatchNet(id, new Task() {
+            @Override
+            public String run() {
+                JSONObject o = new JSONObject();
+                try {
+                    android.content.SharedPreferences sp = web.getContext()
+                            .getSharedPreferences("app", 0);
+                    long ts = sp.getLong("notice_ts", 0);
+                    String cached = sp.getString("notice_text", "");
+                    long now = System.currentTimeMillis();
+                    if (now - ts < 24L * 3600L * 1000L) {
+                        o.put("ok", true);
+                        o.put("text", cached);
+                        o.put("cached", true);
+                        return o.toString();
+                    }
+                    java.net.HttpURLConnection c = null;
+                    try {
+                        // 中英文各一份公告：中文版读 NOTICE.md，其余读 NOTICE.en.md
+                        boolean zhNotice = java.util.Locale.getDefault()
+                                .getLanguage().startsWith("zh");
+                        java.net.URL u = new java.net.URL(
+                                "https://raw.githubusercontent.com/henry-97/MineApp/main/docs/"
+                                + (zhNotice ? "NOTICE.md" : "NOTICE.en.md"));
+                        c = (java.net.HttpURLConnection) u.openConnection();
+                        c.setConnectTimeout(10000);
+                        c.setReadTimeout(10000);
+                        c.setRequestProperty("User-Agent", "MineApp");
+                        int code = c.getResponseCode();
+                        if (code == 200) {
+                            java.io.InputStream in = c.getInputStream();
+                            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                            byte[] buf = new byte[4096];
+                            int n;
+                            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                            in.close();
+                            String text = new String(bos.toByteArray(), "UTF-8").trim();
+                            int nl = text.indexOf('\n');
+                            if (nl > 0) text = text.substring(0, nl).trim();
+                            if (text.length() > 200) text = text.substring(0, 200);
+                            sp.edit().putString("notice_text", text)
+                                    .putLong("notice_ts", now).apply();
+                            o.put("ok", true);
+                            o.put("text", text);
+                            o.put("cached", false);
+                            return o.toString();
+                        }
+                    } finally {
+                        if (c != null) c.disconnect();
+                    }
+                    o.put("ok", false);
+                    o.put("text", cached);
+                    return o.toString();
+                } catch (Throwable t) {
+                    // JSONObject.put 会抛受检的 JSONException，catch 块里必须再兜一层
+                    try {
+                        o.put("ok", false);
+                        o.put("error", String.valueOf(t));
+                        return o.toString();
+                    } catch (Throwable ignored) {
+                        return "{\"ok\":false}";
+                    }
+                }
+            }
+        });
+    }
+
     @JavascriptInterface
     public void update(int id, String arg) {
-        // 🔴 5.3 起只认固定标签 `next`。
-        //    6.0 MineApp NEXT 会把「全部通道 + 自研无线调试」合到一个包里，
-        //    不再区分普通版/多通道版，所以这里也不再按 tag 前缀挑通道、
-        //    不再比较多次 Release——只问一句「next 那个 Release 是什么版本」。
+        // 5.3 起不再按 tag 前缀挑发行通道、也不比较多次 Release ——
+        // 只问一句「我这档标签下面最新的 Release 是什么版本」，标签见 updateTag()。
         dispatchNet(id, new Task() {
             @Override
             public String run() {
                 java.net.HttpURLConnection c = null;
                 try {
                     java.net.URL u = new java.net.URL(
-                            "https://api.github.com/repos/henry-97/MineApp/releases/tags/next");
+                            "https://api.github.com/repos/henry-97/MineApp/releases/tags/"
+                            + updateTag());
                     c = (java.net.HttpURLConnection) u.openConnection();
                     c.setConnectTimeout(15000);
                     c.setReadTimeout(15000);
@@ -3437,7 +4009,8 @@ public class Bridge {
                     int code = c.getResponseCode();
 
                     JSONObject o = new JSONObject();
-                    // 404 = 还没有 next 版本，按「已是最新」处理，不报错
+                    // 404 = 这个标签下还没有 Release（例如 next6x 尚未发布），
+                    // 按「已是最新」处理，不报错
                     if (code == 404) {
                         o.put("ok", true);
                         o.put("tag", "");
