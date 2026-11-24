@@ -16,6 +16,10 @@
   <img alt="license" src="https://img.shields.io/badge/license-GPL--3.0-0F6E56">
 </p>
 
+<p align="center">
+  <a href="https://www.mineapp.download/"><b>Official site · Download · Changelog →</b></a>
+</p>
+
 > **Mine App is a featherweight Android app manager that brings sluggish devices back to life — without root or heavy frameworks.**
 >
 > - **Zero Bloat, Zero Dependencies**: No third-party libraries whatsoever — AndroidX included. Built purely on platform APIs: the compiled code is just **33 KB**, the whole APK under 1 MB, and total on-device footprint under 10 MB. No Gradle on the build side either. No root, no resident Shizuku.
@@ -204,6 +208,11 @@ screen off.**
   More will be added over time — pull requests with licence-compliant icons are welcome.</sub>
 </p>
 
+## Official site
+
+**<https://www.mineapp.download>** — latest APK, changelog, UI previews and the illustrated first-time setup.
+Versions are kept in sync with [GitHub Releases](https://github.com/henry-97/MineApp/releases); either entry point works.
+
 ## Requirements
 
 - Android 8.0 (API 26) or newer, targetSdk 35
@@ -212,7 +221,7 @@ screen off.**
 
 ## Install
 
-1. Grab the right APK (~650 KB) from [Releases](https://github.com/henry-97/MineApp/releases):
+1. Grab the right APK (~650 KB) from [the official site](https://www.mineapp.download/) or [Releases](https://github.com/henry-97/MineApp/releases):
    standard `MineApp-X.Y.apk` or multi-channel `MineApp-X.Y-multi.apk` — see "Extended edition" below for the difference
 2. Or build it yourself (see below)
 

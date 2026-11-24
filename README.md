@@ -16,6 +16,10 @@
   <img alt="license" src="https://img.shields.io/badge/license-GPL--3.0-0F6E56">
 </p>
 
+<p align="center">
+  <a href="https://www.mineapp.download/"><b>官网 · 下载最新版 · 更新日志 →</b></a>
+</p>
+
 > **Mine App（中文名「应用管理器」）是一款专让卡顿安卓设备焕发活力的纯净应用管理器。**
 >
 > - **真·零依赖**：不引入 AndroidX 等任何第三方库，只用系统 API —— 全部代码编译后仅 **33 KB**，连同六套图标整体不足 1 MB，含本地数据总计不足 10 MB。构建侧也不依赖 Gradle，不依赖 Root，无需常驻 Shizuku。
@@ -182,6 +186,11 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
   后续会持续增加，也欢迎在开源社区 PR 贡献版权合规的图标。</sub>
 </p>
 
+## 官网
+
+**<https://www.mineapp.download>** —— 下载最新版、查看版本更新日志、界面预览与首次配置图解。
+版本与 [GitHub Releases](https://github.com/henry-97/MineApp/releases) 同步，两个入口任选其一即可。
+
 ## 环境要求
 
 - Android 8.0（API 26）及以上，targetSdk 35
@@ -190,7 +199,7 @@ adbd 就会在本机 `127.0.0.1:5555` 上开一个入口。App 内置了一个�
 
 ## 安装
 
-1. 到 [Releases](https://github.com/henry-97/MineApp/releases) 下载对应的 APK（约 650 KB）：
+1. 到 [官网](https://www.mineapp.download/) 或 [Releases](https://github.com/henry-97/MineApp/releases) 下载对应的 APK（约 650 KB）：
    经典版 `MineApp-X.Y.apk`、多通道版 `MineApp-X.Y-multi.apk`，两者的区别见下文「扩展版本」
 2. 或者自己编译（见下文「从源码构建」）
 
