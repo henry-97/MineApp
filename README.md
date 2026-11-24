@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.mineapp.download/"><b>官网 · 下载最新版 · 更新日志 →</b></a>
+  <a href="https://www.mineapp.download/"><b>官网 · App介绍 · 说明 · 更新日志（连击六个六有限时彩蛋）</b></a>
 </p>
 
 > **Mine App（中文名「应用管理器」）是一款专让卡顿安卓设备焕发活力的纯净应用管理器。**

@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.mineapp.download/"><b>Official site · Download · Changelog →</b></a>
+  <a href="https://www.mineapp.download/"><b>Official site · Intro · Docs · Changelog (hit 6 six times for an easter egg)</b></a>
 </p>
 
 > **Mine App is a featherweight Android app manager that brings sluggish devices back to life — without root or heavy frameworks.**
